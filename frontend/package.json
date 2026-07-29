@@ -10,13 +10,14 @@
   },
   "dependencies": {
     "@types/mapbox-gl": "^3.4.1",
-    "framer-motion": "^12.42.0",
-    "lucide-react": "^1.21.0",
-    "mapbox-gl": "^3.25.0",
+    "framer-motion": "^12.42.2",
+    "lucide-react": "^1.27.0",
+    "mapbox-gl": "^3.27.0",
     "next": "16.2.9",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "react-map-gl": "^8.1.1"
+    "react-map-gl": "^8.1.1",
+    "recharts": "^3.10.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

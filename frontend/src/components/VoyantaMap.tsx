@@ -1,69 +1,69 @@
 "use client";
 
-import { useRef } from 'react';
-import Map, { Source, Layer, Marker } from 'react-map-gl';
-import 'mapbox-gl/dist/mapbox-gl.css';
-
-const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
-
 export interface MapWaypoint {
   id: string;
   lat: number;
   lng: number;
+  title?: string;
+  location?: string;
 }
 
-export default function VoyantaMap({ 
-  waypoints, 
-  routeGeoJSON 
-}: { 
-  waypoints: MapWaypoint[], 
-  routeGeoJSON?: any 
-}) {
-  const mapRef = useRef(null);
-  
-  // Line layer styling for the generated route
-  const routeLayer = {
-    id: 'route',
-    type: 'line' as const,
-    source: 'route',
-    layout: {
-      'line-join': 'round' as const,
-      'line-cap': 'round' as const
-    },
-    paint: {
-      'line-color': '#FF4A5A',
-      'line-width': 4,
-      'line-dasharray': [0, 2, 2] // Dashed walking path effect
-    }
-  };
+interface VoyantaMapProps {
+  waypoints: MapWaypoint[];
+  mapImageUrl?: string;
+}
+
+export default function VoyantaMap({ waypoints, mapImageUrl }: VoyantaMapProps) {
+  function openNavigation(waypoint: MapWaypoint) {
+    const destination = encodeURIComponent(`${waypoint.lat},${waypoint.lng}`);
+    window.open(
+      `https://www.google.com/maps/dir/?api=1&destination=${destination}`,
+      "_blank",
+      "noopener,noreferrer"
+    );
+  }
 
   return (
-    <Map
-      ref={mapRef}
-      initialViewState={{
-        longitude: 135.7681, // e.g., Kyoto
-        latitude: 35.0116,
-        zoom: 13,
-        pitch: 45 // 3D perspective
-      }}
-      mapStyle="mapbox://styles/mapbox/dark-v11"
-      mapboxAccessToken={MAPBOX_TOKEN}
-      interactiveLayerIds={['route']}
-      style={{ width: '100%', height: '100%' }}
-    >
-      {waypoints.map((wp, i) => (
-        <Marker key={wp.id} longitude={wp.lng} latitude={wp.lat} anchor="bottom">
-          <div className="bg-brand-accent text-white w-8 h-8 rounded-full flex items-center justify-center font-bold border-2 border-brand-dark shadow-lg">
-            {i + 1}
-          </div>
-        </Marker>
-      ))}
-
-      {routeGeoJSON && (
-        <Source id="route" type="geojson" data={routeGeoJSON}>
-          <Layer {...routeLayer} />
-        </Source>
+    <div className="relative h-full w-full overflow-hidden rounded-[2rem] border border-white/[0.08] bg-[#0E1525]">
+      {mapImageUrl ? (
+        <img
+          src={mapImageUrl}
+          alt="TomTom map preview"
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      ) : (
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#1f293d_1px,transparent_1px),linear-gradient(to_bottom,#1f293d_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-40" />
       )}
-    </Map>
+
+      <div className="absolute inset-0 bg-gradient-to-t from-[#05070A] via-[#05070A]/25 to-transparent" />
+
+      <div className="absolute inset-x-0 bottom-6 z-10 flex flex-col items-center gap-3 px-4">
+        <div className="rounded-2xl border border-white/[0.10] bg-[#0A0D14]/85 px-5 py-4 text-center shadow-2xl backdrop-blur-xl">
+          <p className="text-sm font-semibold text-white">TomTom Map Preview</p>
+          <p className="mt-1 text-xs text-[#94A3B8]">
+            Tap a stop below to open navigation.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap justify-center gap-3">
+          {waypoints.map((waypoint, index) => (
+            <button
+              key={waypoint.id}
+              type="button"
+              onClick={() => openNavigation(waypoint)}
+              className="flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.08] px-3 py-2 text-xs font-semibold text-white backdrop-blur-md transition hover:bg-white/[0.14]"
+              title={`Navigate to ${waypoint.title ?? `stop ${index + 1}`}`}
+            >
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white text-[11px] font-bold text-[#05070A]">
+                {index + 1}
+              </span>
+              <span className="max-w-[10rem] truncate">
+                {waypoint.title ?? `Stop ${index + 1}`}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
