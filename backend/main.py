@@ -1,5 +1,6 @@
 from dotenv import load_dotenv
 import os
+import json
 import logging
 import httpx
 from uuid import UUID
@@ -18,14 +19,23 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-TOMTOM_API_KEY = os.getenv("TOMTOM_API_KEY")
-TOMTOM_BASE = "https://api.tomtom.com"
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1")
+# ─────────────────────────────────────────────
+#  Environment variables
+# ─────────────────────────────────────────────
+
+TOMTOM_API_KEY      = os.getenv("TOMTOM_API_KEY")
+TOMTOM_BASE         = "https://api.tomtom.com"
 OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
-PEXELS_API_KEY = os.getenv("PEXELS_API_KEY", "")
-PEXELS_BASE = "https://api.pexels.com/v1/search"
-PEXELS_FALLBACK = "https://images.pexels.com/photos/1483769/pexels-photo-1483769.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2"
+PEXELS_API_KEY      = os.getenv("PEXELS_API_KEY", "")
+PEXELS_BASE         = "https://api.pexels.com/v1/search"
+PEXELS_FALLBACK     = (
+    "https://images.pexels.com/photos/1483769/pexels-photo-1483769.jpeg"
+    "?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2"
+)
+DATABASE_URL        = os.getenv("DATABASE_URL")  # required; no localhost default
+GROQ_API_KEY        = os.getenv("GROQ_API_KEY", "")
+GROQ_MODEL          = os.getenv("GROQ_MODEL", "llama3-8b-8192")
+GROQ_BASE           = "https://api.groq.com/openai/v1/chat/completions"
 
 # ─────────────────────────────────────────────
 #  Pydantic response models
@@ -130,7 +140,7 @@ class TripPlanResponse(BaseModel):
     routes: List[TripDayRoute]
 
 
-class OllamaTripStop(BaseModel):
+class GroqTripStop(BaseModel):
     title: str
     location: str
     category: str
@@ -138,16 +148,16 @@ class OllamaTripStop(BaseModel):
     best_time: str
 
 
-class OllamaTripDay(BaseModel):
+class GroqTripDay(BaseModel):
     day: int
     theme: str
-    stops: List[OllamaTripStop]
+    stops: List[GroqTripStop]
 
 
-class OllamaTripContent(BaseModel):
+class GroqTripContent(BaseModel):
     destination: str
     summary: str
-    days: List[OllamaTripDay]
+    days: List[GroqTripDay]
 
 
 FALLBACK_CITY_COORDINATES = {
@@ -166,16 +176,18 @@ FALLBACK_CITY_COORDINATES = {
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Database connection pool
-    db_url = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/voyanta")
+    # Database connection pool — only connect if DATABASE_URL is provided
     app.state.db_pool = None
-    try:
-        app.state.db_pool = await asyncpg.create_pool(db_url, timeout=10)
-        logger.info("✅ Database pool connected.")
-    except Exception as e:
-        logger.warning(f"⚠️  Could not connect to DB on startup: {e}")
+    if DATABASE_URL:
+        try:
+            app.state.db_pool = await asyncpg.create_pool(DATABASE_URL, timeout=10)
+            logger.info("✅ Database pool connected.")
+        except Exception as e:
+            logger.warning(f"⚠️  Could not connect to DB on startup: {e}")
+    else:
+        logger.warning("⚠️  DATABASE_URL not set — DB features disabled.")
 
-    # Shared async HTTP client for TomTom API calls
+    # Shared async HTTP client
     app.state.http_client = httpx.AsyncClient(timeout=10.0)
     logger.info("✅ HTTP client initialized.")
 
@@ -191,16 +203,24 @@ app = FastAPI(
     title="Voyanta API",
     description="Intelligent travel planner powered by TomTom APIs",
     version="2.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
-# CORS — allow all origins so Vercel frontend can reach this backend.
-# After deployment, tighten this to your exact Vercel URL if you prefer.
-CORSORIGINS = os.getenv("CORS_ORIGINS", "*")
+# ─────────────────────────────────────────────
+#  CORS — read allowed origins from env var
+# ─────────────────────────────────────────────
+
+_raw_origins = os.getenv("CORS_ORIGINS", "*")
+_parsed_origins: List[str] = (
+    [o.strip() for o in _raw_origins.split(",") if o.strip()]
+    if _raw_origins != "*"
+    else ["*"]
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[CORSORIGINS] if CORSORIGINS != "*" else ["*"],
-    allow_credentials=CORSORIGINS != "*",
+    allow_origins=_parsed_origins,
+    allow_credentials=_raw_origins != "*",
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -306,7 +326,6 @@ async def fetch_real_image(
 
     for query in filter(None, [primary_query, fallback_query]):
         try:
-            encoded = query.replace(' ', '%20')
             r = await client.get(
                 PEXELS_BASE,
                 params={
@@ -352,6 +371,7 @@ async def fetch_weather_label(client: httpx.AsyncClient, lat: float, lng: float)
         except Exception as exc:
             logger.warning("OpenWeather lookup failed for %s,%s: %s", lat, lng, exc)
 
+    # Free fallback — Open-Meteo (no API key required)
     try:
         r = await client.get(
             "https://api.open-meteo.com/v1/forecast",
@@ -372,60 +392,69 @@ async def fetch_weather_label(client: httpx.AsyncClient, lat: float, lng: float)
     return "Weather unavailable"
 
 
-async def generate_trip_with_ollama(
+# ─────────────────────────────────────────────
+#  Groq AI — replaces local Ollama
+# ─────────────────────────────────────────────
+
+async def generate_trip_with_groq(
     client: httpx.AsyncClient,
     location: str,
     days: int,
     start_day: date,
     coordinates: Coordinates,
 ) -> Optional[TripPlanResponse]:
-    model_name = OLLAMA_MODEL
-    try:
-        tags_response = await client.get(f"{OLLAMA_BASE_URL}/api/tags", timeout=10.0)
-        tags_response.raise_for_status()
-        available_models = tags_response.json().get("models", [])
-        available_names = [model.get("name") for model in available_models if model.get("name")]
-        if available_names and model_name not in available_names:
-            model_name = available_names[0]
-    except Exception as exc:
-        logger.warning("Ollama model discovery failed: %s", exc)
+    """
+    Generate a trip itinerary using Groq's free hosted LLM API.
+    Falls back gracefully if GROQ_API_KEY is not set or the request fails.
+    """
+    if not GROQ_API_KEY:
+        logger.warning("GROQ_API_KEY not set — skipping AI trip generation for %s", location)
+        return None
 
-    schema = OllamaTripContent.model_json_schema()
     prompt = (
         f"Create a realistic {days}-day travel itinerary for {location}. "
-        "Return only data matching the provided JSON schema. "
-        "Use real-sounding landmarks, neighborhoods, food spots, and cultural activities for the destination. "
-        "Give exactly 3 stops per day. Keep best_time short like '09:00 AM'. "
-        "Make category labels concise like Food, Culture, Beach, Nature, Shopping, Wellness, Heritage."
+        "Return ONLY a valid JSON object (no markdown, no extra text) with this exact structure:\n"
+        '{"destination":"<city name>","summary":"<one sentence>","days":['
+        '{"day":1,"theme":"<theme>","stops":['
+        '{"title":"<place>","location":"<address>","category":"<Food|Culture|Nature|Shopping|Heritage|Beach|Wellness>","duration_minutes":<int>,"best_time":"<HH:MM AM/PM>"},'
+        "...3 stops per day]}]}\n"
+        f"Generate exactly {days} days with 3 stops each. Use real landmarks."
     )
 
     try:
         response = await client.post(
-            f"{OLLAMA_BASE_URL}/api/chat",
+            GROQ_BASE,
+            headers={
+                "Authorization": f"Bearer {GROQ_API_KEY}",
+                "Content-Type": "application/json",
+            },
             json={
-                "model": model_name,
-                "stream": False,
-                "format": schema,
+                "model": GROQ_MODEL,
                 "messages": [
                     {
                         "role": "system",
-                        "content": (
-                            "You are a travel planner. Produce concise, realistic city itineraries as valid JSON only."
-                        ),
+                        "content": "You are a travel planner. Return only valid JSON, no markdown.",
                     },
                     {"role": "user", "content": prompt},
                 ],
-                "options": {"temperature": 0.2},
+                "temperature": 0.3,
+                "max_tokens": 3000,
             },
-            timeout=120.0,
+            timeout=30.0,
         )
         response.raise_for_status()
-        content = response.json().get("message", {}).get("content")
-        if not content:
-            return None
-        ai_trip = OllamaTripContent.model_validate_json(content)
+        content = response.json()["choices"][0]["message"]["content"].strip()
+
+        # Strip markdown code fences if present
+        if content.startswith("```"):
+            content = content.split("```")[1]
+            if content.startswith("json"):
+                content = content[4:]
+            content = content.strip()
+
+        ai_trip = GroqTripContent.model_validate_json(content)
     except Exception as exc:
-        logger.warning("Ollama trip generation failed for %s: %s", location, exc)
+        logger.warning("Groq trip generation failed for %s: %s", location, exc)
         return None
 
     destination = ai_trip.destination or location.title()
@@ -453,7 +482,7 @@ async def generate_trip_with_ollama(
             stop_image = await fetch_real_image(client, stop.title, f"{stop.title} {destination}")
             itinerary.append(
                 TripStop(
-                    id=f"ollama-{day_number}-{stop_index + 1}",
+                    id=f"groq-{day_number}-{stop_index + 1}",
                     day=day_number,
                     date=trip_date.strftime("%b %d"),
                     time=stop.best_time or build_time_label(stop_index),
@@ -480,7 +509,8 @@ async def generate_trip_with_ollama(
     return TripPlanResponse(
         destination=destination,
         destination_image=destination_image,
-        map_image_url=build_tomtom_static_map_url(coordinates.lat, coordinates.lng, zoom=10),
+        map_image_url=build_tomtom_static_map_url(coordinates.lat, coordinates.lng, zoom=10)
+        if TOMTOM_API_KEY else build_image_url(f"map {destination}"),
         weather=weather_label if weather_label != "Weather unavailable" else "AI-planned",
         dates=format_date_range(start_day, days),
         days=days,
@@ -549,7 +579,8 @@ def build_fallback_trip_plan(location: str, days: int, start_day: date) -> TripP
     return TripPlanResponse(
         destination=destination,
         destination_image=destination_image,
-        map_image_url=build_tomtom_static_map_url(coordinates.lat, coordinates.lng, zoom=10),
+        map_image_url=build_tomtom_static_map_url(coordinates.lat, coordinates.lng, zoom=10)
+        if TOMTOM_API_KEY else build_image_url(f"map {destination}"),
         weather="Offline mode",
         dates=format_date_range(start_day, days),
         days=days,
@@ -570,6 +601,8 @@ async def root():
         "message": "Welcome to Voyanta API v2 — Powered by TomTom",
         "docs": "/docs",
         "tomtom_configured": bool(TOMTOM_API_KEY),
+        "groq_configured": bool(GROQ_API_KEY),
+        "db_configured": bool(DATABASE_URL),
     }
 
 
@@ -584,10 +617,6 @@ async def geocode(
     client: httpx.AsyncClient = Depends(get_http_client),
     key: str = Depends(tomtom_key)
 ):
-    """
-    Convert a free-text address or place name into geographic coordinates
-    using TomTom's Fuzzy Search API.
-    """
     url = f"{TOMTOM_BASE}/search/2/geocode/{query}.json"
     params = {"key": key, "limit": limit, "typeahead": True}
     try:
@@ -625,9 +654,6 @@ async def reverse_geocode(
     client: httpx.AsyncClient = Depends(get_http_client),
     key: str = Depends(tomtom_key)
 ):
-    """
-    Convert geographic coordinates into a human-readable address using TomTom Reverse Geocoding.
-    """
     url = f"{TOMTOM_BASE}/search/2/reverseGeocode/{lat},{lng}.json"
     params = {"key": key}
     try:
@@ -642,7 +668,7 @@ async def reverse_geocode(
     addresses = data.get("addresses", [])
     if not addresses:
         raise HTTPException(status_code=404, detail="No address found for these coordinates.")
-    
+
     addr = addresses[0].get("address", {})
     return ReverseGeocodeResult(
         address=addr.get("freeformAddress", ""),
@@ -653,7 +679,7 @@ async def reverse_geocode(
 
 
 # ─────────────────────────────────────────────
-#  3. ROUTE CALCULATION — multi-stop itinerary routing
+#  3. ROUTE CALCULATION
 # ─────────────────────────────────────────────
 
 @app.post("/route", response_model=RouteResponse, tags=["Routing"])
@@ -662,11 +688,6 @@ async def calculate_route(
     client: httpx.AsyncClient = Depends(get_http_client),
     key: str = Depends(tomtom_key)
 ):
-    """
-    Calculate an optimized multi-stop route across all itinerary waypoints.
-    Returns total distance, travel time, and a GeoJSON LineString for the map.
-    Supports car, pedestrian, and bicycle travel modes.
-    """
     if len(body.waypoints) < 2:
         raise HTTPException(status_code=400, detail="At least 2 waypoints are required.")
 
@@ -696,7 +717,6 @@ async def calculate_route(
     summary = route.get("summary", {})
     legs_raw = route.get("legs", [])
 
-    # Build GeoJSON LineString from all leg points
     all_points = []
     legs = []
     for leg in legs_raw:
@@ -712,10 +732,7 @@ async def calculate_route(
 
     geojson = {
         "type": "Feature",
-        "geometry": {
-            "type": "LineString",
-            "coordinates": all_points
-        },
+        "geometry": {"type": "LineString", "coordinates": all_points},
         "properties": {
             "distance_km": round(summary.get("lengthInMeters", 0) / 1000, 1),
             "duration_min": round(summary.get("travelTimeInSeconds", 0) / 60),
@@ -732,32 +749,23 @@ async def calculate_route(
 
 
 # ─────────────────────────────────────────────
-#  4. NEARBY POI SEARCH — discover local spots
+#  4. NEARBY POI SEARCH
 # ─────────────────────────────────────────────
 
 @app.get("/nearby-pois", response_model=List[POI], tags=["Discovery"])
 async def nearby_pois(
-    lat: float = Query(..., description="Center latitude"),
-    lng: float = Query(..., description="Center longitude"),
-    radius: int = Query(2000, ge=100, le=50000, description="Search radius in meters"),
-    category: Optional[str] = Query(None, description="TomTom category filter (e.g. 'restaurant', 'museum', 'hotel')"),
+    lat: float = Query(...),
+    lng: float = Query(...),
+    radius: int = Query(2000, ge=100, le=50000),
+    category: Optional[str] = Query(None),
     limit: int = Query(10, ge=1, le=50),
     client: httpx.AsyncClient = Depends(get_http_client),
     key: str = Depends(tomtom_key)
 ):
-    """
-    Discover nearby Points of Interest around a waypoint using TomTom's Nearby Search.
-    Perfect for the Voyanta 'Smart Radar' feature — surfaces restaurants, museums, 
-    landmarks, and events near any itinerary stop.
-    """
     url = f"{TOMTOM_BASE}/search/2/nearbySearch/.json"
     params: dict = {
-        "key": key,
-        "lat": lat,
-        "lon": lng,
-        "radius": radius,
-        "limit": limit,
-        "view": "Unified",
+        "key": key, "lat": lat, "lon": lng,
+        "radius": radius, "limit": limit, "view": "Unified",
     }
     if category:
         params["categorySet"] = category
@@ -792,23 +800,19 @@ async def nearby_pois(
 
 
 # ─────────────────────────────────────────────
-#  5. FUZZY SEARCH — smart place search bar
+#  5. FUZZY SEARCH
 # ─────────────────────────────────────────────
 
 @app.get("/search", response_model=List[POI], tags=["Discovery"])
 async def fuzzy_search(
-    query: str = Query(..., description="Free text search (e.g. 'coffee shops in Reykjavik')"),
-    lat: Optional[float] = Query(None, description="Bias results near this latitude"),
-    lng: Optional[float] = Query(None, description="Bias results near this longitude"),
+    query: str = Query(...),
+    lat: Optional[float] = Query(None),
+    lng: Optional[float] = Query(None),
     radius: int = Query(10000, ge=100, le=100000),
     limit: int = Query(10, ge=1, le=50),
     client: httpx.AsyncClient = Depends(get_http_client),
     key: str = Depends(tomtom_key)
 ):
-    """
-    Full-text fuzzy search for places, addresses, and landmarks.
-    Powers the Voyanta search bar to find any destination worldwide.
-    """
     url = f"{TOMTOM_BASE}/search/2/search/{query}.json"
     params: dict = {"key": key, "limit": limit, "typeahead": True}
     if lat and lng:
@@ -841,6 +845,10 @@ async def fuzzy_search(
     return results
 
 
+# ─────────────────────────────────────────────
+#  6. TRIP PLAN — main endpoint
+# ─────────────────────────────────────────────
+
 @app.post("/trip-plan", response_model=TripPlanResponse, tags=["Trips"])
 async def build_trip_plan(
     body: TripPlanRequest,
@@ -848,60 +856,31 @@ async def build_trip_plan(
     key: Optional[str] = Depends(optional_tomtom_key)
 ):
     """
-    Build a trip dashboard payload from a user-entered destination and trip length.
-    The destination is geocoded with TomTom, nearby POIs are fetched, and each day
-    receives a small set of itinerary stops plus route geometry when available.
+    Build a full trip dashboard. Tries: TomTom geocode → Groq AI → static fallback.
     """
     days = max(1, min(body.days, 30))
     start_day = body.start_date or date.today()
     default_coordinates = fallback_coordinates_for(body.location)
-    if not key:
-        logger.warning("TomTom API key missing. Trying Ollama trip plan for %s", body.location)
-        ollama_trip = await generate_trip_with_ollama(
-            client,
-            body.location,
-            days,
-            start_day,
-            default_coordinates,
-        )
-        return ollama_trip or build_fallback_trip_plan(body.location, days, start_day)
 
+    if not key:
+        logger.warning("TomTom key missing — trying Groq for %s", body.location)
+        groq_trip = await generate_trip_with_groq(client, body.location, days, start_day, default_coordinates)
+        return groq_trip or build_fallback_trip_plan(body.location, days, start_day)
+
+    # Geocode
     geocode_url = f"{TOMTOM_BASE}/search/2/geocode/{body.location}.json"
-    geocode_params = {"key": key, "limit": 1, "typeahead": True}
     try:
-        geocode_response = await client.get(geocode_url, params=geocode_params)
+        geocode_response = await client.get(geocode_url, params={"key": key, "limit": 1, "typeahead": True})
         geocode_response.raise_for_status()
-    except httpx.HTTPStatusError as e:
-        logger.warning("TomTom geocoding HTTP error for %s: %s", body.location, e)
-        ollama_trip = await generate_trip_with_ollama(
-            client,
-            body.location,
-            days,
-            start_day,
-            default_coordinates,
-        )
-        return ollama_trip or build_fallback_trip_plan(body.location, days, start_day)
-    except httpx.RequestError as e:
-        logger.warning("TomTom geocoding unreachable for %s: %s", body.location, e)
-        ollama_trip = await generate_trip_with_ollama(
-            client,
-            body.location,
-            days,
-            start_day,
-            default_coordinates,
-        )
-        return ollama_trip or build_fallback_trip_plan(body.location, days, start_day)
+    except Exception as e:
+        logger.warning("TomTom geocoding failed for %s: %s", body.location, e)
+        groq_trip = await generate_trip_with_groq(client, body.location, days, start_day, default_coordinates)
+        return groq_trip or build_fallback_trip_plan(body.location, days, start_day)
 
     geocode_results = geocode_response.json().get("results", [])
     if not geocode_results:
-        ollama_trip = await generate_trip_with_ollama(
-            client,
-            body.location,
-            days,
-            start_day,
-            default_coordinates,
-        )
-        return ollama_trip or build_fallback_trip_plan(body.location, days, start_day)
+        groq_trip = await generate_trip_with_groq(client, body.location, days, start_day, default_coordinates)
+        return groq_trip or build_fallback_trip_plan(body.location, days, start_day)
 
     destination = geocode_results[0]
     destination_position = destination.get("position", {})
@@ -911,52 +890,30 @@ async def build_trip_plan(
     dest_lng = destination_position.get("lon")
 
     if dest_lat is None or dest_lng is None:
-        raise HTTPException(status_code=502, detail="Destination coordinates were missing from geocoding response.")
+        raise HTTPException(status_code=502, detail="Destination coordinates missing from geocoding response.")
 
+    # POI search
     poi_url = f"{TOMTOM_BASE}/search/2/nearbySearch/.json"
     poi_params = {
-        "key": key,
-        "lat": dest_lat,
-        "lon": dest_lng,
-        "radius": 12000,
-        "limit": max(days * 4, 8),
-        "view": "Unified",
+        "key": key, "lat": dest_lat, "lon": dest_lng,
+        "radius": 12000, "limit": max(days * 4, 8), "view": "Unified",
     }
     try:
         poi_response = await client.get(poi_url, params=poi_params)
         poi_response.raise_for_status()
-    except httpx.HTTPStatusError as e:
-        logger.warning("TomTom POI search HTTP error for %s: %s", body.location, e)
-        ollama_trip = await generate_trip_with_ollama(
-            client,
-            destination_name,
-            days,
-            start_day,
-            Coordinates(lat=dest_lat, lng=dest_lng),
+        raw_pois = poi_response.json().get("results", [])
+    except Exception as e:
+        logger.warning("TomTom POI search failed for %s: %s", body.location, e)
+        groq_trip = await generate_trip_with_groq(
+            client, destination_name, days, start_day, Coordinates(lat=dest_lat, lng=dest_lng)
         )
-        return ollama_trip or build_fallback_trip_plan(body.location, days, start_day)
-    except httpx.RequestError as e:
-        logger.warning("TomTom POI search unreachable for %s: %s", body.location, e)
-        ollama_trip = await generate_trip_with_ollama(
-            client,
-            destination_name,
-            days,
-            start_day,
-            Coordinates(lat=dest_lat, lng=dest_lng),
-        )
-        return ollama_trip or build_fallback_trip_plan(body.location, days, start_day)
+        return groq_trip or build_fallback_trip_plan(body.location, days, start_day)
 
-    raw_pois = poi_response.json().get("results", [])
     if not raw_pois:
-        logger.warning("No POIs found for %s. Trying Ollama trip plan.", body.location)
-        ollama_trip = await generate_trip_with_ollama(
-            client,
-            destination_name,
-            days,
-            start_day,
-            Coordinates(lat=dest_lat, lng=dest_lng),
+        groq_trip = await generate_trip_with_groq(
+            client, destination_name, days, start_day, Coordinates(lat=dest_lat, lng=dest_lng)
         )
-        return ollama_trip or build_fallback_trip_plan(body.location, days, start_day)
+        return groq_trip or build_fallback_trip_plan(body.location, days, start_day)
 
     destination_image = await fetch_destination_image(client, destination_name)
     weather_label = await fetch_weather_label(client, dest_lat, dest_lng)
@@ -971,7 +928,7 @@ async def build_trip_plan(
         start_idx = day_index * stops_per_day
         day_pois = raw_pois[start_idx:start_idx + stops_per_day]
         if not day_pois:
-            day_pois = raw_pois[: min(stops_per_day, len(raw_pois))]
+            day_pois = raw_pois[:min(stops_per_day, len(raw_pois))]
 
         day_waypoints = []
         for stop_index, poi in enumerate(day_pois):
@@ -1012,12 +969,7 @@ async def build_trip_plan(
 
         locations = ":".join([f"{wp.lat},{wp.lng}" for wp in day_waypoints])
         route_url = f"{TOMTOM_BASE}/routing/1/calculateRoute/{locations}/json"
-        route_params = {
-            "key": key,
-            "travelMode": "car",
-            "routeType": "fastest",
-            "traffic": True,
-        }
+        route_params = {"key": key, "travelMode": "car", "routeType": "fastest", "traffic": True}
         try:
             route_response = await client.get(route_url, params=route_params)
             route_response.raise_for_status()
@@ -1042,10 +994,7 @@ async def build_trip_plan(
                 day=day_number,
                 geojson={
                     "type": "Feature",
-                    "geometry": {
-                        "type": "LineString",
-                        "coordinates": coords,
-                    },
+                    "geometry": {"type": "LineString", "coordinates": coords},
                     "properties": {},
                 },
                 total_distance_meters=summary.get("lengthInMeters", 0),
@@ -1056,6 +1005,7 @@ async def build_trip_plan(
     return TripPlanResponse(
         destination=destination_name,
         destination_image=destination_image,
+        map_image_url=build_tomtom_static_map_url(dest_lat, dest_lng, zoom=10),
         weather=weather_label,
         dates=format_date_range(start_day, days),
         days=days,
@@ -1066,22 +1016,17 @@ async def build_trip_plan(
 
 
 # ─────────────────────────────────────────────
-#  6. TRAFFIC INCIDENTS — live traffic alerts
+#  7. TRAFFIC INCIDENTS
 # ─────────────────────────────────────────────
 
 @app.get("/traffic", response_model=List[TrafficIncident], tags=["Traffic"])
 async def get_traffic_incidents(
-    lat: float = Query(..., description="Bounding box center latitude"),
-    lng: float = Query(..., description="Bounding box center longitude"),
-    radius_km: float = Query(5.0, ge=0.5, le=50.0, description="Radius in km"),
+    lat: float = Query(...),
+    lng: float = Query(...),
+    radius_km: float = Query(5.0, ge=0.5, le=50.0),
     client: httpx.AsyncClient = Depends(get_http_client),
     key: str = Depends(tomtom_key)
 ):
-    """
-    Fetch live traffic incidents (accidents, roadworks, closures) near a location.
-    Used by Voyanta to warn travelers about disruptions along their route.
-    """
-    # Build a rough bounding box from center + radius
     delta = radius_km / 111.0
     min_lat, max_lat = lat - delta, lat + delta
     min_lng, max_lng = lng - delta, lng + delta
@@ -1089,12 +1034,9 @@ async def get_traffic_incidents(
 
     url = f"{TOMTOM_BASE}/traffic/services/5/incidentDetails"
     params = {
-        "key": key,
-        "bbox": bbox,
+        "key": key, "bbox": bbox,
         "fields": "{incidents{type,geometry{type,coordinates},properties{id,iconCategory,magnitudeOfDelay,events{description,code},startTime,endTime,from,to,length,delay,roadNumbers,timeValidity}}}",
-        "language": "en-GB",
-        "t": "1111",
-        "timeValidityFilter": "present",
+        "language": "en-GB", "t": "1111", "timeValidityFilter": "present",
     }
     try:
         r = await client.get(url, params=params)
@@ -1112,16 +1054,13 @@ async def get_traffic_incidents(
         geom = feature.get("geometry", {})
         coords = geom.get("coordinates", [0, 0])
         if isinstance(coords[0], list):
-            coords = coords[0]  # take first point of a line
-
+            coords = coords[0]
         events = props.get("events", [{}])
         desc = events[0].get("description", "Traffic incident") if events else "Traffic incident"
-        mag = props.get("magnitudeOfDelay", 0)
-
         incidents.append(TrafficIncident(
             id=props.get("id", ""),
             description=f"{desc} ({props.get('from', '')} → {props.get('to', '')})",
-            severity=severity_map.get(mag, "Unknown"),
+            severity=severity_map.get(props.get("magnitudeOfDelay", 0), "Unknown"),
             lat=coords[1] if len(coords) > 1 else lat,
             lng=coords[0],
         ))
@@ -1129,7 +1068,7 @@ async def get_traffic_incidents(
 
 
 # ─────────────────────────────────────────────
-#  7. DATABASE: Smart Event Suggestions (existing)
+#  8. DATABASE: Smart Event Suggestions
 # ─────────────────────────────────────────────
 
 @app.get("/trips/{trip_id}/smart-suggestions", response_model=List[EventFestival], tags=["Trips"])
@@ -1138,23 +1077,19 @@ async def get_smart_suggestions(
     day_date: date,
     pool: asyncpg.Pool = Depends(get_db_pool)
 ):
-    """
-    Finds events happening within a 5km radius of any scheduled itinerary waypoint
-    for that specific calendar day using PostGIS ST_DWithin.
-    """
     query = """
         WITH trip_waypoints AS (
-            SELECT location 
-            FROM waypoints 
+            SELECT location
+            FROM waypoints
             WHERE trip_id = $1::uuid AND DATE(start_time) = $2::DATE
         )
-        SELECT 
-            e.id::text, 
-            e.title, 
-            e.event_type, 
-            e.start_time, 
+        SELECT
+            e.id::text,
+            e.title,
+            e.event_type,
+            e.start_time,
             e.end_time,
-            ST_Y(e.location::geometry)::float as lat, 
+            ST_Y(e.location::geometry)::float as lat,
             ST_X(e.location::geometry)::float as lng,
             MIN(ST_DistanceSphere(e.location::geometry, w.location::geometry))::float as distance_meters
         FROM events e
