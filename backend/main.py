@@ -194,10 +194,13 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# CORS — allow all origins so Vercel frontend can reach this backend.
+# After deployment, tighten this to your exact Vercel URL if you prefer.
+CORSORIGINS = os.getenv("CORS_ORIGINS", "*")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
-    allow_credentials=True,
+    allow_origins=[CORSORIGINS] if CORSORIGINS != "*" else ["*"],
+    allow_credentials=CORSORIGINS != "*",
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -1176,4 +1179,5 @@ async def get_smart_suggestions(
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
