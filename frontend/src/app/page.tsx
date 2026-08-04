@@ -18,6 +18,7 @@ import {
   Settings2,
   ChevronDown,
   ChevronUp,
+  Home,
 } from "lucide-react";
 
 const VoyantaMap = dynamic(() => import("@/components/VoyantaMap"), {
@@ -342,12 +343,16 @@ export default function Page() {
 
         <header className="sticky top-0 z-40 border-b border-white/[0.05] bg-[#05070A]/85 backdrop-blur-2xl">
           <div className="mx-auto flex max-w-[1600px] items-center gap-4 px-6 py-5 md:px-10">
-            <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setTrip(null)}
+              className="flex items-center gap-3 transition-opacity hover:opacity-80"
+            >
               <div className="flex h-11 w-11 items-center justify-center rounded-full bg-white shadow-[0_0_28px_rgba(255,255,255,0.18)]">
                 <Snowflake className="h-5 w-5 text-black" />
               </div>
               <span className="text-xl font-syne font-bold tracking-tight">VOYANTA</span>
-            </div>
+            </button>
 
             {trip ? (
               <form
@@ -402,7 +407,18 @@ export default function Page() {
               <div className="ml-auto" />
             )}
 
-            <div className="hidden items-center rounded-full border border-white/[0.08] bg-white/[0.03] p-1 md:flex">
+            <div className="hidden items-center gap-3 md:flex">
+              {trip && (
+                <button
+                  onClick={() => setTrip(null)}
+                  className="flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-xs font-bold text-white transition hover:bg-white/[0.08]"
+                >
+                  <Home className="h-3.5 w-3.5" />
+                  New Trip
+                </button>
+              )}
+              
+              <div className="flex items-center rounded-full border border-white/[0.08] bg-white/[0.03] p-1">
               <button
                 onClick={() => setViewMode("grid")}
                 className={cn(
