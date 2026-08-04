@@ -436,7 +436,7 @@ async def generate_trip_with_groq(
         '{"destination":"<city name>","summary":"<one sentence>","days":['
         '{"day":1,"theme":"<theme>","stops":['
         '{"title":"<place>","location":"<address>","category":"<category string>","duration_minutes":<int>,"best_time":"<HH:MM AM/PM>"},'
-        f"...{stops_per_day} stops per day]}}]}\n"
+        f"...{stops_per_day} stops per day]}}]}}\n"
         f"Generate exactly {days} days with {stops_per_day} stops each. Use real landmarks that fit the budget and categories."
     )
 
