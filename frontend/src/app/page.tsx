@@ -66,6 +66,13 @@ interface TripRoute {
   total_travel_time_seconds: number;
 }
 
+interface CulinaryHighlight {
+  title: string;
+  description: string;
+  famous_for: string;
+  location: string;
+}
+
 interface TripPlan {
   destination: string;
   destination_image: string;
@@ -75,6 +82,7 @@ interface TripPlan {
   days: number;
   itinerary: TripStop[];
   routes: TripRoute[];
+  culinary_highlights: CulinaryHighlight[];
 }
 
 const cn = (...classes: Array<string | false | null | undefined>) =>
@@ -90,8 +98,8 @@ function formatRouteSummary(route?: TripRoute) {
   return `${km} km planned route • ${minutes} min drive time`;
 }
 
-function StopCard({ stop }: { stop: TripStop }) {
-  const mapUrl = `https://www.google.com/maps/dir/?api=1&destination=${stop.lat},${stop.lng}`;
+function StopCard({ stop, destination }: { stop: TripStop; destination: string }) {
+  const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(stop.title + ' ' + destination)}`;
 
   return (
     <motion.article
@@ -162,6 +170,36 @@ function StopCard({ stop }: { stop: TripStop }) {
         </div>
       </div>
     </motion.article>
+  );
+}
+
+function CulinaryCard({ highlight, destination }: { highlight: CulinaryHighlight; destination: string }) {
+  const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(highlight.title + ' ' + destination)}`;
+
+  return (
+    <article className="flex flex-col gap-4 rounded-3xl border border-white/[0.06] bg-white/[0.01] p-6 hover:bg-white/[0.03] transition-colors">
+      <div>
+        <h3 className="font-syne text-lg font-bold text-white">{highlight.title}</h3>
+        <p className="mt-1 text-[0.8rem] font-medium text-orange-400">{highlight.famous_for}</p>
+      </div>
+      <p className="text-[0.85rem] leading-relaxed text-[#94A3B8] flex-1">
+        {highlight.description}
+      </p>
+      <div className="mt-2 flex items-center justify-between border-t border-white/[0.05] pt-4">
+        <span className="text-[0.75rem] text-[#64748B] flex items-center gap-1.5 line-clamp-1 max-w-[60%]">
+          <MapPin className="h-3 w-3 shrink-0" />
+          {highlight.location}
+        </span>
+        <a
+          href={mapUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center gap-1.5 rounded-full bg-blue-500/10 px-3 py-1.5 text-[11px] font-bold text-blue-400 transition-colors hover:bg-blue-500/20"
+        >
+          Navigate
+        </a>
+      </div>
+    </article>
   );
 }
 
@@ -440,6 +478,7 @@ export default function Page() {
                 3D Map
               </button>
             </div>
+            </div>
           </div>
         </header>
 
@@ -536,7 +575,7 @@ export default function Page() {
                   <div className="grid gap-8 sm:grid-cols-2 xl:grid-cols-3">
                     <AnimatePresence mode="popLayout">
                       {filteredItinerary.map((stop) => (
-                        <StopCard key={stop.id} stop={stop} />
+                        <StopCard key={stop.id} stop={stop} destination={trip.destination} />
                       ))}
                     </AnimatePresence>
                   </div>
@@ -545,7 +584,7 @@ export default function Page() {
                     <div className="grid gap-8 sm:grid-cols-2 xl:grid-cols-1">
                       <AnimatePresence mode="popLayout">
                         {filteredItinerary.map((stop) => (
-                          <StopCard key={stop.id} stop={stop} />
+                          <StopCard key={stop.id} stop={stop} destination={trip.destination} />
                         ))}
                       </AnimatePresence>
                     </div>
@@ -564,6 +603,25 @@ export default function Page() {
                   </div>
                 )}
               </section>
+
+              {/* Culinary Highlights Section */}
+              {trip.culinary_highlights && trip.culinary_highlights.length > 0 && (
+                <section className="mt-16 border-t border-white/[0.08] pt-12">
+                  <div className="mb-8">
+                    <p className="text-[11px] uppercase tracking-[0.28em] text-[#64748B]">
+                      Local Flavour
+                    </p>
+                    <h2 className="mt-2 text-3xl font-syne font-bold tracking-tight">
+                      Must-Try Culinary Highlights
+                    </h2>
+                  </div>
+                  <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    {trip.culinary_highlights.map((highlight, idx) => (
+                      <CulinaryCard key={idx} highlight={highlight} destination={trip.destination} />
+                    ))}
+                  </div>
+                </section>
+              )}
             </>
           ) : null}
 

@@ -131,6 +131,12 @@ class TripDayRoute(BaseModel):
     total_travel_time_seconds: float = 0
 
 
+class CulinaryHighlight(BaseModel):
+    title: str
+    description: str
+    famous_for: str
+    location: str
+
 class TripPlanResponse(BaseModel):
     destination: str
     destination_image: str
@@ -141,6 +147,7 @@ class TripPlanResponse(BaseModel):
     coordinates: Coordinates
     itinerary: List[TripStop]
     routes: List[TripDayRoute]
+    culinary_highlights: List[CulinaryHighlight]
 
 
 class GroqTripStop(BaseModel):
@@ -156,11 +163,17 @@ class GroqTripDay(BaseModel):
     theme: str
     stops: List[GroqTripStop]
 
+class GroqCulinaryHighlight(BaseModel):
+    title: str
+    description: str
+    famous_for: str
+    location: str
 
 class GroqTripContent(BaseModel):
     destination: str
     summary: str
     days: List[GroqTripDay]
+    culinary_highlights: List[GroqCulinaryHighlight]
 
 
 FALLBACK_CITY_COORDINATES = {
@@ -432,11 +445,18 @@ async def generate_trip_with_groq(
         f"The traveler prefers a {pace or 'Balanced'} pace ({stops_per_day} stops per day) "
         f"with a {budget_str} budget. "
         f"Focus heavily on these categories if possible: {categories_str}. "
+        "CRITICAL REQUIREMENTS:\n"
+        "- Eliminate generic, routine activities (e.g., standard gyms, basic parks, indoor fitness centers).\n"
+        "- Recommend ONLY destination-specific highlights, famous city landmarks, top-rated tourist hotspots, and unique cultural/outdoor activities (e.g., scenic runs through historic parks, waterfront walks, iconic viewpoints).\n"
+        "- Include a dedicated 'culinary_highlights' array containing 3 to 5 'Must-Try' local food suggestions and iconic top-rated eateries famous for local dishes.\n"
         "Return ONLY a valid JSON object (no markdown, no extra text) with this exact structure:\n"
         '{"destination":"<city name>","summary":"<one sentence>","days":['
         '{"day":1,"theme":"<theme>","stops":['
         '{"title":"<place>","location":"<address>","category":"<category string>","duration_minutes":<int>,"best_time":"<HH:MM AM/PM>"},'
-        f"...{stops_per_day} stops per day]}}]}}\n"
+        f"...{stops_per_day} stops per day]}}],"
+        '"culinary_highlights":['
+        '{"title":"<eatery name or dish>","description":"<brief description>","famous_for":"<local specialty>","location":"<address>"},'
+        '...3 to 5 highlights]}\n'
         f"Generate exactly {days} days with {stops_per_day} stops each. Use real landmarks that fit the budget and categories."
     )
 
@@ -536,6 +556,14 @@ async def generate_trip_with_groq(
         coordinates=coordinates,
         itinerary=itinerary,
         routes=routes,
+        culinary_highlights=[
+            CulinaryHighlight(
+                title=h.title,
+                description=h.description,
+                famous_for=h.famous_for,
+                location=h.location
+            ) for h in ai_trip.culinary_highlights
+        ] if hasattr(ai_trip, "culinary_highlights") else []
     )
 
 
@@ -606,6 +634,7 @@ def build_fallback_trip_plan(location: str, days: int, start_day: date) -> TripP
         coordinates=coordinates,
         itinerary=itinerary,
         routes=routes,
+        culinary_highlights=[]
     )
 
 
