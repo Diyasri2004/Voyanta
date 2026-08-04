@@ -15,6 +15,9 @@ import {
   Navigation,
   PlaneTakeoff,
   PlaneLanding,
+  Settings2,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 const VoyantaMap = dynamic(() => import("@/components/VoyantaMap"), {
@@ -173,11 +176,28 @@ function addDays(iso: string, n: number): string {
   return d.toISOString().split("T")[0];
 }
 
-/** Difference in days between two YYYY-MM-DD strings (end - start) */
 function diffDays(start: string, end: string): number {
   const ms = new Date(end).getTime() - new Date(start).getTime();
   return Math.max(1, Math.round(ms / 86400000));
 }
+
+const ACTIVITY_CATEGORIES = [
+  "🏛️ Culture & History", "🍕 Foodie & Culinary", "⛰️ Outdoor & Adventure",
+  "🛍️ Shopping & Local Markets", "🎨 Art & Entertainment", "🌙 Nightlife & Social",
+  "🧘 Wellness & Relaxation", "🎢 Family & Theme Parks"
+];
+
+const TRAVEL_PACES = [
+  { id: "Relaxed", label: "☕ Relaxed", desc: "1-2 stops/day" },
+  { id: "Balanced", label: "🚶 Balanced", desc: "3-4 stops/day" },
+  { id: "Action-Packed", label: "⚡ Action-Packed", desc: "5+ stops/day" },
+];
+
+const BUDGET_LEVELS = [
+  { id: "Budget-Friendly", label: "💰 Budget-Friendly" },
+  { id: "Moderate", label: "💳 Moderate" },
+  { id: "Luxury", label: "✨ Luxury" },
+];
 
 export default function Page() {
   const [locationInput, setLocationInput] = useState("");
@@ -189,7 +209,19 @@ export default function Page() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function loadTripPlan(location: string, days: number, date: string) {
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [pace, setPace] = useState<string>("Balanced");
+  const [budget, setBudget] = useState<string>("Moderate");
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  async function loadTripPlan(
+    location: string, 
+    days: number, 
+    date: string,
+    categories: string[],
+    pace: string,
+    budget: string
+  ) {
     setLoading(true);
     setError(null);
 
@@ -197,7 +229,7 @@ export default function Page() {
       const response = await fetch("/api/trip-plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ location, days, start_date: date }),
+        body: JSON.stringify({ location, days, start_date: date, categories, pace, budget }),
       });
 
       const payload = await response.json().catch(() => null);
@@ -245,7 +277,7 @@ export default function Page() {
       return;
     }
     const days = Math.min(30, Math.max(1, diffDays(startDate, returnDate)));
-    void loadTripPlan(trimmedLocation, days, startDate);
+    void loadTripPlan(trimmedLocation, days, startDate, selectedCategories, pace, budget);
   }
 
   return (
@@ -611,6 +643,105 @@ export default function Page() {
                       {diffDays(startDate, returnDate)}&nbsp;day{diffDays(startDate, returnDate) !== 1 ? "s" : ""}
                     </span>
                   </div>
+
+                  {/* Advanced Options Toggle */}
+                  <button
+                    type="button"
+                    onClick={() => setShowAdvanced(!showAdvanced)}
+                    className="mx-auto mt-2 flex items-center gap-2 text-[0.85rem] text-[#64748B] hover:text-white transition-colors"
+                  >
+                    <Settings2 className="h-4 w-4" />
+                    Advanced preferences
+                    {showAdvanced ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                  </button>
+
+                  {/* Advanced Options Panel */}
+                  <AnimatePresence>
+                    {showAdvanced && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="mt-4 flex flex-col gap-6 rounded-2xl border border-white/[0.05] bg-white/[0.02] p-6 text-left">
+                          
+                          {/* Categories */}
+                          <div>
+                            <p className="mb-3 text-[0.85rem] font-semibold text-white">Activity Interests</p>
+                            <div className="flex flex-wrap gap-2">
+                              {ACTIVITY_CATEGORIES.map(cat => {
+                                const isSelected = selectedCategories.includes(cat);
+                                return (
+                                  <button
+                                    key={cat}
+                                    type="button"
+                                    onClick={() => setSelectedCategories(prev => 
+                                      isSelected ? prev.filter(c => c !== cat) : [...prev, cat]
+                                    )}
+                                    className={cn(
+                                      "rounded-full px-4 py-2 text-[0.8rem] transition-colors border",
+                                      isSelected 
+                                        ? "bg-blue-500/20 border-blue-500/50 text-blue-100" 
+                                        : "bg-white/[0.03] border-white/[0.08] text-[#94A3B8] hover:bg-white/[0.08]"
+                                    )}
+                                  >
+                                    {cat}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          <div className="grid gap-6 md:grid-cols-2">
+                            {/* Pace */}
+                            <div>
+                              <p className="mb-3 text-[0.85rem] font-semibold text-white">Travel Pace</p>
+                              <div className="flex flex-col gap-2">
+                                {TRAVEL_PACES.map(p => (
+                                  <label key={p.id} className="flex cursor-pointer items-center gap-3 rounded-xl border border-white/[0.05] bg-white/[0.02] p-3 hover:bg-white/[0.05] transition-colors">
+                                    <input
+                                      type="radio"
+                                      name="pace"
+                                      value={p.id}
+                                      checked={pace === p.id}
+                                      onChange={() => setPace(p.id)}
+                                      className="h-4 w-4 accent-blue-500"
+                                    />
+                                    <div className="flex flex-col">
+                                      <span className="text-[0.85rem] text-white">{p.label}</span>
+                                      <span className="text-[0.75rem] text-[#64748B]">{p.desc}</span>
+                                    </div>
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Budget */}
+                            <div>
+                              <p className="mb-3 text-[0.85rem] font-semibold text-white">Budget Level</p>
+                              <div className="flex flex-col gap-2">
+                                {BUDGET_LEVELS.map(b => (
+                                  <label key={b.id} className="flex cursor-pointer items-center gap-3 rounded-xl border border-white/[0.05] bg-white/[0.02] p-3 hover:bg-white/[0.05] transition-colors">
+                                    <input
+                                      type="radio"
+                                      name="budget"
+                                      value={b.id}
+                                      checked={budget === b.id}
+                                      onChange={() => setBudget(b.id)}
+                                      className="h-4 w-4 accent-blue-500"
+                                    />
+                                    <span className="text-[0.85rem] text-white">{b.label}</span>
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </form>
 
                 <p className="mt-5 text-[0.8rem] text-[#334155]">

@@ -101,6 +101,9 @@ class TripPlanRequest(BaseModel):
     location: str
     days: int = 3
     start_date: Optional[date] = None
+    categories: Optional[List[str]] = None
+    pace: Optional[str] = None
+    budget: Optional[str] = None
 
 
 class TripStop(BaseModel):
@@ -402,6 +405,9 @@ async def generate_trip_with_groq(
     days: int,
     start_day: date,
     coordinates: Coordinates,
+    categories: Optional[List[str]] = None,
+    pace: Optional[str] = None,
+    budget: Optional[str] = None,
 ) -> Optional[TripPlanResponse]:
     """
     Generate a trip itinerary using Groq's free hosted LLM API.
@@ -411,14 +417,27 @@ async def generate_trip_with_groq(
         logger.warning("GROQ_API_KEY not set — skipping AI trip generation for %s", location)
         return None
 
+    stops_per_day = 3
+    if pace:
+        if "relaxed" in pace.lower():
+            stops_per_day = 2
+        elif "action" in pace.lower() or "packed" in pace.lower():
+            stops_per_day = 5
+
+    categories_str = ", ".join(categories) if categories else "Food, Culture, Nature, Shopping, Heritage, Wellness, Sightseeing"
+    budget_str = budget if budget else "Moderate"
+
     prompt = (
         f"Create a realistic {days}-day travel itinerary for {location}. "
+        f"The traveler prefers a {pace or 'Balanced'} pace ({stops_per_day} stops per day) "
+        f"with a {budget_str} budget. "
+        f"Focus heavily on these categories if possible: {categories_str}. "
         "Return ONLY a valid JSON object (no markdown, no extra text) with this exact structure:\n"
         '{"destination":"<city name>","summary":"<one sentence>","days":['
         '{"day":1,"theme":"<theme>","stops":['
-        '{"title":"<place>","location":"<address>","category":"<Food|Culture|Nature|Shopping|Heritage|Beach|Wellness>","duration_minutes":<int>,"best_time":"<HH:MM AM/PM>"},'
-        "...3 stops per day]}]}\n"
-        f"Generate exactly {days} days with 3 stops each. Use real landmarks."
+        '{"title":"<place>","location":"<address>","category":"<category string>","duration_minutes":<int>,"best_time":"<HH:MM AM/PM>"},'
+        f"...{stops_per_day} stops per day]}}]}\n"
+        f"Generate exactly {days} days with {stops_per_day} stops each. Use real landmarks that fit the budget and categories."
     )
 
     try:
@@ -887,12 +906,22 @@ async def build_trip_plan(
 
     # 2. PRIORITY: Use Groq (LLM) to generate a realistic travel itinerary
     if GROQ_API_KEY:
-        groq_trip = await generate_trip_with_groq(client, destination_name, days, start_day, coordinates)
+        groq_trip = await generate_trip_with_groq(
+            client, destination_name, days, start_day, coordinates,
+            body.categories, body.pace, body.budget
+        )
         if groq_trip:
             # Add TomTom map if available
             if key:
                 groq_trip.map_image_url = build_tomtom_static_map_url(dest_lat, dest_lng, zoom=10)
             return groq_trip
+
+    stops_per_day = 3
+    if body.pace:
+        if "relaxed" in body.pace.lower():
+            stops_per_day = 2
+        elif "action" in body.pace.lower() or "packed" in body.pace.lower():
+            stops_per_day = 5
 
     # 3. FALLBACK 1: Try TomTom POI Search (Filtered for Tourist Attractions & Museums)
     if key:
@@ -913,7 +942,6 @@ async def build_trip_plan(
                 routes = []
                 fallback_map_image = build_tomtom_static_map_url(dest_lat, dest_lng, zoom=10)
                 
-                stops_per_day = 3
                 for day_index in range(days):
                     day_number = day_index + 1
                     trip_date = start_day.fromordinal(start_day.toordinal() + day_index)
