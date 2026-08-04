@@ -380,7 +380,7 @@ export default function Page() {
         <div className="fixed inset-0 pointer-events-none bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.16] mix-blend-overlay" />
 
         <header className="sticky top-0 z-40 border-b border-white/[0.05] bg-[#05070A]/85 backdrop-blur-2xl">
-          <div className="mx-auto flex max-w-[1600px] items-center gap-4 px-6 py-5 md:px-10">
+          <div className="mx-auto flex max-w-[1600px] flex-col md:flex-row md:items-center gap-4 px-6 py-5 md:px-10">
             <button
               type="button"
               onClick={() => setTrip(null)}
@@ -445,7 +445,7 @@ export default function Page() {
               <div className="ml-auto" />
             )}
 
-            <div className="hidden items-center gap-3 md:flex">
+            <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end">
               {trip && (
                 <button
                   onClick={() => setTrip(null)}
@@ -669,7 +669,7 @@ export default function Page() {
                   </div>
 
                   {/* ── Row 2 : Departure | Return | Plan trip ── */}
-                  <div className="flex items-center gap-[10px]">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-[10px]">
 
                     {/* Departure date */}
                     <div className="relative flex-1">
@@ -705,7 +705,7 @@ export default function Page() {
                       id="plan-trip-btn"
                       type="submit"
                       disabled={loading || !locationInput.trim()}
-                      className="shrink-0 rounded-full bg-white px-7 py-[14px] text-[0.95rem] font-bold text-[#05070A] transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="w-full sm:w-auto shrink-0 rounded-full bg-white px-7 py-[14px] text-[0.95rem] font-bold text-[#05070A] transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Plan trip"}
                     </button>
