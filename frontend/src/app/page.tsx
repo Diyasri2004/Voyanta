@@ -87,26 +87,29 @@ function formatRouteSummary(route?: TripRoute) {
 }
 
 function StopCard({ stop }: { stop: TripStop }) {
+  const mapUrl = `https://www.google.com/maps/dir/?api=1&destination=${stop.lat},${stop.lng}`;
+
   return (
     <motion.article
       layout
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.97 }}
-      className="overflow-hidden rounded-[2rem] bg-[#0A0D14]/85 border border-white/[0.08] shadow-2xl"
+      onClick={() => window.open(mapUrl, "_blank")}
+      className="group overflow-hidden rounded-[2rem] bg-[#0A0D14]/85 border border-white/[0.08] shadow-2xl cursor-pointer transition-all hover:border-blue-500/40 hover:shadow-[0_0_30px_rgba(59,130,246,0.15)]"
     >
-      <div className="relative h-64">
+      <div className="relative h-64 overflow-hidden">
         <img
           src={stop.image}
           alt={stop.title}
-          className="h-full w-full object-cover"
+          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-[#07090E] via-[#07090E]/30 to-transparent" />
         <div className="absolute left-0 right-0 bottom-0 p-6">
           <span className="inline-flex rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[10px] font-bold tracking-[0.22em] text-white">
             {stop.type}
           </span>
-          <h3 className="mt-3 text-2xl font-syne font-bold tracking-tight text-white">
+          <h3 className="mt-3 text-2xl font-syne font-bold tracking-tight text-white group-hover:text-blue-400 transition-colors">
             {stop.title}
           </h3>
           <p className="mt-2 flex items-center gap-2 text-sm text-[#CBD5E1]">
