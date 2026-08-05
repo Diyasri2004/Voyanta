@@ -586,10 +586,10 @@ def fallback_coordinates_for(location: str) -> Coordinates:
     return Coordinates(lat=20.5937, lng=78.9629)
 
 
-def build_fallback_trip_plan(location: str, days: int, start_day: date) -> TripPlanResponse:
+async def build_fallback_trip_plan(location: str, days: int, start_day: date, client: httpx.AsyncClient) -> TripPlanResponse:
     coordinates = fallback_coordinates_for(location)
     destination = location.title()
-    destination_image = build_image_url(destination)
+    destination_image = await fetch_real_image(client, destination)
     routes: List[TripDayRoute] = []
     itinerary: List[TripStop] = []
     stop_templates = [
@@ -636,6 +636,7 @@ def build_fallback_trip_plan(location: str, days: int, start_day: date) -> TripP
                 elif day_index == 2:
                     venue_title = ["Ambedkar Memorial Park", "British Residency", "Chowk Night Market"][stop_index % 3]
 
+            stop_image = await fetch_real_image(client, venue_title, f"{title} {destination}")
             itinerary.append(
                 TripStop(
                     id=f"fallback-{day_number}-{stop_index + 1}",
@@ -648,7 +649,7 @@ def build_fallback_trip_plan(location: str, days: int, start_day: date) -> TripP
                     creators=f"Starts at {build_time_label(stop_index)}",
                     distance=f"{round((stop_index + 1) * 1.8, 1)}km",
                     duration="90m",
-                    image=build_image_url(title),
+                    image=stop_image,
                     map_image_url=build_tomtom_static_map_url(stop_lat, stop_lng) if TOMTOM_API_KEY else build_image_url(f"map {stop_lat}"),
                     lat=stop_lat,
                     lng=stop_lng,
@@ -1066,7 +1067,7 @@ async def build_trip_plan(
             logger.warning("TomTom POI fallback failed for %s: %s", destination_name, e)
 
     # 4. FALLBACK 2: Hardcoded generic templates
-    return build_fallback_trip_plan(destination_name, days, start_day)
+    return await build_fallback_trip_plan(destination_name, days, start_day, client)
 
 
 # ─────────────────────────────────────────────
