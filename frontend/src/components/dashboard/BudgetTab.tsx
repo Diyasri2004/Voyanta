@@ -3,10 +3,12 @@
 import { useState } from "react";
 import { Doughnut } from "react-chartjs-2";
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from "chart.js";
+import { useCurrency } from "@/context/CurrencyContext";
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
 export default function BudgetTab({ trip }: { trip: any }) {
+  const { formatCost, convertCost } = useCurrency();
   const [budgetLimit, setBudgetLimit] = useState(2000);
   const [expenses, setExpenses] = useState([
     { category: "Dining", amount: 450, color: "#ff007f" },
@@ -42,7 +44,7 @@ export default function BudgetTab({ trip }: { trip: any }) {
       <div className="bg-white/5 border border-white/10 rounded-xl p-5 flex items-center justify-between">
         <div>
           <p className="text-[#94A3B8] text-xs font-bold uppercase tracking-wider">Remaining</p>
-          <p className="text-3xl font-syne font-bold text-white mt-1">${remaining}</p>
+          <p className="text-3xl font-syne font-bold text-white mt-1">{formatCost(remaining)}</p>
         </div>
         <div className="h-20 w-20 relative">
           <Doughnut data={data} options={options} />
@@ -57,7 +59,7 @@ export default function BudgetTab({ trip }: { trip: any }) {
               <div className="w-3 h-3 rounded-full shadow-[0_0_8px_currentColor]" style={{ backgroundColor: e.color, color: e.color }} />
               <span className="text-sm font-semibold">{e.category}</span>
             </div>
-            <span className="text-sm font-bold">${e.amount}</span>
+            <span className="text-sm font-bold">{formatCost(e.amount)}</span>
           </div>
         ))}
       </div>

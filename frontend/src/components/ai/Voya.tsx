@@ -3,10 +3,13 @@
 import { useState } from "react";
 import { MessageSquare, X, Send } from "lucide-react";
 
-export default function VoyAI({ trip }: { trip: any }) {
+import { useCurrency } from "@/context/CurrencyContext";
+
+export default function Voya({ trip }: { trip: any }) {
+  const { currency } = useCurrency();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
-    { role: "assistant", content: "I am VOY-AI, your cyber-travel assistant. How can I modify your agenda?" }
+    { role: "assistant", content: "I am Voya, your AI Travel Concierge. How can I modify your agenda?" }
   ]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -26,7 +29,7 @@ export default function VoyAI({ trip }: { trip: any }) {
       setTimeout(() => {
         setMessages(prev => [...prev, { 
           role: "assistant", 
-          content: `Checking ${trip?.destination || "your destination"}... I recommend updating your packing list.`
+          content: `Checking ${trip?.destination || "your destination"}... I see you are using ${currency}. I recommend updating your packing list.`
         }]);
         setIsLoading(false);
       }, 1000);
@@ -51,7 +54,7 @@ export default function VoyAI({ trip }: { trip: any }) {
         <div className="flex items-center justify-between p-4 border-b border-[#00f0ff]/20">
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-[#39ff14] animate-pulse" />
-            <h3 className="font-syne font-bold text-[#00f0ff]">VOY-AI</h3>
+            <h3 className="font-syne font-bold text-[#00f0ff]">Voya - AI Travel Concierge</h3>
           </div>
           <button onClick={() => setIsOpen(false)} className="text-white/50 hover:text-white">
             <X className="h-5 w-5" />
@@ -89,7 +92,7 @@ export default function VoyAI({ trip }: { trip: any }) {
               type="text" 
               value={input}
               onChange={e => setInput(e.target.value)}
-              placeholder="Command VOY-AI..."
+              placeholder="Command Voya..."
               className="flex-1 bg-transparent px-4 py-3 text-sm outline-none text-white placeholder-white/40"
             />
             <button type="submit" disabled={!input.trim()} className="bg-[#00f0ff] text-black p-2 rounded-full hover:bg-white disabled:opacity-50 transition-colors">

@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import CyberDashboard from "@/components/dashboard/CyberDashboard";
 import CityHeroImage from "@/components/CityHeroImage";
 import { AnimatePresence, motion } from "framer-motion";
+import { useCurrency } from "@/context/CurrencyContext";
 import {
   Calendar,
   Loader2,
@@ -174,19 +175,36 @@ function StopCard({ stop, destination }: { stop: TripStop; destination: string }
   );
 }
 
-function CulinaryCard({ highlight, destination }: { highlight: CulinaryHighlight; destination: string }) {
+function CulinaryCard({ highlight, destination }: { highlight: any; destination: string }) {
+  const { formatStringRange } = useCurrency();
   const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(highlight.title + ' ' + destination)}`;
 
   return (
-    <article className="flex flex-col gap-4 rounded-3xl border border-white/[0.06] bg-white/[0.01] p-6 hover:bg-white/[0.03] transition-colors">
+    <article className="flex flex-col gap-4 rounded-3xl border border-[#ff007f]/20 bg-[#03050a]/90 backdrop-blur-md p-6 hover:bg-white/5 transition-colors shadow-[0_0_15px_rgba(255,0,127,0.1)] group">
       <div>
-        <h3 className="font-syne text-lg font-bold text-white">{highlight.title}</h3>
-        <p className="mt-1 text-[0.8rem] font-medium text-orange-400">{highlight.famous_for}</p>
+        <div className="flex justify-between items-start">
+          <h3 className="font-syne text-lg font-bold text-white group-hover:text-[#ff007f] transition-colors">{highlight.title}</h3>
+          {highlight.price_tier && (
+            <span className="bg-[#ff007f]/20 text-[#ff007f] text-xs font-bold px-2 py-1 rounded-md ml-2 shrink-0 border border-[#ff007f]/30">
+              {highlight.price_tier}
+            </span>
+          )}
+        </div>
+        <p className="mt-1 text-[0.8rem] font-bold text-[#39ff14] uppercase tracking-wider">{highlight.famous_for}</p>
       </div>
+      
       <p className="text-[0.85rem] leading-relaxed text-[#94A3B8] flex-1">
         {highlight.description}
       </p>
-      <div className="mt-2 flex items-center justify-between border-t border-white/[0.05] pt-4">
+
+      {highlight.cost_approx && (
+        <div className="flex items-center gap-1 bg-white/5 border border-white/10 w-fit px-2 py-1 rounded-md cursor-help" title="≈ Prices are approximate and subject to seasonal changes.">
+          <span className="text-[10px] text-white/80">🍱 Approx:</span>
+          <span className="text-[10px] font-bold text-[#00f0ff]">{formatStringRange(highlight.cost_approx)}</span>
+        </div>
+      )}
+
+      <div className="mt-2 flex items-center justify-between border-t border-white/10 pt-4">
         <span className="text-[0.75rem] text-[#64748B] flex items-center gap-1.5 line-clamp-1 max-w-[60%]">
           <MapPin className="h-3 w-3 shrink-0" />
           {highlight.location}
@@ -195,7 +213,7 @@ function CulinaryCard({ highlight, destination }: { highlight: CulinaryHighlight
           href={mapUrl}
           target="_blank"
           rel="noreferrer"
-          className="flex items-center gap-1.5 rounded-full bg-blue-500/10 px-3 py-1.5 text-[11px] font-bold text-blue-400 transition-colors hover:bg-blue-500/20"
+          className="flex items-center gap-1.5 rounded-full bg-[#00f0ff]/10 px-3 py-1.5 text-[11px] font-bold text-[#00f0ff] transition-colors hover:bg-[#00f0ff]/20 border border-[#00f0ff]/30"
         >
           Navigate
         </a>
@@ -240,6 +258,7 @@ const BUDGET_LEVELS = [
 ];
 
 export default function Page() {
+  const { currency, setCurrency } = useCurrency();
   const [locationInput, setLocationInput] = useState("");
   const [startDate, setStartDate] = useState(todayIso());
   const [returnDate, setReturnDate] = useState(() => addDays(todayIso(), 3));
@@ -447,6 +466,22 @@ export default function Page() {
             )}
 
             <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end">
+              <select 
+                value={currency} 
+                onChange={e => setCurrency(e.target.value)}
+                className="bg-[#03050a] border border-[#ff007f]/50 text-white text-xs font-bold rounded-lg px-2 py-2 outline-none focus:border-[#00f0ff] transition-colors cursor-pointer"
+              >
+                <option value="USD">USD ($)</option>
+                <option value="EUR">EUR (€)</option>
+                <option value="GBP">GBP (£)</option>
+                <option value="INR">INR (₹)</option>
+                <option value="JPY">JPY (¥)</option>
+                <option value="AUD">AUD (A$)</option>
+                <option value="CAD">CAD (C$)</option>
+                <option value="AED">AED (د.إ)</option>
+                <option value="SGD">SGD (S$)</option>
+              </select>
+
               {trip && (
                 <button
                   onClick={() => setTrip(null)}
@@ -491,7 +526,29 @@ export default function Page() {
           ) : null}
 
           {trip ? (
-            <CyberDashboard trip={trip} setTrip={setTrip} />
+            <div className="flex flex-col w-full h-full">
+              <CyberDashboard trip={trip} setTrip={setTrip} />
+
+              {trip.culinary_highlights && trip.culinary_highlights.length > 0 && (
+                <section className="mt-8 pt-8 border-t border-white/10 shrink-0">
+                  <div className="mb-6 flex items-center justify-between">
+                    <div>
+                      <p className="text-[11px] uppercase tracking-[0.28em] text-[#ff007f] font-bold">
+                        Local Flavour
+                      </p>
+                      <h2 className="mt-1 text-2xl font-syne font-bold tracking-tight text-white">
+                        Must-Try Culinary Highlights
+                      </h2>
+                    </div>
+                  </div>
+                  <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4 pb-12">
+                    {trip.culinary_highlights.map((highlight: any, idx: number) => (
+                      <CulinaryCard key={idx} highlight={highlight} destination={trip.destination} />
+                    ))}
+                  </div>
+                </section>
+              )}
+            </div>
           ) : null}
 
           {loading && !trip ? (
@@ -525,16 +582,49 @@ export default function Page() {
                 <form onSubmit={handleSubmit} className="mt-9 flex flex-col gap-[10px]">
 
                   {/* ── Row 1 : Destination search ── */}
-                  <div className="relative">
+                  <div className="relative group">
                     <Search className="pointer-events-none absolute left-[18px] top-1/2 h-[17px] w-[17px] -translate-y-1/2 text-[#475569]" />
                     <input
                       id="destination-input"
                       value={locationInput}
                       onChange={(e) => setLocationInput(e.target.value)}
-                      placeholder="Search a destination..."
+                      placeholder="Search a destination... (e.g. Kyoto, Dubai)"
                       autoComplete="off"
-                      className="w-full rounded-full border border-white/[0.09] bg-[#111827]/60 py-[14px] pl-12 pr-5 text-[0.95rem] text-white placeholder-[#475569] outline-none transition-all focus:border-blue-500/40 focus:bg-[#111827]/90 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.12)]"
+                      className="w-full rounded-full border border-white/[0.09] bg-[#111827]/60 py-[14px] pl-12 pr-5 text-[0.95rem] text-white placeholder-[#475569] outline-none transition-all focus:border-[#00f0ff]/50 focus:bg-[#111827]/90 focus:shadow-[0_0_15px_rgba(0,240,255,0.2)]"
                     />
+                    
+                    {/* Autocomplete Dropdown */}
+                    {locationInput.length > 0 && (
+                      <div className="absolute top-full mt-2 w-full bg-[#03050a]/95 backdrop-blur-xl border border-[#00f0ff]/30 rounded-xl overflow-hidden z-50 shadow-[0_10px_30px_rgba(0,0,0,0.8)] opacity-0 invisible group-focus-within:opacity-100 group-focus-within:visible transition-all">
+                        {['Kyoto, Japan', 'Tokyo, Japan', 'Paris, France', 'Dubai, UAE', 'New York, USA', 'Delhi, India', 'London, UK']
+                          .filter(city => city.toLowerCase().includes(locationInput.toLowerCase()))
+                          .map((city, idx) => (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => setLocationInput(city)}
+                              className="w-full text-left px-4 py-3 hover:bg-[#00f0ff]/10 text-white text-sm border-b border-white/5 last:border-0 transition-colors"
+                            >
+                              <MapPin className="inline-block h-3 w-3 text-[#00f0ff] mr-2" />
+                              {city}
+                            </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Suggestion Chips */}
+                  <div className="flex flex-wrap gap-2 mt-1 mb-2">
+                    {['Kyoto', 'Dubai', 'Paris', 'New York'].map(city => (
+                      <button
+                        key={city}
+                        type="button"
+                        onClick={() => setLocationInput(city)}
+                        className="bg-[#00f0ff]/10 border border-[#00f0ff]/30 text-[#00f0ff] text-[10px] px-3 py-1 rounded-full font-bold tracking-widest hover:bg-[#00f0ff] hover:text-black transition-colors"
+                      >
+                        {city}
+                      </button>
+                    ))}
                   </div>
 
                   {/* ── Row 2 : Departure | Return | Plan trip ── */}

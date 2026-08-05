@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import { Clock, MapPin, AlertTriangle, ArrowRight } from "lucide-react";
+import { useCurrency } from "@/context/CurrencyContext";
 
 export default function AgendaTab({ trip, setTrip }: { trip: any; setTrip: any }) {
+  const { formatStringRange } = useCurrency();
   const itinerary = trip?.itinerary || [];
   const [activeDay, setActiveDay] = useState(1);
 
@@ -101,6 +103,14 @@ export default function AgendaTab({ trip, setTrip }: { trip: any; setTrip: any }
                 <ArrowRight className="h-4 w-4" />
               </button>
             </div>
+            
+            {stop.cost_range && (
+              <div className="flex items-center gap-1 bg-white/5 border border-white/10 w-fit px-2 py-1 rounded-md mb-1 cursor-help" title="≈ Prices are approximate and subject to seasonal changes.">
+                <span className="text-[10px] text-white/80">🏷️ Approx. Cost:</span>
+                <span className="text-[10px] font-bold text-[#ff007f]">{formatStringRange(stop.cost_range)}</span>
+              </div>
+            )}
+
             <p className="text-xs text-[#94A3B8] flex items-center gap-1 mt-1">
               <MapPin className="h-3 w-3" />
               <span className="truncate">{stop.location}</span>

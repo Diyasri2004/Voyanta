@@ -122,6 +122,7 @@ class TripStop(BaseModel):
     map_image_url: str
     lat: float
     lng: float
+    cost_range: str
 
 
 class TripDayRoute(BaseModel):
@@ -136,6 +137,8 @@ class CulinaryHighlight(BaseModel):
     description: str
     famous_for: str
     location: str
+    price_tier: str
+    cost_approx: str
 
 class TripPlanResponse(BaseModel):
     destination: str
@@ -156,6 +159,7 @@ class GroqTripStop(BaseModel):
     category: str
     duration_minutes: int
     best_time: str
+    cost_range: str
 
 
 class GroqTripDay(BaseModel):
@@ -168,6 +172,8 @@ class GroqCulinaryHighlight(BaseModel):
     description: str
     famous_for: str
     location: str
+    price_tier: str
+    cost_approx: str
 
 class GroqTripContent(BaseModel):
     destination: str
@@ -450,13 +456,14 @@ async def generate_trip_with_groq(
         "- DISTINCT SCHEDULES: Provide distinct morning, afternoon, and evening activities with realistic time spacing.\n"
         "- NO GENERIC PLACEHOLDERS: Replace generic descriptions (e.g., 'Gym', 'Eat local food', 'Visit a park') with REAL, highly specific destination hotspots, exact restaurant/street names, famous historic sites, and authentic local experiences for the selected city.\n"
         "- Include a dedicated 'culinary_highlights' array containing 3 to 5 'Must-Try' local food suggestions and iconic top-rated eateries famous for local dishes.\n"
+        "- PRICING: Provide precise cost estimates in USD ($). For stops, use 'cost_range' (e.g. '$15 - $40 / person'). For culinary, use 'price_tier' (e.g. '$$$') and 'cost_approx' (e.g. '$25 - $35 / person').\n"
         "Return ONLY a valid JSON object (no markdown, no extra text) with this exact structure:\n"
         '{"destination":"<city name>","summary":"<one sentence>","days":['
         '{"day":1,"theme":"<theme>","stops":['
-        '{"title":"<specific place name>","location":"<address>","category":"<category string>","duration_minutes":<int>,"best_time":"<HH:MM AM/PM>"},'
+        '{"title":"<specific place name>","location":"<address>","category":"<category string>","duration_minutes":<int>,"best_time":"<HH:MM AM/PM>","cost_range":"<str>"},'
         f"...{stops_per_day} stops per day]}}],"
         '"culinary_highlights":['
-        '{"title":"<eatery name or dish>","description":"<brief description>","famous_for":"<local specialty>","location":"<address>"},'
+        '{"title":"<eatery name or dish>","description":"<brief description>","famous_for":"<local specialty>","location":"<address>","price_tier":"<str>","cost_approx":"<str>"},'
         '...3 to 5 highlights]}\n'
         f"Generate exactly {days} days with {stops_per_day} stops each. Use real, distinct landmarks that fit the budget and categories."
     )
@@ -537,6 +544,7 @@ async def generate_trip_with_groq(
                     map_image_url=map_image_url,
                     lat=stop_lat,
                     lng=stop_lng,
+                    cost_range=getattr(stop, 'cost_range', '$10 - $20 / person'),
                 )
             )
 
@@ -562,7 +570,9 @@ async def generate_trip_with_groq(
                 title=h.title,
                 description=h.description,
                 famous_for=h.famous_for,
-                location=h.location
+                location=h.location,
+                price_tier=getattr(h, 'price_tier', '$$'),
+                cost_approx=getattr(h, 'cost_approx', '$15 - $25 / person'),
             ) for h in ai_trip.culinary_highlights
         ] if hasattr(ai_trip, "culinary_highlights") else []
     )
@@ -607,12 +617,12 @@ def build_fallback_trip_plan(location: str, days: int, start_day: date) -> TripP
                     type=category.upper(),
                     creators=f"Starts at {build_time_label(stop_index)}",
                     distance=f"{round((stop_index + 1) * 1.8, 1)}km",
-                    elevation="N/A",
-                    duration=f"{90 + (stop_index * 30)}m",
-                    image=destination_image,
-                    map_image_url=build_image_url(f"map {destination}"),
+                    duration="90m",
+                    image=build_image_url(title),
+                    map_image_url=build_tomtom_static_map_url(stop_lat, stop_lng) if TOMTOM_API_KEY else build_image_url(f"map {stop_lat}"),
                     lat=stop_lat,
                     lng=stop_lng,
+                    cost_range="$15 - $30 / person",
                 )
             )
             day_coordinates.append([stop_lng, stop_lat])
@@ -1004,6 +1014,7 @@ async def build_trip_plan(
                                 map_image_url=fallback_map_image,
                                 lat=stop_lat_poi,
                                 lng=stop_lng_poi,
+                                cost_range="$10 - $25 / person",
                             )
                         )
                         day_waypoints.append([stop_lng_poi, stop_lat_poi])
