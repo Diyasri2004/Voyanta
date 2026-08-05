@@ -249,8 +249,8 @@ export default function Page() {
   const [error, setError] = useState<string | null>(null);
 
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-  const [pace, setPace] = useState<string>("Balanced");
-  const [budget, setBudget] = useState<string>("Moderate");
+  const [pace, setPace] = useState<string>("");
+  const [budget, setBudget] = useState<string>("");
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   async function loadTripPlan(
