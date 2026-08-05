@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
+import CyberDashboard from "@/components/dashboard/CyberDashboard";
 import CityHeroImage from "@/components/CityHeroImage";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -490,139 +491,7 @@ export default function Page() {
           ) : null}
 
           {trip ? (
-            <>
-              <section className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
-                <div className="rounded-[2.5rem] border border-white/[0.08] bg-white/[0.02] p-8 backdrop-blur-xl">
-                  <p className="text-[11px] uppercase tracking-[0.3em] text-[#64748B]">
-                    Live destination
-                  </p>
-                  <h1 className="mt-4 text-4xl font-syne font-bold tracking-tight md:text-6xl">
-                    {trip.destination}
-                  </h1>
-
-                  <div className="mt-5 flex flex-wrap items-center gap-3">
-                    <span className="inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-blue-300">
-                      <Calendar className="h-3.5 w-3.5" />
-                      {trip.dates}
-                    </span>
-                    <span className="rounded-full border border-white/[0.1] bg-white/[0.04] px-4 py-2 text-xs font-bold uppercase tracking-[0.18em]">
-                      {trip.weather}
-                    </span>
-                    <span className="rounded-full border border-white/[0.1] bg-white/[0.04] px-4 py-2 text-xs font-bold uppercase tracking-[0.18em]">
-                      {trip.days} days
-                    </span>
-                  </div>
-
-                  <p className="mt-8 max-w-2xl text-sm leading-7 text-[#94A3B8]">
-                    Search any destination and choose how many days you want for the trip.
-                    The backend geocodes the place, finds nearby stops, builds day plans,
-                    and sends route data back to this dashboard.
-                  </p>
-                </div>
-
-                <div className="overflow-hidden rounded-[2.5rem] border border-white/[0.08] bg-white/[0.02]">
-                  <CityHeroImage
-                    city={trip.destination}
-                    className="h-full min-h-[280px] w-full"
-                  />
-                </div>
-              </section>
-
-              <section className="mt-10 flex gap-4 overflow-x-auto border-b border-white/[0.05] pb-8 hide-scrollbar">
-                {Array.from({ length: trip.days }, (_, index) => {
-                  const day = index + 1;
-                  const dayStops = trip.itinerary.filter((item) => item.day === day);
-                  const dateLabel = dayStops[0]?.date ?? `Day ${day}`;
-                  return (
-                    <button
-                      key={day}
-                      onClick={() => setActiveDay(day)}
-                      className={cn(
-                        "min-w-[180px] shrink-0 rounded-[2rem] px-6 py-5 text-left transition",
-                        activeDay === day
-                          ? "bg-white text-[#05070A]"
-                          : "border border-white/[0.08] bg-white/[0.02] text-[#94A3B8]"
-                      )}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-[11px] font-bold uppercase tracking-[0.24em]">
-                          Day {day}
-                        </span>
-                        <span className="rounded-full bg-black/10 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.16em]">
-                          {dayStops.length} stops
-                        </span>
-                      </div>
-                      <p className="mt-3 text-2xl font-syne font-bold">{dateLabel}</p>
-                    </button>
-                  );
-                })}
-              </section>
-
-              <section className="mt-10">
-                <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-                  <div>
-                    <p className="text-[11px] uppercase tracking-[0.28em] text-[#64748B]">
-                      Day overview
-                    </p>
-                    <h2 className="mt-2 text-3xl font-syne font-bold tracking-tight">
-                      Day {activeDay} itinerary
-                    </h2>
-                  </div>
-                  <p className="text-sm text-[#94A3B8]">{formatRouteSummary(activeRoute)}</p>
-                </div>
-
-                {viewMode === "grid" ? (
-                  <div className="grid gap-8 sm:grid-cols-2 xl:grid-cols-3">
-                    <AnimatePresence mode="popLayout">
-                      {filteredItinerary.map((stop) => (
-                        <StopCard key={stop.id} stop={stop} destination={trip.destination} />
-                      ))}
-                    </AnimatePresence>
-                  </div>
-                ) : (
-                  <div className="grid gap-8 xl:grid-cols-[0.95fr_1.05fr]">
-                    <div className="grid gap-8 sm:grid-cols-2 xl:grid-cols-1">
-                      <AnimatePresence mode="popLayout">
-                        {filteredItinerary.map((stop) => (
-                          <StopCard key={stop.id} stop={stop} destination={trip.destination} />
-                        ))}
-                      </AnimatePresence>
-                    </div>
-                    <div className="min-h-[620px] overflow-hidden rounded-[2rem] border border-white/[0.08]">
-                      <VoyantaMap
-                        waypoints={filteredItinerary.map((stop) => ({
-                          id: stop.id,
-                          lat: stop.lat,
-                          lng: stop.lng,
-                          title: stop.title,
-                          location: stop.location,
-                        }))}
-                        mapImageUrl={trip.map_image_url}
-                      />
-                    </div>
-                  </div>
-                )}
-              </section>
-
-              {/* Culinary Highlights Section */}
-              {trip.culinary_highlights && trip.culinary_highlights.length > 0 && (
-                <section className="mt-16 border-t border-white/[0.08] pt-12">
-                  <div className="mb-8">
-                    <p className="text-[11px] uppercase tracking-[0.28em] text-[#64748B]">
-                      Local Flavour
-                    </p>
-                    <h2 className="mt-2 text-3xl font-syne font-bold tracking-tight">
-                      Must-Try Culinary Highlights
-                    </h2>
-                  </div>
-                  <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                    {trip.culinary_highlights.map((highlight, idx) => (
-                      <CulinaryCard key={idx} highlight={highlight} destination={trip.destination} />
-                    ))}
-                  </div>
-                </section>
-              )}
-            </>
+            <CyberDashboard trip={trip} setTrip={setTrip} />
           ) : null}
 
           {loading && !trip ? (

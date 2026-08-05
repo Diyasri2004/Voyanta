@@ -1,14 +1,15 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0a0a0a;
-  --foreground: #ededed;
+  --background: #03050a;
+  --foreground: #ffffff;
 }
 
 @theme {
-  --color-brand-dark: #0B0F19;
-  --color-brand-accent: #FF4A5A;
-  --color-brand-surface: #1A2235;
+  --color-cyber-dark: #03050a;
+  --color-cyber-pink: #ff007f;
+  --color-cyber-cyan: #00f0ff;
+  --color-cyber-lime: #39ff14;
 
   --animate-festival-ping: festival-ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
   --animate-slide-in: slideIn 0.3s ease-out forwards;
