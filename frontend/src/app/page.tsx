@@ -598,12 +598,22 @@ export default function Page() {
                 <form onSubmit={handleSubmit} className="mt-9 flex flex-col gap-[10px]">
 
                   {/* ── Row 1 : Destination search ── */}
-                  <div className="relative group">
+                  <div className="relative">
                     <Search className="pointer-events-none absolute left-[18px] top-1/2 h-[17px] w-[17px] -translate-y-1/2 text-[#475569]" />
                     <input
                       id="destination-input"
                       value={locationInput}
                       onChange={(e) => setLocationInput(e.target.value)}
+                      onFocus={() => {
+                        const wrapper = document.getElementById('autocomplete-dropdown');
+                        if (wrapper) wrapper.style.display = 'block';
+                      }}
+                      onBlur={() => {
+                        setTimeout(() => {
+                          const wrapper = document.getElementById('autocomplete-dropdown');
+                          if (wrapper) wrapper.style.display = 'none';
+                        }, 200);
+                      }}
                       placeholder="Search a destination... (e.g. Kyoto, Dubai)"
                       autoComplete="off"
                       className="w-full rounded-full border border-white/[0.09] bg-[#111827]/60 py-[14px] pl-12 pr-5 text-[0.95rem] text-white placeholder-[#475569] outline-none transition-all focus:border-[#00f0ff]/50 focus:bg-[#111827]/90 focus:shadow-[0_0_15px_rgba(0,240,255,0.2)]"
@@ -611,14 +621,22 @@ export default function Page() {
                     
                     {/* Autocomplete Dropdown */}
                     {locationInput.length > 0 && (
-                      <div className="absolute top-full mt-2 w-full bg-[#03050a]/95 backdrop-blur-xl border border-[#00f0ff]/30 rounded-xl overflow-hidden z-50 shadow-[0_10px_30px_rgba(0,0,0,0.8)] opacity-0 invisible group-focus-within:opacity-100 group-focus-within:visible transition-all">
+                      <div id="autocomplete-dropdown" className="absolute top-full mt-2 w-full bg-[#03050a]/95 backdrop-blur-xl border border-[#00f0ff]/30 rounded-xl overflow-hidden z-50 shadow-[0_10px_30px_rgba(0,0,0,0.8)] transition-all">
                         {['Kyoto, Japan', 'Tokyo, Japan', 'Paris, France', 'Dubai, UAE', 'New York, USA', 'Delhi, India', 'London, UK']
                           .filter(city => city.toLowerCase().includes(locationInput.toLowerCase()))
                           .map((city, idx) => (
                             <button
                               key={idx}
                               type="button"
-                              onClick={() => setLocationInput(city)}
+                              onMouseDown={(e) => {
+                                // Prevent input blur before click fires
+                                e.preventDefault();
+                              }}
+                              onClick={() => {
+                                setLocationInput(city);
+                                const wrapper = document.getElementById('autocomplete-dropdown');
+                                if (wrapper) wrapper.style.display = 'none';
+                              }}
                               className="w-full text-left px-4 py-3 hover:bg-[#00f0ff]/10 text-white text-sm border-b border-white/5 last:border-0 transition-colors"
                             >
                               <MapPin className="inline-block h-3 w-3 text-[#00f0ff] mr-2" />
