@@ -272,6 +272,7 @@ export default function Page() {
   const [pace, setPace] = useState<string>("");
   const [budget, setBudget] = useState<string>("");
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [formErrors, setFormErrors] = useState({ categories: false, pace: false, budget: false });
 
   async function loadTripPlan(
     location: string, 
@@ -335,6 +336,21 @@ export default function Page() {
       setError("Enter a destination before planning the trip.");
       return;
     }
+
+    const errors = {
+      categories: selectedCategories.length === 0,
+      pace: !pace,
+      budget: !budget
+    };
+
+    setFormErrors(errors);
+
+    if (errors.categories || errors.pace || errors.budget) {
+      setShowAdvanced(true);
+      setError("Please complete all advanced preferences (Interests, Pace, Budget).");
+      return;
+    }
+
     const days = Math.min(30, Math.max(1, diffDays(startDate, returnDate)));
     void loadTripPlan(trimmedLocation, days, startDate, selectedCategories, pace, budget);
   }
@@ -700,8 +716,8 @@ export default function Page() {
                         <div className="mt-4 flex flex-col gap-6 rounded-2xl border border-white/[0.05] bg-white/[0.02] p-6 text-left">
                           
                           {/* Categories */}
-                          <div>
-                            <p className="mb-3 text-[0.85rem] font-semibold text-white">Activity Interests</p>
+                          <div className={cn("p-4 rounded-xl transition-all", formErrors.categories ? "border-2 border-[#ff007f] shadow-[0_0_15px_rgba(255,0,127,0.4)]" : "border border-transparent")}>
+                            <p className="mb-3 text-[0.85rem] font-semibold text-white">Activity Interests {formErrors.categories && <span className="text-[#ff007f] ml-2 text-xs">Required *</span>}</p>
                             <div className="flex flex-wrap gap-2">
                               {ACTIVITY_CATEGORIES.map(cat => {
                                 const isSelected = selectedCategories.includes(cat);
@@ -709,13 +725,16 @@ export default function Page() {
                                   <button
                                     key={cat}
                                     type="button"
-                                    onClick={() => setSelectedCategories(prev => 
-                                      isSelected ? prev.filter(c => c !== cat) : [...prev, cat]
-                                    )}
+                                    onClick={() => {
+                                      setSelectedCategories(prev => 
+                                        isSelected ? prev.filter(c => c !== cat) : [...prev, cat]
+                                      );
+                                      setFormErrors(prev => ({ ...prev, categories: false }));
+                                    }}
                                     className={cn(
                                       "rounded-full px-4 py-2 text-[0.8rem] transition-colors border",
                                       isSelected 
-                                        ? "bg-blue-500/20 border-blue-500/50 text-blue-100" 
+                                        ? "bg-[#00f0ff]/20 border-[#00f0ff]/50 text-[#00f0ff]" 
                                         : "bg-white/[0.03] border-white/[0.08] text-[#94A3B8] hover:bg-white/[0.08]"
                                     )}
                                   >
@@ -728,8 +747,8 @@ export default function Page() {
 
                           <div className="grid gap-6 md:grid-cols-2">
                             {/* Pace */}
-                            <div>
-                              <p className="mb-3 text-[0.85rem] font-semibold text-white">Travel Pace</p>
+                            <div className={cn("p-4 rounded-xl transition-all", formErrors.pace ? "border-2 border-[#ff007f] shadow-[0_0_15px_rgba(255,0,127,0.4)]" : "border border-transparent")}>
+                              <p className="mb-3 text-[0.85rem] font-semibold text-white">Travel Pace {formErrors.pace && <span className="text-[#ff007f] ml-2 text-xs">Required *</span>}</p>
                               <div className="flex flex-col gap-2">
                                 {TRAVEL_PACES.map(p => (
                                   <label key={p.id} className="flex cursor-pointer items-center gap-3 rounded-xl border border-white/[0.05] bg-white/[0.02] p-3 hover:bg-white/[0.05] transition-colors">
@@ -738,8 +757,11 @@ export default function Page() {
                                       name="pace"
                                       value={p.id}
                                       checked={pace === p.id}
-                                      onChange={() => setPace(p.id)}
-                                      className="h-4 w-4 accent-blue-500"
+                                      onChange={() => {
+                                        setPace(p.id);
+                                        setFormErrors(prev => ({ ...prev, pace: false }));
+                                      }}
+                                      className="h-4 w-4 accent-[#00f0ff]"
                                     />
                                     <div className="flex flex-col">
                                       <span className="text-[0.85rem] text-white">{p.label}</span>
@@ -751,8 +773,8 @@ export default function Page() {
                             </div>
 
                             {/* Budget */}
-                            <div>
-                              <p className="mb-3 text-[0.85rem] font-semibold text-white">Budget Level</p>
+                            <div className={cn("p-4 rounded-xl transition-all", formErrors.budget ? "border-2 border-[#ff007f] shadow-[0_0_15px_rgba(255,0,127,0.4)]" : "border border-transparent")}>
+                              <p className="mb-3 text-[0.85rem] font-semibold text-white">Budget & Quality {formErrors.budget && <span className="text-[#ff007f] ml-2 text-xs">Required *</span>}</p>
                               <div className="flex flex-col gap-2">
                                 {BUDGET_LEVELS.map(b => (
                                   <label key={b.id} className="flex cursor-pointer items-center gap-3 rounded-xl border border-white/[0.05] bg-white/[0.02] p-3 hover:bg-white/[0.05] transition-colors">
@@ -761,8 +783,11 @@ export default function Page() {
                                       name="budget"
                                       value={b.id}
                                       checked={budget === b.id}
-                                      onChange={() => setBudget(b.id)}
-                                      className="h-4 w-4 accent-blue-500"
+                                      onChange={() => {
+                                        setBudget(b.id);
+                                        setFormErrors(prev => ({ ...prev, budget: false }));
+                                      }}
+                                      className="h-4 w-4 accent-[#00f0ff]"
                                     />
                                     <span className="text-[0.85rem] text-white">{b.label}</span>
                                   </label>

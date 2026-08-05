@@ -12,6 +12,7 @@ export default function ThreeMap({ trip }: { trip: any }) {
         <ambientLight intensity={0.5} />
         <directionalLight position={[10, 10, 10]} intensity={1} color="#00f0ff" />
         <directionalLight position={[-10, -10, -10]} intensity={1} color="#ff007f" />
+        <pointLight position={[0, 0, 0]} intensity={2} color="#00f0ff" distance={5} />
         
         <Suspense fallback={null}>
           <Sphere args={[1.5, 64, 64]} position={[0, 0, 0]}>
@@ -22,19 +23,30 @@ export default function ThreeMap({ trip }: { trip: any }) {
               clearcoatRoughness={0.1}
               metalness={0.9}
               roughness={0.2}
-              distort={0.2}
-              speed={2}
+              distort={0.1}
+              speed={1}
               wireframe
+              emissive="#00f0ff"
+              emissiveIntensity={0.2}
             />
           </Sphere>
           
-          {/* Laser arcs placeholder - in a full implementation we'd map coordinates to 3D sphere surface */}
-          {trip?.itinerary?.map((stop: any, idx: number) => (
-            <mesh key={idx} position={[(Math.random() - 0.5) * 3, (Math.random() - 0.5) * 3, 1.6]}>
-              <boxGeometry args={[0.05, 0.05, 0.2]} />
-              <meshStandardMaterial color="#39ff14" emissive="#39ff14" emissiveIntensity={2} />
-            </mesh>
-          ))}
+          {trip?.itinerary?.map((stop: any, idx: number) => {
+            const R = 1.5;
+            const latRad = stop.lat * (Math.PI / 180);
+            const lngRad = stop.lng * (Math.PI / 180);
+            
+            const x = R * Math.cos(latRad) * Math.sin(lngRad);
+            const y = R * Math.sin(latRad);
+            const z = R * Math.cos(latRad) * Math.cos(lngRad);
+
+            return (
+              <mesh key={idx} position={[x, y, z]}>
+                <boxGeometry args={[0.05, 0.05, 0.2]} />
+                <meshStandardMaterial color="#39ff14" emissive="#39ff14" emissiveIntensity={2} />
+              </mesh>
+            );
+          })}
         </Suspense>
         
         <OrbitControls enableZoom={true} autoRotate autoRotateSpeed={0.5} />

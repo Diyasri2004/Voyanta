@@ -94,7 +94,9 @@ export default function AgendaTab({ trip, setTrip }: { trip: any; setTrip: any }
               </div>
               <button 
                 onClick={() => {
-                  const query = encodeURIComponent(stop.title + " " + (stop.location || trip.destination));
+                  const SPOT_NAME = stop.title;
+                  const CITY_NAME = trip.destination;
+                  const query = encodeURIComponent(SPOT_NAME + " " + CITY_NAME);
                   window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, "_blank");
                 }}
                 className="bg-[#39ff14]/10 text-[#39ff14] p-2 rounded-full hover:bg-[#39ff14]/20 transition-colors"
