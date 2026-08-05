@@ -15,9 +15,9 @@ interface VoyantaMapProps {
 
 export default function VoyantaMap({ waypoints, mapImageUrl }: VoyantaMapProps) {
   function openNavigation(waypoint: MapWaypoint) {
-    const destination = encodeURIComponent(`${waypoint.lat},${waypoint.lng}`);
+    const query = encodeURIComponent(`${waypoint.title ?? ''} ${waypoint.location ?? ''}`.trim());
     window.open(
-      `https://www.google.com/maps/dir/?api=1&destination=${destination}`,
+      `https://www.google.com/maps/search/?api=1&query=${query}`,
       "_blank",
       "noopener,noreferrer"
     );
