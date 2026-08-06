@@ -32,9 +32,10 @@ export default function Voya({ trip }: { trip: any }) {
   };
 
   const SUGGESTIONS = [
-    "💰 Estimated cost for activities?",
-    "🍣 Top local food spots?",
-    "☔ Rainy day backup plan?",
+    "✨ Swap an activity for a hidden gem",
+    "🍱 Top local food spots & budget",
+    "🚗 Local transit & navigation tips",
+    "☔ Rainy day backup plan",
   ];
 
   const sendMessage = async (e?: React.FormEvent, presetMessage?: string) => {

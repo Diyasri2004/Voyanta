@@ -450,22 +450,21 @@ async def generate_trip_with_groq(
         f"Create a realistic {days}-day travel itinerary for {location}. "
         f"The traveler prefers a {pace or 'Balanced'} pace ({stops_per_day} stops per day) "
         f"with a {budget_str} budget. "
-        f"Focus heavily on these categories if possible: {categories_str}. "
         "CRITICAL REQUIREMENTS:\n"
+        "- MUST FEATURE FAMOUS TIER-1 ICONIC LANDMARKS & CULINARY HUBS: Every generated itinerary MUST automatically prioritize the absolute most famous, iconic, top-rated tier-1 tourist attractions, historical monuments, and legendary local food hubs for the destination. (For example, if location is Lucknow, MUST feature famous spots like Bara Imambara, Chota Imambara, Rumi Darwaza, Hazratganj, Tunday Kababi Chowk, Ambedkar Park, and British Residency. NEVER include obscure neighborhood parks or local gyms).\n"
         "- ABSOLUTELY NO REPEATING ACTIVITIES: Every single day MUST contain completely unique, non-repeating activities. Do not reuse any location, attraction, or restaurant across the entire trip.\n"
         "- DISTINCT SCHEDULES: Provide distinct morning, afternoon, and evening activities with realistic time spacing.\n"
-        "- NO GENERIC PLACEHOLDERS: Replace generic descriptions (e.g., 'Gym', 'Eat local food', 'Visit a park') with REAL, highly specific destination hotspots, exact restaurant/street names, famous historic sites, and authentic local experiences for the selected city.\n"
-        "- Include a dedicated 'culinary_highlights' array containing 3 to 5 'Must-Try' local food suggestions and iconic top-rated eateries famous for local dishes.\n"
-        "- PRICING: Provide precise cost estimates in USD ($). For stops, use 'cost_range' (e.g. '$15 - $40 / person'). For culinary, use 'price_tier' (e.g. '$$$') and 'cost_approx' (e.g. '$25 - $35 / person').\n"
+        "- Include a dedicated 'culinary_highlights' array containing 3 to 5 'Must-Try' iconic local food suggestions and legendary eateries famous for local dishes.\n"
+        "- PRICING: Provide precise cost estimates in USD ($). For stops, use 'cost_range' (e.g. '$10 - $30 / person'). For culinary, use 'price_tier' (e.g. '$$$') and 'cost_approx' (e.g. '$15 - $25 / person').\n"
         "Return ONLY a valid JSON object (no markdown, no extra text) with this exact structure:\n"
         '{"destination":"<city name>","summary":"<one sentence>","days":['
         '{"day":1,"theme":"<theme>","stops":['
-        '{"title":"<specific place name>","location":"<address>","category":"<category string>","duration_minutes":<int>,"best_time":"<HH:MM AM/PM>","cost_range":"<str>"},'
+        '{"title":"<famous place name>","location":"<address>","category":"<category string>","duration_minutes":<int>,"best_time":"<HH:MM AM/PM>","cost_range":"<str>"},'
         f"...{stops_per_day} stops per day]}}],"
         '"culinary_highlights":['
         '{"title":"<eatery name or dish>","description":"<brief description>","famous_for":"<local specialty>","location":"<address>","price_tier":"<str>","cost_approx":"<str>"},'
         '...3 to 5 highlights]}\n'
-        f"Generate exactly {days} days with {stops_per_day} stops each. Use real, distinct landmarks that fit the budget and categories."
+        f"Generate exactly {days} days with {stops_per_day} stops each. Focus strictly on top tier-1 famous landmarks."
     )
 
     try:

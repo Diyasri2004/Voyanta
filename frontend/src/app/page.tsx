@@ -17,9 +17,6 @@ import {
   Navigation,
   PlaneTakeoff,
   PlaneLanding,
-  Settings2,
-  ChevronDown,
-  ChevronUp,
   Home,
 } from "lucide-react";
 
@@ -268,12 +265,6 @@ export default function Page() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-  const [pace, setPace] = useState<string>("");
-  const [budget, setBudget] = useState<string>("");
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [formErrors, setFormErrors] = useState({ categories: false, pace: false, budget: false });
-  const [showAlertBanner, setShowAlertBanner] = useState(false);
   const [isAutocompleteOpen, setIsAutocompleteOpen] = useState(false);
 
   useEffect(() => {
@@ -290,24 +281,16 @@ export default function Page() {
         setTrip(null);
         return;
       }
-
-      if (showAdvanced) {
-        setShowAdvanced(false);
-        return;
-      }
     };
 
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
-  }, [trip, showAdvanced]);
+  }, [trip]);
 
   async function loadTripPlan(
     location: string, 
     days: number, 
-    date: string,
-    categories: string[],
-    pace: string,
-    budget: string
+    date: string
   ) {
     setLoading(true);
     setError(null);
@@ -316,7 +299,7 @@ export default function Page() {
       const response = await fetch("/api/trip-plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ location, days, start_date: date, categories, pace, budget }),
+        body: JSON.stringify({ location, days, start_date: date, categories: [], pace: "", budget: "" }),
       });
 
       const payload = await response.json().catch(() => null);
@@ -367,24 +350,8 @@ export default function Page() {
       return;
     }
 
-    const errors = {
-      categories: selectedCategories.length === 0,
-      pace: !pace,
-      budget: !budget
-    };
-
-    setFormErrors(errors);
-
-    if (errors.categories || errors.pace || errors.budget) {
-      setShowAdvanced(true);
-      setShowAlertBanner(true);
-      setError(null);
-      return;
-    }
-
-    setShowAlertBanner(false);
     const days = Math.min(30, Math.max(1, diffDays(startDate, returnDate)));
-    void loadTripPlan(trimmedLocation, days, startDate, selectedCategories, pace, budget);
+    void loadTripPlan(trimmedLocation, days, startDate);
   }
 
   return (
@@ -425,24 +392,6 @@ export default function Page() {
           `,
         }}
       />
-
-      {showAlertBanner && (
-        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] w-[92%] max-w-2xl animate-bounce">
-          <div className="flex items-center justify-between gap-3 bg-[#03050a]/95 border-2 border-[#ff007f] text-white px-6 py-4 rounded-2xl backdrop-blur-2xl shadow-[0_0_35px_rgba(255,0,127,0.6)]">
-            <div className="flex items-center gap-3 text-sm font-semibold">
-              <span className="text-2xl">⚠️</span>
-              <span>Attention Traveler: Please select your options in ALL 3 Advanced Preference boxes before proceeding!</span>
-            </div>
-            <button 
-              type="button"
-              onClick={() => setShowAlertBanner(false)}
-              className="text-[#ff007f] hover:text-white font-bold text-xl p-1 transition-colors"
-            >
-              ✕
-            </button>
-          </div>
-        </div>
-      )}
 
       <div className="relative min-h-screen bg-[#05070A] font-manrope text-white selection:bg-[#ff007f] selection:text-white overflow-x-hidden">
         <div className="fixed inset-0 pointer-events-none bg-[radial-gradient(circle_at_top,rgba(148,163,184,0.14),transparent_42%),linear-gradient(180deg,#05070A_0%,#04060A_100%)]" />
@@ -762,123 +711,6 @@ export default function Page() {
                       {diffDays(startDate, returnDate)}&nbsp;day{diffDays(startDate, returnDate) !== 1 ? "s" : ""}
                     </span>
                   </div>
-
-                  {/* Advanced Options Toggle */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!showAdvanced) {
-                        if (typeof window !== "undefined") {
-                          window.history.pushState({ step: "preferences" }, "");
-                        }
-                        setShowAdvanced(true);
-                      } else {
-                        setShowAdvanced(false);
-                      }
-                    }}
-                    className="mx-auto mt-2 flex items-center gap-2 text-[0.85rem] text-[#64748B] hover:text-white transition-colors"
-                  >
-                    <Settings2 className="h-4 w-4" />
-                    Advanced preferences
-                    {showAdvanced ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                  </button>
-
-                  {/* Advanced Options Panel */}
-                  <AnimatePresence>
-                    {showAdvanced && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: "auto" }}
-                        exit={{ opacity: 0, height: 0 }}
-                        className="overflow-hidden"
-                      >
-                        <div className="mt-4 flex flex-col gap-6 rounded-2xl border border-white/[0.05] bg-white/[0.02] p-4 md:p-6 text-left">
-                          
-                          {/* Categories */}
-                          <div className={cn("p-4 rounded-xl transition-all", formErrors.categories ? "border-2 border-[#ff007f] shadow-[0_0_25px_rgba(255,0,127,0.6)] animate-shake bg-[#ff007f]/5" : "border border-transparent")}>
-                            <p className="mb-3 text-[0.85rem] font-semibold text-white">Activity Interests {formErrors.categories && <span className="text-[#ff007f] ml-2 text-xs">Required *</span>}</p>
-                            <div className="flex flex-wrap gap-2">
-                              {ACTIVITY_CATEGORIES.map(cat => {
-                                const isSelected = selectedCategories.includes(cat);
-                                return (
-                                  <button
-                                    key={cat}
-                                    type="button"
-                                    onClick={() => {
-                                      setSelectedCategories(prev => 
-                                        isSelected ? prev.filter(c => c !== cat) : [...prev, cat]
-                                      );
-                                      setFormErrors(prev => ({ ...prev, categories: false }));
-                                    }}
-                                    className={cn(
-                                      "rounded-full px-4 py-2 text-[0.8rem] transition-colors border",
-                                      isSelected 
-                                        ? "bg-[#00f0ff]/20 border-[#00f0ff]/50 text-[#00f0ff]" 
-                                        : "bg-white/[0.03] border-white/[0.08] text-[#94A3B8] hover:bg-white/[0.08]"
-                                    )}
-                                  >
-                                    {cat}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-
-                          <div className="grid gap-6 md:grid-cols-2">
-                            {/* Pace */}
-                            <div className={cn("p-4 rounded-xl transition-all", formErrors.pace ? "border-2 border-[#ff007f] shadow-[0_0_25px_rgba(255,0,127,0.6)] animate-shake bg-[#ff007f]/5" : "border border-transparent")}>
-                              <p className="mb-3 text-[0.85rem] font-semibold text-white">Travel Pace {formErrors.pace && <span className="text-[#ff007f] ml-2 text-xs">Required *</span>}</p>
-                              <div className="flex flex-col gap-2">
-                                {TRAVEL_PACES.map(p => (
-                                  <label key={p.id} className="flex cursor-pointer items-center gap-3 rounded-xl border border-white/[0.05] bg-white/[0.02] p-3 hover:bg-white/[0.05] transition-colors">
-                                    <input
-                                      type="radio"
-                                      name="pace"
-                                      value={p.id}
-                                      checked={pace === p.id}
-                                      onChange={() => {
-                                        setPace(p.id);
-                                        setFormErrors(prev => ({ ...prev, pace: false }));
-                                      }}
-                                      className="h-4 w-4 accent-[#00f0ff]"
-                                    />
-                                    <div className="flex flex-col">
-                                      <span className="text-[0.85rem] text-white">{p.label}</span>
-                                      <span className="text-[0.75rem] text-[#64748B]">{p.desc}</span>
-                                    </div>
-                                  </label>
-                                ))}
-                              </div>
-                            </div>
-
-                            {/* Budget */}
-                            <div className={cn("p-4 rounded-xl transition-all", formErrors.budget ? "border-2 border-[#ff007f] shadow-[0_0_25px_rgba(255,0,127,0.6)] animate-shake bg-[#ff007f]/5" : "border border-transparent")}>
-                              <p className="mb-3 text-[0.85rem] font-semibold text-white">Budget & Quality {formErrors.budget && <span className="text-[#ff007f] ml-2 text-xs">Required *</span>}</p>
-                              <div className="flex flex-col gap-2">
-                                {BUDGET_LEVELS.map(b => (
-                                  <label key={b.id} className="flex cursor-pointer items-center gap-3 rounded-xl border border-white/[0.05] bg-white/[0.02] p-3 hover:bg-white/[0.05] transition-colors">
-                                    <input
-                                      type="radio"
-                                      name="budget"
-                                      value={b.id}
-                                      checked={budget === b.id}
-                                      onChange={() => {
-                                        setBudget(b.id);
-                                        setFormErrors(prev => ({ ...prev, budget: false }));
-                                      }}
-                                      className="h-4 w-4 accent-[#00f0ff]"
-                                    />
-                                    <span className="text-[0.85rem] text-white">{b.label}</span>
-                                  </label>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
                 </form>
 
                 <p className="mt-5 text-[0.8rem] text-[#334155]">
