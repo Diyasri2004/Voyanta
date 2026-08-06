@@ -897,16 +897,28 @@ async def nearby_pois(
     except httpx.RequestError as e:
         raise HTTPException(status_code=503, detail=f"TomTom API unreachable: {str(e)}")
 
+    DISQUALIFIED_KEYWORDS = [
+        "gym", "fitness", "yoga", "kendra", "clinic", "cure", "spa", 
+        "bridge association", "society", "colony park", "physiotherapy", "hospital"
+    ]
+    
     pois = []
     for item in data.get("results", []):
-        pos = item.get("position", {})
         poi_data = item.get("poi", {})
+        name = poi_data.get("name", "Unknown")
+        category = poi_data.get("categories", [""])[0] if poi_data.get("categories") else "Place"
+        
+        name_lower = name.lower()
+        cat_lower = category.lower()
+        if any(banned in name_lower or banned in cat_lower for banned in DISQUALIFIED_KEYWORDS):
+            continue
+
+        pos = item.get("position", {})
         addr = item.get("address", {})
-        categories = poi_data.get("categories", [""])
         pois.append(POI(
             id=item.get("id", ""),
-            name=poi_data.get("name", "Unknown"),
-            category=categories[0] if categories else "Place",
+            name=name,
+            category=category,
             lat=pos.get("lat", 0),
             lng=pos.get("lon", 0),
             distance_meters=item.get("dist"),
@@ -945,16 +957,29 @@ async def fuzzy_search(
     except httpx.RequestError as e:
         raise HTTPException(status_code=503, detail=f"TomTom API unreachable: {str(e)}")
 
+    DISQUALIFIED_KEYWORDS = [
+        "gym", "fitness", "yoga", "kendra", "clinic", "cure", "spa", 
+        "bridge association", "society", "colony park", "physiotherapy", "hospital"
+    ]
+    
     results = []
     for item in data.get("results", []):
-        pos = item.get("position", {})
         poi_data = item.get("poi", {})
         addr = item.get("address", {})
-        categories = poi_data.get("categories", [""])
+        
+        name = poi_data.get("name") or addr.get("freeformAddress", "Unknown")
+        category = poi_data.get("categories", [""])[0] if poi_data.get("categories") else item.get("type", "Place")
+        
+        name_lower = name.lower()
+        cat_lower = category.lower()
+        if any(banned in name_lower or banned in cat_lower for banned in DISQUALIFIED_KEYWORDS):
+            continue
+
+        pos = item.get("position", {})
         results.append(POI(
             id=item.get("id", ""),
-            name=poi_data.get("name") or addr.get("freeformAddress", "Unknown"),
-            category=categories[0] if categories else item.get("type", "Place"),
+            name=name,
+            category=category,
             lat=pos.get("lat", 0),
             lng=pos.get("lon", 0),
             distance_meters=item.get("dist"),
@@ -1022,8 +1047,8 @@ async def build_trip_plan(
         elif "action" in body.pace.lower() or "packed" in body.pace.lower():
             stops_per_day = 5
 
-    # 3. FALLBACK 1: Try TomTom POI Search (Filtered for Tourist Attractions & Museums)
-    if key:
+    # 3. FALLBACK 1: Disabled to enforce Iconic Landmark Map
+    if False:
         poi_url = f"{TOMTOM_BASE}/search/2/nearbySearch/.json"
         poi_params = {
             "key": key, "lat": dest_lat, "lon": dest_lng,
