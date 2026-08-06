@@ -451,7 +451,6 @@ async def generate_trip_with_groq(
         f"The traveler prefers a {pace or 'Balanced'} pace ({stops_per_day} stops per day) "
         f"with a {budget_str} budget. "
         "CRITICAL REQUIREMENTS:\n"
-        "- MUST FEATURE FAMOUS TIER-1 ICONIC LANDMARKS & CULINARY HUBS: Every generated itinerary MUST automatically prioritize the absolute most famous, iconic, top-rated tier-1 tourist attractions, historical monuments, and legendary local food hubs for the destination. (For example, if location is Lucknow, MUST feature famous spots like Bara Imambara, Chota Imambara, Rumi Darwaza, Hazratganj, Tunday Kababi Chowk, Ambedkar Park, and British Residency. NEVER include obscure neighborhood parks or local gyms).\n"
         "- ABSOLUTELY NO REPEATING ACTIVITIES: Every single day MUST contain completely unique, non-repeating activities. Do not reuse any location, attraction, or restaurant across the entire trip.\n"
         "- DISTINCT SCHEDULES: Provide distinct morning, afternoon, and evening activities with realistic time spacing.\n"
         "- Include a dedicated 'culinary_highlights' array containing 3 to 5 'Must-Try' iconic local food suggestions and legendary eateries famous for local dishes.\n"
@@ -467,6 +466,18 @@ async def generate_trip_with_groq(
         f"Generate exactly {days} days with {stops_per_day} stops each. Focus strictly on top tier-1 famous landmarks."
     )
 
+    system_prompt = (
+        "You are a premier travel planner. Return only valid JSON, no markdown.\n\n"
+        "STRICT VENUE SELECTION RULE:\n"
+        "You are generating a premier travel itinerary. You MUST strictly select ONLY famous, highly-rated, tier-1 iconic landmarks, historic sites, and legendary local culinary hubs for the destination city.\n"
+        "- NEVER suggest generic local gyms, obscure neighborhood parks, residential shopping centers, or non-tourist spots.\n"
+        "- For any destination, select the top 5-10 most famous landmarks recognized globally or nationally for that city.\n"
+        "- GROUNDING EXAMPLES BY CITY:\n"
+        "  * If destination is Lucknow: MUST feature iconic landmarks such as Bara Imambara, Chota Imambara, Rumi Darwaza, Hazratganj Market, Ambedkar Memorial Park, British Residency, and legendary eateries like Tunday Kababi (Chowk/Aminabad) or Dastarkhwan.\n"
+        "  * If destination is Paris: MUST feature Eiffel Tower, Louvre Museum, Cathédrale Notre-Dame, Arc de Triomphe, Sacré-Cœur, and Le Marais.\n"
+        "  * If destination is Delhi: MUST feature Red Fort, Qutub Minar, India Gate, Humayun's Tomb, and Chandni Chowk."
+    )
+
     try:
         response = await client.post(
             GROQ_BASE,
@@ -479,7 +490,7 @@ async def generate_trip_with_groq(
                 "messages": [
                     {
                         "role": "system",
-                        "content": "You are a travel planner. Return only valid JSON, no markdown.",
+                        "content": system_prompt,
                     },
                     {"role": "user", "content": prompt},
                 ],
@@ -499,6 +510,12 @@ async def generate_trip_with_groq(
             content = content.strip()
 
         ai_trip = GroqTripContent.model_validate_json(content)
+        
+        # Guardrail: Strip out banned generic terms
+        banned_terms = ["gym", "fitness", "neighborhood park", "local society", "generic"]
+        for day in ai_trip.days:
+            day.stops = [stop for stop in day.stops if not any(term in (stop.title.lower() + stop.location.lower()) for term in banned_terms)]
+            
     except Exception as exc:
         logger.warning("Groq trip generation failed for %s: %s", location, exc)
         return None
