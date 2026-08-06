@@ -106,13 +106,6 @@ export default function AgendaTab({ trip, setTrip }: { trip: any; setTrip: any }
               </button>
             </div>
             
-            {stop.cost_range && (
-              <div className="flex items-center gap-1 bg-white/5 border border-white/10 w-fit px-2 py-1 rounded-md mb-1 cursor-help" title="≈ Prices are approximate and subject to seasonal changes.">
-                <span className="text-[10px] text-white/80">🏷️ Approx. Cost:</span>
-                <span className="text-[10px] font-bold text-[#ff007f]">{formatStringRange(stop.cost_range)}</span>
-              </div>
-            )}
-
             <p className="text-xs text-[#94A3B8] flex items-center gap-1 mt-1">
               <MapPin className="h-3 w-3" />
               <span className="truncate">{stop.location}</span>
