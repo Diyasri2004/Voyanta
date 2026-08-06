@@ -150,36 +150,36 @@ class TripPlanResponse(BaseModel):
     coordinates: Coordinates
     itinerary: List[TripStop]
     routes: List[TripDayRoute]
-    culinary_highlights: List[CulinaryHighlight]
+    culinary_highlights: List[CulinaryHighlight] = []
 
 
 class GroqTripStop(BaseModel):
     title: str
-    location: str
-    category: str
-    duration_minutes: int
-    best_time: str
-    cost_range: str
+    location: Optional[str] = "City Center"
+    category: Optional[str] = "Sightseeing"
+    duration_minutes: Optional[int] = 60
+    best_time: Optional[str] = "10:00 AM"
+    cost_range: Optional[str] = "$10 - $25 / person"
 
 
 class GroqTripDay(BaseModel):
     day: int
-    theme: str
-    stops: List[GroqTripStop]
+    theme: Optional[str] = "Exploration"
+    stops: List[GroqTripStop] = []
 
 class GroqCulinaryHighlight(BaseModel):
     title: str
-    description: str
-    famous_for: str
-    location: str
-    price_tier: str
-    cost_approx: str
+    description: Optional[str] = "Authentic local culinary experience."
+    famous_for: Optional[str] = "Local Specialties"
+    location: Optional[str] = "City Center"
+    price_tier: Optional[str] = "$$"
+    cost_approx: Optional[str] = "$15 - $25 / person"
 
 class GroqTripContent(BaseModel):
-    destination: str
-    summary: str
-    days: List[GroqTripDay]
-    culinary_highlights: List[GroqCulinaryHighlight]
+    destination: Optional[str] = None
+    summary: Optional[str] = None
+    days: List[GroqTripDay] = []
+    culinary_highlights: List[GroqCulinaryHighlight] = []
 
 
 FALLBACK_CITY_COORDINATES = {
@@ -534,12 +534,12 @@ async def generate_trip_with_groq(
                     date=trip_date.strftime("%b %d"),
                     time=stop.best_time or build_time_label(stop_index),
                     title=stop.title,
-                    location=stop.location,
-                    type=stop.category.upper(),
+                    location=stop.location or destination,
+                    type=(stop.category or "SIGHTSEEING").upper(),
                     creators=f"Starts at {stop.best_time or build_time_label(stop_index)}",
                     distance=f"{round((stop_index + 1) * 2.1 + (day_index * 0.6), 1)}km",
                     elevation="N/A",
-                    duration=f"{max(45, stop.duration_minutes)}m",
+                    duration=f"{max(45, stop.duration_minutes or 60)}m",
                     image=stop_image,
                     map_image_url=map_image_url,
                     lat=stop_lat,
@@ -1062,6 +1062,7 @@ async def build_trip_plan(
                     coordinates=coordinates,
                     itinerary=itinerary,
                     routes=routes,
+                    culinary_highlights=[]
                 )
         except Exception as e:
             logger.warning("TomTom POI fallback failed for %s: %s", destination_name, e)
