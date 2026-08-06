@@ -146,9 +146,6 @@ export default function RadarTab({ trip, setTrip }: { trip: any; setTrip: any })
               <div className="flex-1 pr-2">
                 <div className="flex items-center gap-2 mb-1">
                   <span className="text-[10px] bg-[#00f0ff]/20 text-[#00f0ff] px-2 py-0.5 rounded-full font-bold uppercase">{hit.type}</span>
-                  {hit.cost && (
-                    <span className="text-[10px] text-[#ff007f] font-bold">{formatStringRange(hit.cost)}</span>
-                  )}
                 </div>
                 <h4 className="font-bold text-white text-sm group-hover:text-[#00f0ff] transition-colors">{hit.title}</h4>
                 <p className="text-xs text-white/50 flex items-center gap-1 mt-1">
