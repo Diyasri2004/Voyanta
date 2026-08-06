@@ -578,7 +578,7 @@ export default function Page() {
 
           {!loading && !trip && !error ? (
             <div className="flex min-h-[55vh] items-center justify-center px-4">
-              <div className="w-full max-w-[780px] rounded-[2rem] border border-white/[0.07] bg-[#0B0F18]/80 px-10 py-12 text-center backdrop-blur-2xl shadow-[0_0_80px_rgba(0,0,0,0.6)]">
+              <div className="w-full max-w-[780px] rounded-[2rem] border border-white/[0.07] bg-[#0B0F18]/80 px-6 py-8 md:px-10 md:py-12 text-center backdrop-blur-2xl shadow-[0_0_80px_rgba(0,0,0,0.6)]">
 
                 {/* Icon */}
                 <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-full bg-[#111827] border border-blue-500/20 shadow-[0_0_28px_rgba(59,130,246,0.25)]">
@@ -586,7 +586,7 @@ export default function Page() {
                 </div>
 
                 {/* Title */}
-                <h1 className="font-syne text-[2.6rem] font-extrabold leading-tight tracking-tight text-white">
+                <h1 className="font-syne text-3xl md:text-[2.6rem] font-extrabold leading-tight tracking-tight text-white">
                   Start with a real destination
                 </h1>
 
@@ -662,7 +662,7 @@ export default function Page() {
                   </div>
 
                   {/* ── Row 2 : Departure | Return | Plan trip ── */}
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-[10px]">
+                  <div className="flex flex-col md:flex-row items-stretch md:items-center gap-[10px]">
 
                     {/* Departure date */}
                     <div className="relative flex-1">
@@ -731,7 +731,7 @@ export default function Page() {
                         exit={{ opacity: 0, height: 0 }}
                         className="overflow-hidden"
                       >
-                        <div className="mt-4 flex flex-col gap-6 rounded-2xl border border-white/[0.05] bg-white/[0.02] p-6 text-left">
+                        <div className="mt-4 flex flex-col gap-6 rounded-2xl border border-white/[0.05] bg-white/[0.02] p-4 md:p-6 text-left">
                           
                           {/* Categories */}
                           <div className={cn("p-4 rounded-xl transition-all", formErrors.categories ? "border-2 border-[#ff007f] shadow-[0_0_15px_rgba(255,0,127,0.4)]" : "border border-transparent")}>
