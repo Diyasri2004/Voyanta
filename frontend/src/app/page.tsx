@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import CyberDashboard from "@/components/dashboard/CyberDashboard";
 import CityHeroImage from "@/components/CityHeroImage";
@@ -273,6 +273,32 @@ export default function Page() {
   const [budget, setBudget] = useState<string>("");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [formErrors, setFormErrors] = useState({ categories: false, pace: false, budget: false });
+  const [showAlertBanner, setShowAlertBanner] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.history.replaceState({ step: "setup" }, "");
+    }
+  }, []);
+
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      if (event.state?.modal === "voya") return;
+
+      if (trip) {
+        setTrip(null);
+        return;
+      }
+
+      if (showAdvanced) {
+        setShowAdvanced(false);
+        return;
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [trip, showAdvanced]);
 
   async function loadTripPlan(
     location: string, 
@@ -299,6 +325,9 @@ export default function Page() {
 
       setTrip(payload);
       setActiveDay(1);
+      if (typeof window !== "undefined") {
+        window.history.pushState({ step: "dashboard" }, "");
+      }
     } catch (err) {
       setTrip(null);
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -347,10 +376,12 @@ export default function Page() {
 
     if (errors.categories || errors.pace || errors.budget) {
       setShowAdvanced(true);
-      setError("Please complete all advanced preferences (Interests, Pace, Budget).");
+      setShowAlertBanner(true);
+      setError(null);
       return;
     }
 
+    setShowAlertBanner(false);
     const days = Math.min(30, Math.max(1, diffDays(startDate, returnDate)));
     void loadTripPlan(trimmedLocation, days, startDate, selectedCategories, pace, budget);
   }
@@ -393,6 +424,14 @@ export default function Page() {
               z-index: 9999;
               animation: glowPulse 3s ease-in-out infinite;
             }
+            @keyframes shake {
+              0%, 100% { transform: translateX(0); }
+              20%, 60% { transform: translateX(-8px); }
+              40%, 80% { transform: translateX(8px); }
+            }
+            .animate-shake {
+              animation: shake 0.4s ease-in-out;
+            }
             @keyframes glowPulse {
               0%, 100% { opacity: 0.7; }
               50%       { opacity: 1; }
@@ -411,7 +450,25 @@ export default function Page() {
       <div className="blue-glow-left" aria-hidden="true" />
       <div className="blue-glow-right" aria-hidden="true" />
 
-      <div className="min-h-screen bg-[#05070A] text-white font-manrope selection:bg-white selection:text-black">
+      {showAlertBanner && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] w-[92%] max-w-2xl animate-bounce">
+          <div className="flex items-center justify-between gap-3 bg-[#03050a]/95 border-2 border-[#ff007f] text-white px-6 py-4 rounded-2xl backdrop-blur-2xl shadow-[0_0_35px_rgba(255,0,127,0.6)]">
+            <div className="flex items-center gap-3 text-sm font-semibold">
+              <span className="text-2xl">⚠️</span>
+              <span>Attention Traveler: Please select your options in all 3 Advanced Preference boxes to customize your trip before proceeding!</span>
+            </div>
+            <button 
+              type="button"
+              onClick={() => setShowAlertBanner(false)}
+              className="text-[#ff007f] hover:text-white font-bold text-xl p-1 transition-colors"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="relative min-h-screen bg-[#05070A] font-manrope text-white selection:bg-blue-500 selection:text-white overflow-x-hidden">
         <div className="fixed inset-0 pointer-events-none bg-[radial-gradient(circle_at_top,rgba(148,163,184,0.14),transparent_42%),linear-gradient(180deg,#05070A_0%,#04060A_100%)]" />
         <div className="fixed inset-0 pointer-events-none bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.16] mix-blend-overlay" />
 
@@ -714,7 +771,16 @@ export default function Page() {
                   {/* Advanced Options Toggle */}
                   <button
                     type="button"
-                    onClick={() => setShowAdvanced(!showAdvanced)}
+                    onClick={() => {
+                      if (!showAdvanced) {
+                        if (typeof window !== "undefined") {
+                          window.history.pushState({ step: "preferences" }, "");
+                        }
+                        setShowAdvanced(true);
+                      } else {
+                        setShowAdvanced(false);
+                      }
+                    }}
                     className="mx-auto mt-2 flex items-center gap-2 text-[0.85rem] text-[#64748B] hover:text-white transition-colors"
                   >
                     <Settings2 className="h-4 w-4" />
@@ -734,7 +800,7 @@ export default function Page() {
                         <div className="mt-4 flex flex-col gap-6 rounded-2xl border border-white/[0.05] bg-white/[0.02] p-4 md:p-6 text-left">
                           
                           {/* Categories */}
-                          <div className={cn("p-4 rounded-xl transition-all", formErrors.categories ? "border-2 border-[#ff007f] shadow-[0_0_15px_rgba(255,0,127,0.4)]" : "border border-transparent")}>
+                          <div className={cn("p-4 rounded-xl transition-all", formErrors.categories ? "border-2 border-[#ff007f] shadow-[0_0_25px_rgba(255,0,127,0.6)] animate-shake bg-[#ff007f]/5" : "border border-transparent")}>
                             <p className="mb-3 text-[0.85rem] font-semibold text-white">Activity Interests {formErrors.categories && <span className="text-[#ff007f] ml-2 text-xs">Required *</span>}</p>
                             <div className="flex flex-wrap gap-2">
                               {ACTIVITY_CATEGORIES.map(cat => {
@@ -765,7 +831,7 @@ export default function Page() {
 
                           <div className="grid gap-6 md:grid-cols-2">
                             {/* Pace */}
-                            <div className={cn("p-4 rounded-xl transition-all", formErrors.pace ? "border-2 border-[#ff007f] shadow-[0_0_15px_rgba(255,0,127,0.4)]" : "border border-transparent")}>
+                            <div className={cn("p-4 rounded-xl transition-all", formErrors.pace ? "border-2 border-[#ff007f] shadow-[0_0_25px_rgba(255,0,127,0.6)] animate-shake bg-[#ff007f]/5" : "border border-transparent")}>
                               <p className="mb-3 text-[0.85rem] font-semibold text-white">Travel Pace {formErrors.pace && <span className="text-[#ff007f] ml-2 text-xs">Required *</span>}</p>
                               <div className="flex flex-col gap-2">
                                 {TRAVEL_PACES.map(p => (
@@ -791,7 +857,7 @@ export default function Page() {
                             </div>
 
                             {/* Budget */}
-                            <div className={cn("p-4 rounded-xl transition-all", formErrors.budget ? "border-2 border-[#ff007f] shadow-[0_0_15px_rgba(255,0,127,0.4)]" : "border border-transparent")}>
+                            <div className={cn("p-4 rounded-xl transition-all", formErrors.budget ? "border-2 border-[#ff007f] shadow-[0_0_25px_rgba(255,0,127,0.6)] animate-shake bg-[#ff007f]/5" : "border border-transparent")}>
                               <p className="mb-3 text-[0.85rem] font-semibold text-white">Budget & Quality {formErrors.budget && <span className="text-[#ff007f] ml-2 text-xs">Required *</span>}</p>
                               <div className="flex flex-col gap-2">
                                 {BUDGET_LEVELS.map(b => (

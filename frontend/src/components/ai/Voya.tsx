@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { MessageSquare, X, Send } from "lucide-react";
 
 import { useCurrency } from "@/context/CurrencyContext";
@@ -13,6 +13,23 @@ export default function Voya({ trip }: { trip: any }) {
   ]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      if (isOpen) {
+        setIsOpen(false);
+      }
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [isOpen]);
+
+  const openDrawer = () => {
+    if (typeof window !== "undefined") {
+      window.history.pushState({ step: "dashboard", modal: "voya" }, "");
+    }
+    setIsOpen(true);
+  };
 
   const SUGGESTIONS = [
     "🍣 Top local food spots?",
@@ -62,7 +79,7 @@ export default function Voya({ trip }: { trip: any }) {
     <>
       {/* Floating Button */}
       <button 
-        onClick={() => setIsOpen(true)}
+        onClick={openDrawer}
         className={`absolute bottom-6 right-6 h-14 w-14 rounded-full bg-[#00f0ff] flex items-center justify-center text-black shadow-[0_0_20px_rgba(0,240,255,0.6)] hover:scale-110 transition-transform z-50 ${isOpen ? 'scale-0 opacity-0' : 'scale-100 opacity-100'}`}
       >
         <span className="text-2xl drop-shadow-[0_0_8px_rgba(255,255,255,0.8)] animate-bounce" style={{ animationDuration: '2s' }}>🤖</span>
