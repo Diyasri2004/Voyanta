@@ -274,6 +274,7 @@ export default function Page() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [formErrors, setFormErrors] = useState({ categories: false, pace: false, budget: false });
   const [showAlertBanner, setShowAlertBanner] = useState(false);
+  const [isAutocompleteOpen, setIsAutocompleteOpen] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -455,7 +456,7 @@ export default function Page() {
           <div className="flex items-center justify-between gap-3 bg-[#03050a]/95 border-2 border-[#ff007f] text-white px-6 py-4 rounded-2xl backdrop-blur-2xl shadow-[0_0_35px_rgba(255,0,127,0.6)]">
             <div className="flex items-center gap-3 text-sm font-semibold">
               <span className="text-2xl">⚠️</span>
-              <span>Attention Traveler: Please select your options in all 3 Advanced Preference boxes to customize your trip before proceeding!</span>
+              <span>Attention Traveler: Please select your options in ALL 3 Advanced Preference boxes before proceeding!</span>
             </div>
             <button 
               type="button"
@@ -539,21 +540,24 @@ export default function Page() {
             )}
 
             <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end">
-              <select 
-                value={currency} 
-                onChange={e => setCurrency(e.target.value)}
-                className="bg-[#03050a] border border-[#ff007f]/50 text-white text-xs font-bold rounded-lg px-2 py-2 outline-none focus:border-[#00f0ff] transition-colors cursor-pointer"
-              >
-                <option value="USD">USD ($)</option>
-                <option value="EUR">EUR (€)</option>
-                <option value="GBP">GBP (£)</option>
-                <option value="INR">INR (₹)</option>
-                <option value="JPY">JPY (¥)</option>
-                <option value="AUD">AUD (A$)</option>
-                <option value="CAD">CAD (C$)</option>
-                <option value="AED">AED (د.إ)</option>
-                <option value="SGD">SGD (S$)</option>
-              </select>
+              <div className="flex items-center gap-1.5 rounded-full border border-[#00f0ff]/40 bg-[#03050a]/80 px-3 py-1.5 shadow-[0_0_12px_rgba(0,240,255,0.2)]">
+                <span className="text-xs font-bold text-[#00f0ff]">🌐</span>
+                <select 
+                  value={currency} 
+                  onChange={e => setCurrency(e.target.value)}
+                  className="bg-transparent text-white text-xs font-bold outline-none cursor-pointer"
+                >
+                  <option value="USD" className="bg-[#03050a] text-white">USD ($)</option>
+                  <option value="EUR" className="bg-[#03050a] text-white">EUR (€)</option>
+                  <option value="GBP" className="bg-[#03050a] text-white">GBP (£)</option>
+                  <option value="INR" className="bg-[#03050a] text-white">INR (₹)</option>
+                  <option value="JPY" className="bg-[#03050a] text-white">JPY (¥)</option>
+                  <option value="AUD" className="bg-[#03050a] text-white">AUD (A$)</option>
+                  <option value="CAD" className="bg-[#03050a] text-white">CAD (C$)</option>
+                  <option value="AED" className="bg-[#03050a] text-white">AED (د.إ)</option>
+                  <option value="SGD" className="bg-[#03050a] text-white">SGD (S$)</option>
+                </select>
+              </div>
 
               {trip && (
                 <button
@@ -660,43 +664,34 @@ export default function Page() {
                     <input
                       id="destination-input"
                       value={locationInput}
-                      onChange={(e) => setLocationInput(e.target.value)}
-                      onFocus={() => {
-                        const wrapper = document.getElementById('autocomplete-dropdown');
-                        if (wrapper) wrapper.style.display = 'block';
+                      onChange={(e) => {
+                        setLocationInput(e.target.value);
+                        setIsAutocompleteOpen(true);
                       }}
-                      onBlur={() => {
-                        setTimeout(() => {
-                          const wrapper = document.getElementById('autocomplete-dropdown');
-                          if (wrapper) wrapper.style.display = 'none';
-                        }, 200);
-                      }}
-                      placeholder="Search a destination... (e.g. Kyoto, Dubai)"
+                      onFocus={() => setIsAutocompleteOpen(true)}
+                      onBlur={() => setTimeout(() => setIsAutocompleteOpen(false), 200)}
+                      placeholder="Search a destination... (e.g. Kyoto, Lucknow, Dubai)"
                       autoComplete="off"
                       className="w-full rounded-full border border-white/[0.09] bg-[#111827]/60 py-[14px] pl-12 pr-5 text-[0.95rem] text-white placeholder-[#475569] outline-none transition-all focus:border-[#00f0ff]/50 focus:bg-[#111827]/90 focus:shadow-[0_0_15px_rgba(0,240,255,0.2)]"
                     />
                     
                     {/* Autocomplete Dropdown */}
-                    {locationInput.length > 0 && (
-                      <div id="autocomplete-dropdown" className="absolute top-full mt-2 w-full bg-[#03050a]/95 backdrop-blur-xl border border-[#00f0ff]/30 rounded-xl overflow-hidden z-50 shadow-[0_10px_30px_rgba(0,0,0,0.8)] transition-all">
-                        {['Kyoto, Japan', 'Tokyo, Japan', 'Paris, France', 'Dubai, UAE', 'New York, USA', 'Delhi, India', 'London, UK']
+                    {isAutocompleteOpen && locationInput.trim().length > 0 && (
+                      <div className="absolute top-full mt-2 w-full bg-[#03050a]/95 backdrop-blur-xl border border-[#00f0ff]/40 rounded-2xl overflow-hidden z-50 shadow-[0_10px_30px_rgba(0,240,255,0.2)] transition-all max-h-60 overflow-y-auto">
+                        {['Kyoto, Japan', 'Tokyo, Japan', 'Paris, France', 'Lucknow, India', 'Dubai, UAE', 'New York, USA', 'Delhi, India', 'London, UK', 'Reykjavik, Iceland', 'Rome, Italy', 'Barcelona, Spain', 'Singapore', 'Bangkok, Thailand', 'Sydney, Australia', 'Mumbai, India']
                           .filter(city => city.toLowerCase().includes(locationInput.toLowerCase()))
                           .map((city, idx) => (
                             <button
                               key={idx}
                               type="button"
-                              onMouseDown={(e) => {
-                                // Prevent input blur before click fires
-                                e.preventDefault();
-                              }}
+                              onMouseDown={(e) => e.preventDefault()}
                               onClick={() => {
                                 setLocationInput(city);
-                                const wrapper = document.getElementById('autocomplete-dropdown');
-                                if (wrapper) wrapper.style.display = 'none';
+                                setIsAutocompleteOpen(false);
                               }}
-                              className="w-full text-left px-4 py-3 hover:bg-[#00f0ff]/10 text-white text-sm border-b border-white/5 last:border-0 transition-colors"
+                              className="w-full text-left px-5 py-3.5 hover:bg-[#00f0ff]/15 text-white text-sm border-b border-white/5 last:border-0 transition-colors flex items-center gap-2 font-medium"
                             >
-                              <MapPin className="inline-block h-3 w-3 text-[#00f0ff] mr-2" />
+                              <MapPin className="h-4 w-4 text-[#00f0ff] shrink-0" />
                               {city}
                             </button>
                         ))}
@@ -706,11 +701,14 @@ export default function Page() {
 
                   {/* Suggestion Chips */}
                   <div className="flex flex-wrap gap-2 mt-1 mb-2">
-                    {['Kyoto', 'Dubai', 'Paris', 'New York'].map(city => (
+                    {['Kyoto', 'Lucknow', 'Dubai', 'Paris', 'New York', 'Tokyo', 'Delhi', 'London'].map(city => (
                       <button
                         key={city}
                         type="button"
-                        onClick={() => setLocationInput(city)}
+                        onClick={() => {
+                          setLocationInput(city);
+                          setIsAutocompleteOpen(false);
+                        }}
                         className="bg-[#00f0ff]/10 border border-[#00f0ff]/30 text-[#00f0ff] text-[10px] px-3 py-1 rounded-full font-bold tracking-widest hover:bg-[#00f0ff] hover:text-black transition-colors"
                       >
                         {city}
@@ -718,7 +716,7 @@ export default function Page() {
                     ))}
                   </div>
 
-                  {/* ── Row 2 : Departure | Return | Plan trip ── */}
+                  {/* ── Row 2 : Departure | Return | Currency | Plan trip ── */}
                   <div className="flex flex-col md:flex-row items-stretch md:items-center gap-[10px]">
 
                     {/* Departure date */}
@@ -748,6 +746,28 @@ export default function Page() {
                         className="w-full rounded-full border border-white/[0.09] bg-[#111827]/60 py-[14px] pl-12 pr-4 text-[0.95rem] text-white outline-none transition-all focus:border-blue-500/40 focus:bg-[#111827]/90 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.12)]"
                         style={{ colorScheme: "dark" }}
                       />
+                    </div>
+
+                    {/* Currency Selector */}
+                    <div className="relative flex-1 sm:flex-initial">
+                      <div className="pointer-events-none absolute left-[16px] top-1/2 -translate-y-1/2 text-xs font-bold text-[#00f0ff]">
+                        🌐
+                      </div>
+                      <select
+                        value={currency}
+                        onChange={(e) => setCurrency(e.target.value)}
+                        className="w-full rounded-full border border-[#00f0ff]/40 bg-[#111827]/80 py-[14px] pl-9 pr-4 text-[0.85rem] font-bold text-white outline-none transition-all hover:border-[#00f0ff] focus:border-[#00f0ff] focus:shadow-[0_0_15px_rgba(0,240,255,0.3)] cursor-pointer"
+                      >
+                        <option value="USD" className="bg-[#03050a] text-white">USD ($)</option>
+                        <option value="EUR" className="bg-[#03050a] text-white">EUR (€)</option>
+                        <option value="GBP" className="bg-[#03050a] text-white">GBP (£)</option>
+                        <option value="INR" className="bg-[#03050a] text-white">INR (₹)</option>
+                        <option value="JPY" className="bg-[#03050a] text-white">JPY (¥)</option>
+                        <option value="AUD" className="bg-[#03050a] text-white">AUD (A$)</option>
+                        <option value="CAD" className="bg-[#03050a] text-white">CAD (C$)</option>
+                        <option value="AED" className="bg-[#03050a] text-white">AED (د.إ)</option>
+                        <option value="SGD" className="bg-[#03050a] text-white">SGD (S$)</option>
+                      </select>
                     </div>
 
                     {/* Plan trip button */}
