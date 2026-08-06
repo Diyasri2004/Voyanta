@@ -236,24 +236,6 @@ function diffDays(start: string, end: string): number {
   return Math.max(1, Math.round(ms / 86400000));
 }
 
-const ACTIVITY_CATEGORIES = [
-  "🏛️ Culture & History", "🍕 Foodie & Culinary", "⛰️ Outdoor & Adventure",
-  "🛍️ Shopping & Local Markets", "🎨 Art & Entertainment", "🌙 Nightlife & Social",
-  "🧘 Wellness & Relaxation", "🎢 Family & Theme Parks"
-];
-
-const TRAVEL_PACES = [
-  { id: "Relaxed", label: "☕ Relaxed", desc: "1-2 stops/day" },
-  { id: "Balanced", label: "🚶 Balanced", desc: "3-4 stops/day" },
-  { id: "Action-Packed", label: "⚡ Action-Packed", desc: "5+ stops/day" },
-];
-
-const BUDGET_LEVELS = [
-  { id: "Budget-Friendly", label: "💰 Budget-Friendly" },
-  { id: "Moderate", label: "💳 Moderate" },
-  { id: "Luxury", label: "✨ Luxury" },
-];
-
 export default function Page() {
   const { currency, setCurrency } = useCurrency();
   const [locationInput, setLocationInput] = useState("");
