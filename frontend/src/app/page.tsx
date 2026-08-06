@@ -404,27 +404,6 @@ export default function Page() {
             .hide-scrollbar::-webkit-scrollbar { display: none; }
             .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-            /* Blue edge glow */
-            .blue-glow-left {
-              position: fixed;
-              left: 0; top: 0; bottom: 0;
-              width: 6px;
-              background: linear-gradient(180deg, transparent 0%, #2563EB 30%, #3B82F6 50%, #2563EB 70%, transparent 100%);
-              box-shadow: 0 0 32px 10px rgba(59,130,246,0.55), 0 0 80px 24px rgba(37,99,235,0.28);
-              pointer-events: none;
-              z-index: 9999;
-              animation: glowPulse 3s ease-in-out infinite;
-            }
-            .blue-glow-right {
-              position: fixed;
-              right: 0; top: 0; bottom: 0;
-              width: 6px;
-              background: linear-gradient(180deg, transparent 0%, #2563EB 30%, #3B82F6 50%, #2563EB 70%, transparent 100%);
-              box-shadow: 0 0 32px 10px rgba(59,130,246,0.55), 0 0 80px 24px rgba(37,99,235,0.28);
-              pointer-events: none;
-              z-index: 9999;
-              animation: glowPulse 3s ease-in-out infinite;
-            }
             @keyframes shake {
               0%, 100% { transform: translateX(0); }
               20%, 60% { transform: translateX(-8px); }
@@ -447,10 +426,6 @@ export default function Page() {
         }}
       />
 
-      {/* Blue edge glows */}
-      <div className="blue-glow-left" aria-hidden="true" />
-      <div className="blue-glow-right" aria-hidden="true" />
-
       {showAlertBanner && (
         <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] w-[92%] max-w-2xl animate-bounce">
           <div className="flex items-center justify-between gap-3 bg-[#03050a]/95 border-2 border-[#ff007f] text-white px-6 py-4 rounded-2xl backdrop-blur-2xl shadow-[0_0_35px_rgba(255,0,127,0.6)]">
@@ -469,7 +444,7 @@ export default function Page() {
         </div>
       )}
 
-      <div className="relative min-h-screen bg-[#05070A] font-manrope text-white selection:bg-blue-500 selection:text-white overflow-x-hidden">
+      <div className="relative min-h-screen bg-[#05070A] font-manrope text-white selection:bg-[#ff007f] selection:text-white overflow-x-hidden">
         <div className="fixed inset-0 pointer-events-none bg-[radial-gradient(circle_at_top,rgba(148,163,184,0.14),transparent_42%),linear-gradient(180deg,#05070A_0%,#04060A_100%)]" />
         <div className="fixed inset-0 pointer-events-none bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.16] mix-blend-overlay" />
 
@@ -497,7 +472,7 @@ export default function Page() {
                     value={locationInput}
                     onChange={(e) => setLocationInput(e.target.value)}
                     placeholder="Search a destination..."
-                    className="w-full rounded-full border border-white/[0.10] bg-white/[0.03] py-3 pl-11 pr-4 text-sm text-white outline-none transition focus:border-blue-500/50 focus:shadow-[0_0_0_2px_rgba(59,130,246,0.15)]"
+                    className="w-full rounded-full border border-white/[0.10] bg-white/[0.03] py-3 pl-11 pr-4 text-sm text-white outline-none transition focus:border-[#00f0ff]/50 focus:shadow-[0_0_15px_rgba(0,240,255,0.2)]"
                   />
                 </div>
                 {/* Departure date */}
@@ -523,7 +498,7 @@ export default function Page() {
                     min={addDays(startDate, 1)}
                     max={addDays(startDate, 30)}
                     onChange={(e) => handleReturnDate(e.target.value)}
-                    className="w-full rounded-full border border-white/[0.10] bg-white/[0.03] py-3 pl-11 pr-4 text-sm text-white outline-none transition focus:border-blue-500/50 focus:shadow-[0_0_0_2px_rgba(59,130,246,0.15)] md:w-44"
+                    className="w-full rounded-full border border-white/[0.10] bg-white/[0.03] py-3 pl-11 pr-4 text-sm text-white outline-none transition focus:border-[#00f0ff]/50 focus:shadow-[0_0_15px_rgba(0,240,255,0.2)] md:w-44"
                     style={{ colorScheme: "dark" }}
                   />
                 </div>
