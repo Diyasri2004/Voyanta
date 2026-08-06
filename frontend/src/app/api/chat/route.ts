@@ -4,51 +4,51 @@ import { NextResponse } from 'next/server';
 export async function POST(req: Request) {
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-    const { messages, context } = await req.json();
+    const body = await req.json();
 
-    if (!messages || !Array.isArray(messages)) {
-      return NextResponse.json({ error: 'Invalid messages array' }, { status: 400 });
-    }
+    const message = body.message || (Array.isArray(body.messages) ? body.messages[body.messages.length - 1]?.content : '');
+    const history = body.history || (Array.isArray(body.messages) 
+      ? body.messages.slice(0, -1).map((m: any) => ({ role: m.role === 'assistant' ? 'model' : 'user', text: m.content })) 
+      : []);
+    const tripContext = body.tripContext || body.context || {};
 
-    const { destination, budget, currency, itinerary } = context || {};
+    const systemInstruction = `
+      You are "Voya", an energetic, highly knowledgeable, and polite AI Travel Concierge for the web app VOYANTA.
+      
+      YOUR CORE RESPONSIBILITIES:
+      1. Provide accurate, realistic, and authentic recommendations for travel destinations worldwide.
+      2. When asked about costs, ticket fees, or approximate expenditures, give realistic price ranges converted to the traveler's active currency (${tripContext?.currency || 'USD'}).
+      3. Help travelers customize, swap, or refine their active itinerary based on their vibe, pace, or budget preferences.
+      4. Never suggest fake or generic places like "Local Park" or "Generic Gym". Always name real-world, iconic spots, legendary food outlets, or hidden gems.
 
-    const serializedItinerary = Array.isArray(itinerary)
-      ? itinerary.map((stop: any) => `• Day ${stop.day}: ${stop.title} (${stop.location || 'Local'}) | Type: ${stop.type || 'Attraction'} | Approx Cost: ${stop.cost_range || 'N/A'}`).join("\n")
-      : (itinerary ? JSON.stringify(itinerary).substring(0, 3000) : 'None');
+      ACTIVE TRIP CONTEXT:
+      - Destination: ${tripContext?.destination || 'Not selected'}
+      - Dates/Duration: ${tripContext?.dates || 'Flexible'}
+      - Selected Currency: ${tripContext?.currency || 'USD'}
+      - Active Itinerary Summary: ${JSON.stringify(tripContext?.itinerary || {})}
 
-    const systemInstruction = `You are Voya, an energetic AI travel concierge with full visibility into the user's active itinerary, selected city, dates, and currency.
-You are helping the traveler with their trip to ${destination || 'an unknown destination'}.
-Preferred currency: ${currency || 'USD'}.
-
-ACTIVE ITINERARY DETAILS & COST DATA:
-${serializedItinerary}
-
-INSTRUCTIONS FOR VOYA:
-- If a traveler wants custom tweaks (e.g. 'more chill pace', 'budget street food', 'hidden gems', 'family friendly spots', 'swap an activity'), suggest specific, real-world venues and help refine their schedule interactively.
-- When asked about costs, entry fees, or approximate expenditures for any venue or overall trip, provide accurate price range estimates converted into their active currency (${currency || 'USD'}) along with helpful context like ticket prices, food costs, or transportation.
-- Respond warmly and in character. Keep answers concise, helpful, and visually engaging using emojis.`;
-
-    // Convert messages to Gemini format (user vs model)
-    const formattedMessages = messages.map((m: any) => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }]
-    }));
+      TONE & STYLE:
+      - Keep responses concise, well-structured (use bullet points), enthusiastic, and practical.
+      - Keep travel disclaimers light (e.g., "≈ Prices are approximate and subject to seasonal changes").
+    `;
 
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: formattedMessages,
+      contents: [
+        ...history.map((h: { role: string; text: string }) => ({
+          role: h.role === 'assistant' ? 'model' : h.role,
+          parts: [{ text: h.text }],
+        })),
+        { role: 'user', parts: [{ text: message }] },
+      ],
       config: {
-        systemInstruction,
-        temperature: 0.7,
-      }
+        systemInstruction: systemInstruction,
+      },
     });
 
-    return NextResponse.json({ reply: response.text });
-  } catch (error: any) {
-    console.error('Chat API Error:', error);
-    return NextResponse.json(
-      { error: 'Failed to communicate with Voya.' },
-      { status: 500 }
-    );
+    return NextResponse.json({ text: response.text, reply: response.text });
+  } catch (error) {
+    console.error('Voya Chat API Error:', error);
+    return NextResponse.json({ error: 'Failed to fetch response from Voya.' }, { status: 500 });
   }
 }

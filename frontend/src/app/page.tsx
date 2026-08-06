@@ -3,6 +3,7 @@
 import { useMemo, useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import CyberDashboard from "@/components/dashboard/CyberDashboard";
+import VoyAI from "@/components/ai/Voya";
 import CityHeroImage from "@/components/CityHeroImage";
 import { AnimatePresence, motion } from "framer-motion";
 import { useCurrency } from "@/context/CurrencyContext";
@@ -703,6 +704,9 @@ export default function Page() {
           ) : null}
         </main>
       </div>
+
+      {/* FLOATING VOYA DRAWER */}
+      <VoyAI trip={trip} />
     </>
   );
 }

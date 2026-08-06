@@ -77,17 +77,9 @@ export default function Voya({ trip }: { trip: any }) {
   };
 
   return (
-    <>
-      {/* Floating Button */}
-      <button 
-        onClick={openDrawer}
-        className={`absolute bottom-6 right-6 h-14 w-14 rounded-full bg-[#00f0ff] flex items-center justify-center text-black shadow-[0_0_20px_rgba(0,240,255,0.6)] hover:scale-110 transition-transform z-50 ${isOpen ? 'scale-0 opacity-0' : 'scale-100 opacity-100'}`}
-      >
-        <span className="text-2xl drop-shadow-[0_0_8px_rgba(255,255,255,0.8)] animate-bounce" style={{ animationDuration: '2s' }}>🤖</span>
-      </button>
-
+    <div className="fixed bottom-6 right-6 z-[9999] pointer-events-auto flex flex-col items-end">
       {/* Chat Drawer */}
-      <div className={`absolute bottom-0 right-0 w-80 sm:w-96 h-[500px] max-h-screen bg-[#03050a]/95 backdrop-blur-xl border-l border-t border-[#00f0ff]/30 shadow-[-10px_-10px_30px_rgba(0,0,0,0.8)] z-50 transition-transform duration-300 flex flex-col ${isOpen ? 'translate-y-0' : 'translate-y-full'}`}>
+      <div className={`absolute bottom-full right-0 mb-4 w-80 sm:w-96 h-[500px] max-h-[80vh] bg-[#03050a]/95 backdrop-blur-xl border border-[#ff007f]/40 rounded-2xl shadow-[0_0_30px_rgba(255,0,127,0.2)] z-50 transition-all duration-300 flex flex-col origin-bottom-right ${isOpen ? 'scale-100 opacity-100' : 'scale-90 opacity-0 pointer-events-none'}`}>
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-[#00f0ff]/20 bg-gradient-to-r from-[#00f0ff]/10 to-transparent">
           <div className="flex items-center gap-3">
@@ -166,6 +158,18 @@ export default function Voya({ trip }: { trip: any }) {
           </div>
         </form>
       </div>
-    </>
+
+      {/* Floating Action Button */}
+      <button 
+        onClick={openDrawer}
+        className={`relative h-16 w-16 rounded-full bg-gradient-to-tr from-[#ff007f] to-[#00f0ff] flex items-center justify-center text-white shadow-[0_0_20px_rgba(255,0,127,0.5)] hover:shadow-[0_0_30px_rgba(0,240,255,0.8)] hover:scale-110 transition-all duration-300 z-[10000] group ${isOpen ? 'rotate-90' : 'rotate-0'}`}
+      >
+        <div className="absolute inset-0 rounded-full border border-white/40 bg-white/10 backdrop-blur-md"></div>
+        {isOpen ? <X className="h-7 w-7 relative z-10 drop-shadow-[0_0_5px_rgba(255,255,255,0.8)]" /> : <MessageSquare className="h-7 w-7 relative z-10 drop-shadow-[0_0_5px_rgba(255,255,255,0.8)]" />}
+        {!isOpen && (
+          <span className="absolute top-0 right-0 h-4 w-4 bg-[#39ff14] rounded-full border-2 border-[#03050a] animate-pulse"></span>
+        )}
+      </button>
+    </div>
   );
 }

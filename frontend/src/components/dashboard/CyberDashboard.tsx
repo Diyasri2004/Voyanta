@@ -3,7 +3,6 @@
 import { useState } from "react";
 import TabController from "./TabController";
 import MapContainer from "../maps/MapContainer";
-import VoyAI from "../ai/Voya";
 
 export default function CyberDashboard({ trip, setTrip }: { trip: any; setTrip: any }) {
   const [activeTab, setActiveTab] = useState("agenda");
@@ -19,9 +18,6 @@ export default function CyberDashboard({ trip, setTrip }: { trip: any; setTrip: 
       <div className="flex-1 relative min-h-[400px] lg:min-h-0 lg:h-full bg-[#0E1525]">
         <MapContainer trip={trip} />
       </div>
-
-      {/* FLOATING VOYA DRAWER */}
-      <VoyAI trip={trip} />
     </div>
   );
 }
