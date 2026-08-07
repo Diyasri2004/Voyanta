@@ -16,9 +16,11 @@
     "@types/mapbox-gl": "^3.4.1",
     "@types/three": "^0.185.4",
     "chart.js": "^4.5.1",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "framer-motion": "^12.42.2",
     "leaflet": "^1.9.4",
-    "lucide-react": "^1.27.0",
+    "lucide-react": "^1.30.0",
     "mapbox-gl": "^3.27.0",
     "next": "16.2.9",
     "react": "19.2.4",
@@ -27,6 +29,7 @@
     "react-leaflet": "^5.0.0",
     "react-map-gl": "^8.1.1",
     "recharts": "^3.10.1",
+    "tailwind-merge": "^3.6.0",
     "three": "^0.185.1"
   },
   "devDependencies": {
