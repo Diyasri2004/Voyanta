@@ -35,7 +35,8 @@ PEXELS_FALLBACK     = (
 )
 DATABASE_URL        = os.getenv("DATABASE_URL")  # required; no localhost default
 GROQ_API_KEY        = os.getenv("GROQ_API_KEY", "")
-GROQ_MODEL          = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+_raw_model          = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+GROQ_MODEL          = "llama-3.3-70b-versatile" if ("8192" in _raw_model or "llama3-8b" in _raw_model) else _raw_model
 GROQ_BASE           = "https://api.groq.com/openai/v1/chat/completions"
 GEMINI_API_KEY      = os.getenv("GEMINI_API_KEY", "")
 
@@ -124,7 +125,7 @@ class TripStop(BaseModel):
     type: str
     creators: str
     distance: str
-    elevation: str
+    elevation: Optional[str] = "N/A"
     duration: str
     image: str
     map_image_url: str
@@ -499,6 +500,9 @@ async def generate_trip_with_groq(
             },
             timeout=30.0,
         )
+        if response.status_code != 200:
+            logger.error("Groq API error response (%s): %s", response.status_code, response.text)
+            return None
         response.raise_for_status()
         content = response.json()["choices"][0]["message"]["content"].strip()
 
@@ -715,6 +719,7 @@ async def build_fallback_trip_plan(location: str, days: int, start_day: date, cl
                         type=category.upper(),
                         creators=f"Starts at {build_time_label(stop_index)}",
                         distance=f"{round((stop_index + 1) * 1.8, 1)}km",
+                        elevation="N/A",
                         duration="90m",
                         image=stop_image,
                         map_image_url=build_tomtom_static_map_url(stop_lat, stop_lng) if TOMTOM_API_KEY else build_image_url(f"map {stop_lat}"),
