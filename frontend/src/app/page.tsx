@@ -504,8 +504,8 @@ export default function Page() {
 
         <main className="relative z-10 mx-auto max-w-[1600px] px-6 py-8 md:px-10">
           {error ? (
-            <div className="rounded-[2rem] border border-red-400/20 bg-red-400/10 p-6 text-red-100">
-              {error}
+            <div className="mx-auto mt-4 max-w-2xl rounded-[2rem] border border-red-500/30 bg-red-500/10 p-6 text-center text-red-200 shadow-[0_0_30px_rgba(239,68,68,0.15)] backdrop-blur-md">
+              <p className="font-semibold">{error}</p>
             </div>
           ) : null}
 
