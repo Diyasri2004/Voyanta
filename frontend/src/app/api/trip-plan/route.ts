@@ -5,14 +5,16 @@ function unique(values: Array<string | undefined>) {
 }
 
 const backendCandidates = unique([
+  process.env.NEXT_PUBLIC_BACKEND_URL?.replace(/\/$/, ""),
   process.env.VOYANTA_BACKEND_URL?.replace(/\/$/, ""),
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, ""),
-  "http://127.0.0.1:8005",
-  "http://127.0.0.1:8004",
-  "http://127.0.0.1:8003",
-  "http://127.0.0.1:8002",
-  "http://127.0.0.1:8001",
   "http://127.0.0.1:8000",
+  "http://localhost:8000",
+  "http://127.0.0.1:8001",
+  "http://127.0.0.1:8002",
+  "http://127.0.0.1:8003",
+  "http://127.0.0.1:8004",
+  "http://127.0.0.1:8005",
 ]);
 
 export async function POST(request: NextRequest) {
