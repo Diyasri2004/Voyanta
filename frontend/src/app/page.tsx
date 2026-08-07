@@ -652,7 +652,7 @@ export default function Page() {
                     ))}
                   </div>
 
-                  {/* ── Row 2 : Departure | Return | Currency | Plan trip ── */}
+                  {/* ── Row 2 : Departure | Return | Travelers | Plan trip ── */}
                   <div className="flex flex-col md:flex-row items-stretch md:items-center gap-[10px]">
 
                     {/* Departure date */}
@@ -684,30 +684,8 @@ export default function Page() {
                       />
                     </div>
 
-                    {/* Currency Selector */}
-                    <div className="relative flex-1 sm:flex-initial">
-                      <div className="pointer-events-none absolute left-[16px] top-1/2 -translate-y-1/2 text-xs font-bold text-[#00f0ff]">
-                        🌐
-                      </div>
-                      <select
-                        value={currency}
-                        onChange={(e) => setCurrency(e.target.value)}
-                        className="w-full rounded-full border border-[#00f0ff]/40 bg-[#111827]/80 py-[14px] pl-9 pr-4 text-[0.85rem] font-bold text-white outline-none transition-all hover:border-[#00f0ff] focus:border-[#00f0ff] focus:shadow-[0_0_15px_rgba(0,240,255,0.3)] cursor-pointer"
-                      >
-                        <option value="USD" className="bg-[#03050a] text-white">USD ($)</option>
-                        <option value="EUR" className="bg-[#03050a] text-white">EUR (€)</option>
-                        <option value="GBP" className="bg-[#03050a] text-white">GBP (£)</option>
-                        <option value="INR" className="bg-[#03050a] text-white">INR (₹)</option>
-                        <option value="JPY" className="bg-[#03050a] text-white">JPY (¥)</option>
-                        <option value="AUD" className="bg-[#03050a] text-white">AUD (A$)</option>
-                        <option value="CAD" className="bg-[#03050a] text-white">CAD (C$)</option>
-                        <option value="AED" className="bg-[#03050a] text-white">AED (د.إ)</option>
-                        <option value="SGD" className="bg-[#03050a] text-white">SGD (S$)</option>
-                      </select>
-                    </div>
-
                     {/* Travelers Popover */}
-                    <div className="relative flex-1 sm:flex-initial">
+                    <div className="relative flex-1">
                       <button
                         type="button"
                         onClick={() => setIsTravelersOpen(!isTravelersOpen)}
