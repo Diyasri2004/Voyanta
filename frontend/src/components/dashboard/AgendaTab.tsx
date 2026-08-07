@@ -90,7 +90,7 @@ export default function AgendaTab({ trip, setTrip }: { trip: any; setTrip: any }
             <div className="flex justify-between items-start">
               <div>
                 <p className="text-[10px] text-[#00f0ff] uppercase tracking-wider font-bold mb-1">{stop.time} • {stop.duration}</p>
-                <h3 className="font-syne font-bold text-base text-white group-hover:text-[#39ff14] transition-colors line-clamp-1">{stop.title}</h3>
+                <h3 className="font-syne font-bold text-base text-white group-hover:text-[#39ff14] transition-colors line-clamp-1">{stop.title || stop.name || stop.location || "Attraction"}</h3>
               </div>
               <button 
                 onClick={() => {

@@ -302,6 +302,16 @@ def build_time_label(index: int) -> str:
     return schedule[index % len(schedule)]
 
 
+def clean_stop_title(title: str, destination: str = "") -> str:
+    if not title:
+        return "Famous Attraction"
+    clean = title.strip()
+    if destination:
+        clean = re.sub(rf"^(?:{re.escape(destination.strip())}|Lucknow|Delhi|Paris|Kyoto|Tokyo|Dubai|London|New York|Mumbai)[,\s\-]+", "", clean, flags=re.IGNORECASE).strip()
+    clean = re.sub(r"^[,\-\:\s]+", "", clean).strip()
+    return clean if clean else title.strip()
+
+
 def build_image_url(query: str) -> str:
     return f"https://picsum.photos/seed/{query.replace(' ', '-').lower()}/1200/800"
 
@@ -506,13 +516,13 @@ async def generate_trip_with_groq(
     system_prompt = (
         "You are a premier travel planner. Return only valid JSON, no markdown.\n\n"
         "CRITICAL MANDATE: You MUST ONLY generate famous, world-renowned tier-1 attractions, historic sites, and legendary culinary hubs for the target city.\n"
-        f"- LANGUAGE REQUIREMENT: Generate all stop titles, activity descriptions, summary, themes, and day itinerary notes in {language or 'English'}.\n"
+        f"- STRICT LANGUAGE INSTRUCTION: You MUST generate and translate ALL Agenda stop titles, activity descriptions, day summaries, Live Radar spots, category tags, expenses, and packing gear lists directly in {language or 'English'}. Do NOT default to English if another language is selected.\n"
+        f"- NO CITY PREFIXES IN TITLES: Do NOT prefix stop titles with the city or state name (e.g., NEVER write 'Lucknow, Uttar Pradesh Bara Imambara' or 'Paris Eiffel Tower'). Output ONLY the exact landmark name.\n"
+        f"- NO GENERIC PLACEHOLDERS: NEVER return generic titles like 'Grand Art Center', 'Bustling Local Market', 'Local Sightseeing', 'City Walk', 'Signature Trail', or 'Check-in'. Every stop MUST be a real, famous, verifiable attraction in {location}.\n"
         "TRAVELER CONTEXT GUIDELINES (SOFT PRIORITIES, NOT HARD RESTRICTIONS):\n"
         "Use the traveler demographics as a subtle thematic bias, but do NOT strictly exclude major iconic sights, top-rated local dining, or standard cultural highlights.\n"
         "MAIN GOAL: Provide a rich, comprehensive, and well-rounded destination experience for all travelers."
         f"{traveler_context_str}\n"
-        "- CRITICAL RULE: Never output generic names containing 'Trail', 'Walk', 'Tour', 'Check-in', or 'Arrival'. Every single item MUST be an exact named venue or monument.\n"
-        "- NEVER generate generic gyms, local society parks, fitness centers, or obscure spots.\n"
         "- IF DESTINATION IS LUCKNOW: You MUST select from: Bara Imambara & Bhool Bhulaiya, Chota Imambara, Rumi Darwaza, Hazratganj Market, Ambedkar Memorial Park, British Residency, Janeshwar Mishra Park, Tunday Kababi Chowk, and Dastarkhwan Lalbagh.\n"
         "- IF DESTINATION IS PARIS: Eiffel Tower, Louvre, Cathédrale Notre-Dame, Arc de Triomphe, Sacré-Cœur, Le Marais.\n"
         "- IF DESTINATION IS DELHI: Red Fort, Qutub Minar, India Gate, Humayun's Tomb, Chandni Chowk."
@@ -603,15 +613,16 @@ async def generate_trip_with_groq(
                 stop_lat = coordinates.lat + (stop_index - 1) * 0.005 + (day_index * 0.003)
                 stop_lng = coordinates.lng + (stop_index + 1) * 0.004 + (day_index * 0.003)
 
+            cleaned_title = clean_stop_title(stop.title, destination)
             day_coordinates.append([stop_lng, stop_lat])
-            stop_image = await fetch_real_image(client, stop.title, f"{stop.title} {destination}")
+            stop_image = await fetch_real_image(client, cleaned_title, f"{cleaned_title} {destination}")
             itinerary.append(
                 TripStop(
                     id=f"groq-{day_number}-{stop_index + 1}",
                     day=day_number,
                     date=trip_date.strftime("%b %d"),
                     time=stop.best_time or build_time_label(stop_index),
-                    title=stop.title,
+                    title=cleaned_title,
                     location=stop.location or destination,
                     type=(stop.category or "SIGHTSEEING").upper(),
                     creators=f"Starts at {stop.best_time or build_time_label(stop_index)}",
@@ -706,7 +717,7 @@ async def build_fallback_trip_plan(location: str, days: int, start_day: date, cl
                 stop_lng = coordinates.lng + lng_offset + (day_index * 0.01)
                 
                 # Special hardcode for famous test cases
-                venue_title = f"{destination} {title}"
+                venue_title = clean_stop_title(title, destination)
                 loc_lower = location.lower()
                 if loc_lower == "lucknow":
                     lucknow_stops = [
