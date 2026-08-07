@@ -325,8 +325,8 @@ export default function Page() {
     setReturnDate(val > max ? max : val);
   }
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  function handleSubmit(e?: React.FormEvent) {
+    e?.preventDefault();
     const trimmedLocation = locationInput.trim();
     if (!trimmedLocation) {
       setError("Enter a destination before planning the trip.");
@@ -504,8 +504,18 @@ export default function Page() {
 
         <main className="relative z-10 mx-auto max-w-[1600px] px-6 py-8 md:px-10">
           {error ? (
-            <div className="mx-auto mt-4 max-w-2xl rounded-[2rem] border border-red-500/30 bg-red-500/10 p-6 text-center text-red-200 shadow-[0_0_30px_rgba(239,68,68,0.15)] backdrop-blur-md">
-              <p className="font-semibold">{error}</p>
+            <div className="mx-auto mt-8 max-w-2xl rounded-3xl border border-[#00f0ff]/40 bg-[#03050a]/90 p-8 text-center backdrop-blur-md shadow-[0_0_40px_rgba(0,240,255,0.15)]">
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#111827] border border-[#ff007f]/40 shadow-[0_0_20px_rgba(255,0,127,0.2)]">
+                <Navigation className="h-6 w-6 text-[#ff007f]" strokeWidth={2} />
+              </div>
+              <h3 className="mb-2 font-syne text-xl font-bold text-white">Connection Interrupted</h3>
+              <p className="mb-6 text-sm text-[#94A3B8]">{error}</p>
+              <button
+                onClick={() => handleSubmit()}
+                className="rounded-full bg-[#00f0ff]/10 px-6 py-2.5 text-sm font-bold text-[#00f0ff] transition-all hover:bg-[#00f0ff]/20 hover:shadow-[0_0_20px_rgba(0,240,255,0.3)] border border-[#00f0ff]/30"
+              >
+                Retry Generation
+              </button>
             </div>
           ) : null}
 
