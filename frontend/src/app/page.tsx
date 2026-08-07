@@ -498,7 +498,7 @@ export default function Page() {
                 <span className="text-xs font-bold text-[#00f0ff]">🌐</span>
                 <select 
                   value={selectedLanguage} 
-                  onChange={e => setSelectedLanguage(e.target.value)}
+                  onChange={e => setSelectedLanguage(e.target.value as LanguageName)}
                   className="bg-transparent text-white text-xs font-bold outline-none cursor-pointer"
                 >
                   {LANGUAGES.map(lang => (
