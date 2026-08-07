@@ -6,20 +6,35 @@ import PackingTab from "./PackingTab";
 import StoryTab from "./StoryTab";
 import RadarTab from "./RadarTab";
 import { LayoutList, Wallet, Backpack, PenTool, Radar } from "lucide-react";
+import { getTranslation, LanguageName } from "@/lib/i18n";
 
-export default function TabController({ trip, setTrip, activeTab, setActiveTab }: { trip: any; setTrip: any; activeTab: string; setActiveTab: (v: string) => void }) {
+export default function TabController({
+  trip,
+  setTrip,
+  activeTab,
+  setActiveTab,
+  selectedLanguage = "English",
+}: {
+  trip: any;
+  setTrip: any;
+  activeTab: string;
+  setActiveTab: (v: string) => void;
+  selectedLanguage?: LanguageName;
+}) {
+  const t = getTranslation(selectedLanguage);
+
   const tabs = [
-    { id: "agenda", icon: LayoutList, label: "Agenda" },
-    { id: "radar", icon: Radar, label: "Live Hits" },
-    { id: "budget", icon: Wallet, label: "Damage" },
-    { id: "packing", icon: Backpack, label: "Fits & Gear" },
-    { id: "story", icon: PenTool, label: "Story Flex" },
+    { id: "agenda", icon: LayoutList, label: t.agenda },
+    { id: "radar", icon: Radar, label: t.liveHits },
+    { id: "budget", icon: Wallet, label: t.damage },
+    { id: "packing", icon: Backpack, label: t.fitsGear },
+    { id: "story", icon: PenTool, label: t.storyFlex },
   ];
 
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 shrink-0">
-        <h2 className="font-syne font-bold text-lg text-white">Command Center</h2>
+        <h2 className="font-syne font-bold text-lg text-white">{t.commandCenter}</h2>
       </div>
       
       {/* Tab Navigation */}

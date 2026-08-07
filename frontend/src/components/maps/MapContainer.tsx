@@ -3,12 +3,14 @@
 import { useState } from "react";
 import dynamic from "next/dynamic";
 import { Layers } from "lucide-react";
+import { getTranslation, LanguageName } from "@/lib/i18n";
 
 const LeafletMap = dynamic(() => import("./LeafletMap"), { ssr: false });
 const ThreeMap = dynamic(() => import("./ThreeMap"), { ssr: false });
 
-export default function MapContainer({ trip }: { trip: any }) {
+export default function MapContainer({ trip, selectedLanguage = "English" }: { trip: any; selectedLanguage?: LanguageName }) {
   const [viewMode, setViewMode] = useState<"2d" | "3d">("2d");
+  const t = getTranslation(selectedLanguage);
 
   return (
     <div className="relative w-full h-full bg-[#0E1525]">
@@ -27,7 +29,7 @@ export default function MapContainer({ trip }: { trip: any }) {
               viewMode === "2d" ? "bg-[#00f0ff] text-black shadow-[0_0_10px_rgba(0,240,255,0.5)]" : "text-white hover:bg-white/10"
             }`}
           >
-            <Layers className="h-4 w-4" /> 2D Cyber Map
+            <Layers className="h-4 w-4" /> {t.cyberMap2D}
           </button>
           <button 
             onClick={() => setViewMode("3d")}
@@ -35,7 +37,7 @@ export default function MapContainer({ trip }: { trip: any }) {
               viewMode === "3d" ? "bg-[#ff007f] text-white shadow-[0_0_10px_rgba(255,0,127,0.5)]" : "text-white hover:bg-white/10"
             }`}
           >
-            <Layers className="h-4 w-4" /> 3D Holo-Globe
+            <Layers className="h-4 w-4" /> {t.holoGlobe3D}
           </button>
         </div>
       </div>

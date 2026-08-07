@@ -25,6 +25,8 @@ import {
   Minus,
 } from "lucide-react";
 
+import { getTranslation, LanguageName } from "@/lib/i18n";
+
 const VoyantaMap = dynamic(() => import("@/components/VoyantaMap"), {
   ssr: false,
   loading: () => (
@@ -85,12 +87,14 @@ export interface TravelersState {
 }
 
 const LANGUAGES = [
-  { code: "EN", name: "English", label: "🇬🇧 EN" },
-  { code: "HI", name: "Hindi", label: "🇮🇳 HI (हिंदी)" },
-  { code: "ES", name: "Spanish", label: "🇪🇸 ES (Español)" },
-  { code: "FR", name: "French", label: "🇫🇷 FR (Français)" },
-  { code: "DE", name: "German", label: "🇩🇪 DE (Deutsch)" },
-  { code: "AR", name: "Arabic", label: "🇦🇪 AR (العربية)" },
+  { code: "EN", name: "English" as LanguageName, label: "🇬🇧 EN" },
+  { code: "HI", name: "Hindi" as LanguageName, label: "🇮🇳 HI (हिंदी)" },
+  { code: "ES", name: "Spanish" as LanguageName, label: "🇪🇸 ES (Español)" },
+  { code: "FR", name: "French" as LanguageName, label: "🇫🇷 FR (Français)" },
+  { code: "DE", name: "German" as LanguageName, label: "🇩🇪 DE (Deutsch)" },
+  { code: "AR", name: "Arabic" as LanguageName, label: "🇦🇪 AR (العربية)" },
+  { code: "ZH", name: "Chinese" as LanguageName, label: "🇨🇳 ZH (中文)" },
+  { code: "JA", name: "Japanese" as LanguageName, label: "🇯🇵 JA (日本語)" },
 ];
 
 interface TripPlan {
@@ -275,7 +279,20 @@ export default function Page() {
     infants: 0,
   });
   const [isTravelersOpen, setIsTravelersOpen] = useState(false);
-  const [selectedLanguage, setSelectedLanguage] = useState<string>("English");
+  const [selectedLanguage, setSelectedLanguage] = useState<LanguageName>("English");
+
+  const t = getTranslation(selectedLanguage);
+
+  const getGroupTypeLabel = (type: string) => {
+    switch (type) {
+      case "Solo": return t.solo;
+      case "Couple": return t.couple;
+      case "Family": return t.family;
+      case "Friends": return t.friends;
+      case "Business": return t.business;
+      default: return type;
+    }
+  };
 
   const [isAutocompleteOpen, setIsAutocompleteOpen] = useState(false);
 
@@ -405,12 +422,12 @@ export default function Page() {
         }}
       />
 
-      <div className="relative min-h-screen bg-[#05070A] font-manrope text-white selection:bg-[#ff007f] selection:text-white overflow-x-hidden">
+      <div className="relative min-h-screen h-screen max-h-screen overflow-hidden bg-[#05070A] font-manrope text-white selection:bg-[#ff007f] selection:text-white flex flex-col justify-between">
         <div className="fixed inset-0 pointer-events-none bg-[radial-gradient(circle_at_top,rgba(148,163,184,0.14),transparent_42%),linear-gradient(180deg,#05070A_0%,#04060A_100%)]" />
         <div className="fixed inset-0 pointer-events-none bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.16] mix-blend-overlay" />
 
-        <header className="sticky top-0 z-40 border-b border-white/[0.05] bg-[#05070A]/85 backdrop-blur-2xl">
-          <div className="mx-auto flex max-w-[1600px] flex-col md:flex-row md:items-center gap-4 px-6 py-5 md:px-10">
+        <header className="sticky top-0 z-40 border-b border-white/[0.05] bg-[#05070A]/85 backdrop-blur-2xl shrink-0">
+          <div className="mx-auto flex max-w-[1600px] flex-col md:flex-row md:items-center gap-4 px-6 py-3.5 md:px-10">
             <button
               type="button"
               onClick={() => setTrip(null)}
@@ -432,7 +449,7 @@ export default function Page() {
                   <input
                     value={locationInput}
                     onChange={(e) => setLocationInput(e.target.value)}
-                    placeholder="Search a destination..."
+                    placeholder={t.searchPlaceholder}
                     className="w-full rounded-full border border-white/[0.10] bg-white/[0.03] py-3 pl-11 pr-4 text-sm text-white outline-none transition focus:border-[#00f0ff]/50 focus:shadow-[0_0_15px_rgba(0,240,255,0.2)]"
                   />
                 </div>
@@ -468,7 +485,7 @@ export default function Page() {
                   disabled={loading || !locationInput.trim()}
                   className="inline-flex items-center justify-center rounded-full bg-white px-6 py-3 text-sm font-bold text-[#05070A] transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Plan trip"}
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : t.planTrip}
                 </button>
               </form>
             ) : (
@@ -518,7 +535,7 @@ export default function Page() {
                   className="flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-xs font-bold text-white transition hover:bg-white/[0.08]"
                 >
                   <Home className="h-3.5 w-3.5" />
-                  New Trip
+                  {t.newTrip}
                 </button>
               )}
               
@@ -548,26 +565,26 @@ export default function Page() {
           </div>
         </header>
 
-        <main className="relative z-10 mx-auto max-w-[1600px] px-6 py-8 md:px-10">
+        <main className="relative z-10 mx-auto w-full max-w-[1600px] px-6 py-4 md:px-10 flex-1 flex flex-col justify-center overflow-y-auto">
           {error ? (
-            <div className="mx-auto mt-8 max-w-2xl rounded-3xl border border-[#00f0ff]/40 bg-[#03050a]/90 p-8 text-center backdrop-blur-md shadow-[0_0_40px_rgba(0,240,255,0.15)]">
+            <div className="mx-auto my-auto max-w-2xl rounded-3xl border border-[#00f0ff]/40 bg-[#03050a]/90 p-8 text-center backdrop-blur-md shadow-[0_0_40px_rgba(0,240,255,0.15)]">
               <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#111827] border border-[#ff007f]/40 shadow-[0_0_20px_rgba(255,0,127,0.2)]">
                 <Navigation className="h-6 w-6 text-[#ff007f]" strokeWidth={2} />
               </div>
-              <h3 className="mb-2 font-syne text-xl font-bold text-white">Connection Interrupted</h3>
+              <h3 className="mb-2 font-syne text-xl font-bold text-white">{t.connectionInterrupted}</h3>
               <p className="mb-6 text-sm text-[#94A3B8]">{error}</p>
               <button
                 onClick={() => handleSubmit()}
                 className="rounded-full bg-[#00f0ff]/10 px-6 py-2.5 text-sm font-bold text-[#00f0ff] transition-all hover:bg-[#00f0ff]/20 hover:shadow-[0_0_20px_rgba(0,240,255,0.3)] border border-[#00f0ff]/30"
               >
-                Retry Generation
+                {t.retryGeneration}
               </button>
             </div>
           ) : null}
 
           {trip ? (
             <div className="flex flex-col w-full h-full">
-              <CyberDashboard trip={trip} setTrip={setTrip} />
+              <CyberDashboard trip={trip} setTrip={setTrip} selectedLanguage={selectedLanguage} />
 
               {trip.culinary_highlights && trip.culinary_highlights.length > 0 && (
                 <section className="mt-8 pt-8 border-t border-white/10 shrink-0">
@@ -592,34 +609,34 @@ export default function Page() {
           ) : null}
 
           {loading && !trip ? (
-            <div className="flex min-h-[50vh] items-center justify-center">
+            <div className="flex my-auto items-center justify-center">
               <div className="flex items-center gap-3 rounded-full border border-blue-500/20 bg-blue-500/5 px-5 py-3 text-sm text-[#CBD5E1] shadow-[0_0_24px_rgba(59,130,246,0.12)]">
                 <Loader2 className="h-4 w-4 animate-spin text-blue-400" />
-                Building your trip dashboard...
+                {t.buildingDashboard}
               </div>
             </div>
           ) : null}
 
           {!loading && !trip && !error ? (
-            <div className="flex min-h-[55vh] items-center justify-center px-4">
-              <div className="w-full max-w-[780px] rounded-[2rem] border border-white/[0.07] bg-[#0B0F18]/80 px-6 py-8 md:px-10 md:py-12 text-center backdrop-blur-2xl shadow-[0_0_80px_rgba(0,0,0,0.6)]">
+            <div className="flex my-auto items-center justify-center px-4 py-2">
+              <div className="w-full max-w-[780px] rounded-[2rem] border border-white/[0.07] bg-[#0B0F18]/80 px-6 py-6 md:px-10 md:py-8 text-center backdrop-blur-2xl shadow-[0_0_80px_rgba(0,0,0,0.6)]">
 
                 {/* Icon */}
-                <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-full bg-[#111827] border border-blue-500/20 shadow-[0_0_28px_rgba(59,130,246,0.25)]">
-                  <Navigation className="h-6 w-6 text-blue-400" strokeWidth={1.8} />
+                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#111827] border border-blue-500/20 shadow-[0_0_28px_rgba(59,130,246,0.25)]">
+                  <Navigation className="h-5 w-5 text-blue-400" strokeWidth={1.8} />
                 </div>
 
                 {/* Title */}
-                <h1 className="font-syne text-3xl md:text-[2.6rem] font-extrabold leading-tight tracking-tight text-white">
-                  Start with a real destination
+                <h1 className="font-syne text-2xl md:text-[2.2rem] font-extrabold leading-tight tracking-tight text-white">
+                  {t.heroTitle}
                 </h1>
 
                 {/* Subtitle */}
-                <p className="mx-auto mt-4 max-w-lg text-[0.95rem] leading-relaxed text-[#64748B]">
-                  Search for a city or place, pick your travel dates, choose the number of trip days (up to 30), and Voyanta will build the dashboard only after you ask for it.
+                <p className="mx-auto mt-3 max-w-lg text-[0.9rem] leading-relaxed text-[#64748B]">
+                  {t.heroSubtitle}
                 </p>
 
-                <form onSubmit={handleSubmit} className="mt-9 flex flex-col gap-[10px]">
+                <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-[10px]">
 
                   {/* ── Row 1 : Destination search ── */}
                   <div className="relative">
@@ -633,7 +650,7 @@ export default function Page() {
                       }}
                       onFocus={() => setIsAutocompleteOpen(true)}
                       onBlur={() => setTimeout(() => setIsAutocompleteOpen(false), 200)}
-                      placeholder="Search a destination... (e.g. Kyoto, Lucknow, Dubai)"
+                      placeholder={t.searchPlaceholder}
                       autoComplete="off"
                       className="w-full rounded-full border border-white/[0.09] bg-[#111827]/60 py-[14px] pl-12 pr-5 text-[0.95rem] text-white placeholder-[#475569] outline-none transition-all focus:border-[#00f0ff]/50 focus:bg-[#111827]/90 focus:shadow-[0_0_15px_rgba(0,240,255,0.2)]"
                     />
@@ -721,7 +738,7 @@ export default function Page() {
                         <div className="flex items-center gap-2">
                           <Users className="h-4 w-4 text-[#00f0ff] shrink-0" />
                           <span className="truncate">
-                            {travelers.group_type} ({travelers.adults + travelers.seniors + travelers.infants})
+                            {getGroupTypeLabel(travelers.group_type)} ({travelers.adults + travelers.seniors + travelers.infants})
                           </span>
                         </div>
                         <ChevronDown className="h-4 w-4 text-[#64748B] shrink-0" />
@@ -729,7 +746,7 @@ export default function Page() {
 
                       {isTravelersOpen && (
                         <div className="absolute top-full mt-2 right-0 w-80 bg-[#03050a]/95 backdrop-blur-2xl border border-[#00f0ff]/40 rounded-3xl p-5 z-50 shadow-[0_10px_40px_rgba(0,240,255,0.25)] text-left">
-                          <p className="text-[11px] font-bold uppercase tracking-wider text-[#00f0ff] mb-3">Group Type</p>
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-[#00f0ff] mb-3">{t.groupType}</p>
                           <div className="flex flex-wrap gap-2 mb-5">
                             {(['Solo', 'Couple', 'Family', 'Friends', 'Business'] as const).map((type) => (
                               <button
@@ -743,17 +760,17 @@ export default function Page() {
                                     : "bg-white/5 border-white/10 text-[#94A3B8] hover:bg-white/10 hover:text-white"
                                 )}
                               >
-                                {type}
+                                {getGroupTypeLabel(type)}
                               </button>
                             ))}
                           </div>
 
-                          <p className="text-[11px] font-bold uppercase tracking-wider text-[#00f0ff] mb-3">Traveler Counts</p>
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-[#00f0ff] mb-3">{t.travelerCounts}</p>
                           <div className="flex flex-col gap-3.5">
                             <div className="flex items-center justify-between">
                               <div>
-                                <p className="text-sm font-semibold text-white">Adults</p>
-                                <p className="text-[11px] text-[#64748B]">Age 13+</p>
+                                <p className="text-sm font-semibold text-white">{t.adults}</p>
+                                <p className="text-[11px] text-[#64748B]">{t.adultsDesc}</p>
                               </div>
                               <div className="flex items-center gap-3">
                                 <button
@@ -776,8 +793,8 @@ export default function Page() {
 
                             <div className="flex items-center justify-between">
                               <div>
-                                <p className="text-sm font-semibold text-white">Senior Citizens</p>
-                                <p className="text-[11px] text-[#64748B]">Age 60+ (Accessibility)</p>
+                                <p className="text-sm font-semibold text-white">{t.seniors}</p>
+                                <p className="text-[11px] text-[#64748B]">{t.seniorsDesc}</p>
                               </div>
                               <div className="flex items-center gap-3">
                                 <button
@@ -800,8 +817,8 @@ export default function Page() {
 
                             <div className="flex items-center justify-between">
                               <div>
-                                <p className="text-sm font-semibold text-white">Infants & Children</p>
-                                <p className="text-[11px] text-[#64748B]">Age 0-12 (Stroller/Kid Friendly)</p>
+                                <p className="text-sm font-semibold text-white">{t.infants}</p>
+                                <p className="text-[11px] text-[#64748B]">{t.infantsDesc}</p>
                               </div>
                               <div className="flex items-center gap-3">
                                 <button
@@ -828,7 +845,7 @@ export default function Page() {
                             onClick={() => setIsTravelersOpen(false)}
                             className="w-full mt-5 py-2.5 rounded-full bg-[#00f0ff]/15 border border-[#00f0ff]/40 text-[#00f0ff] text-xs font-bold hover:bg-[#00f0ff]/30 transition"
                           >
-                            Apply Selection
+                            {t.applySelection}
                           </button>
                         </div>
                       )}
@@ -841,14 +858,14 @@ export default function Page() {
                       disabled={loading || !locationInput.trim()}
                       className="w-full sm:w-auto shrink-0 rounded-full bg-white px-7 py-[14px] text-[0.95rem] font-bold text-[#05070A] transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Plan trip"}
+                      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : t.planTrip}
                     </button>
                   </div>
 
                   {/* Days pill — live count */}
                   <div className="flex justify-center pt-1">
                     <span className="rounded-full border border-blue-500/25 bg-blue-500/8 px-3 py-1 text-[11px] font-semibold text-blue-400 tracking-wide">
-                      {diffDays(startDate, returnDate)}&nbsp;day{diffDays(startDate, returnDate) !== 1 ? "s" : ""}
+                      {diffDays(startDate, returnDate)}&nbsp;{diffDays(startDate, returnDate) > 1 ? t.days : t.day}
                     </span>
                   </div>
                 </form>
