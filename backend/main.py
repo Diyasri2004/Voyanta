@@ -104,8 +104,9 @@ class ReverseGeocodeResult(BaseModel):
 
 
 class TripPlanRequest(BaseModel):
-    location: str
-    days: int = 3
+    location: Optional[str] = None
+    destination: Optional[str] = None
+    days: Optional[int] = 3
     start_date: Optional[date] = None
     categories: Optional[List[str]] = None
     pace: Optional[str] = None
@@ -1040,17 +1041,19 @@ async def build_trip_plan(
     Only uses TomTom POI search as a last resort fallback if Groq fails.
     """
     try:
-        days = max(1, min(body.days, 30))
+        target_location = (body.location or body.destination or "Lucknow").strip()
+        num_days = body.days or 3
+        days = max(1, min(num_days, 30))
         start_day = body.start_date or date.today()
-        default_coordinates = fallback_coordinates_for(body.location)
+        default_coordinates = fallback_coordinates_for(target_location)
 
         dest_lat = default_coordinates.lat
         dest_lng = default_coordinates.lng
-        destination_name = body.location.title()
+        destination_name = target_location.title()
 
         # 1. Geocode with TomTom to get accurate city center and name
         if key:
-            geocode_url = f"{TOMTOM_BASE}/search/2/geocode/{body.location}.json"
+            geocode_url = f"{TOMTOM_BASE}/search/2/geocode/{target_location}.json"
             try:
                 geocode_response = await client.get(geocode_url, params={"key": key, "limit": 1, "typeahead": True})
                 if geocode_response.status_code == 200:
@@ -1061,7 +1064,7 @@ async def build_trip_plan(
                         dest_lng = dest.get("position", {}).get("lon", dest_lng)
                         destination_name = dest.get("address", {}).get("freeformAddress") or destination_name
             except Exception as e:
-                logger.warning("TomTom geocoding failed for %s: %s", body.location, e)
+                logger.warning("TomTom geocoding failed for %s: %s", target_location, e)
 
         coordinates = Coordinates(lat=dest_lat, lng=dest_lng)
 
@@ -1161,7 +1164,9 @@ async def build_trip_plan(
         return await build_fallback_trip_plan(destination_name, days, start_day, client)
     except Exception as e:
         logger.error('Trip plan failed entirely: %s', e, exc_info=True)
-        return await build_fallback_trip_plan(body.location.title(), max(1, min(body.days, 30)), body.start_date or date.today(), client)
+        fallback_loc = (getattr(body, 'location', None) or getattr(body, 'destination', None) or "Lucknow").title()
+        fallback_days = max(1, min(getattr(body, 'days', None) or 3, 30))
+        return await build_fallback_trip_plan(fallback_loc, fallback_days, getattr(body, 'start_date', None) or date.today(), client)
 
 
 # ─────────────────────────────────────────────
