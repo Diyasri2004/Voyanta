@@ -84,6 +84,15 @@ export interface TravelersState {
   infants: number;
 }
 
+const LANGUAGES = [
+  { code: "EN", name: "English", label: "🇬🇧 EN" },
+  { code: "HI", name: "Hindi", label: "🇮🇳 HI (हिंदी)" },
+  { code: "ES", name: "Spanish", label: "🇪🇸 ES (Español)" },
+  { code: "FR", name: "French", label: "🇫🇷 FR (Français)" },
+  { code: "DE", name: "German", label: "🇩🇪 DE (Deutsch)" },
+  { code: "AR", name: "Arabic", label: "🇦🇪 AR (العربية)" },
+];
+
 interface TripPlan {
   destination: string;
   destination_image: string;
@@ -266,6 +275,7 @@ export default function Page() {
     infants: 0,
   });
   const [isTravelersOpen, setIsTravelersOpen] = useState(false);
+  const [selectedLanguage, setSelectedLanguage] = useState<string>("English");
 
   const [isAutocompleteOpen, setIsAutocompleteOpen] = useState(false);
 
@@ -301,7 +311,7 @@ export default function Page() {
       const response = await fetch("/api/trip-plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ location, days, start_date: date, categories: [], pace: "", budget: "", travelers }),
+        body: JSON.stringify({ location, days, start_date: date, categories: [], pace: "", budget: "", travelers, language: selectedLanguage }),
       });
 
       const payload = await response.json().catch(() => null);
@@ -466,8 +476,25 @@ export default function Page() {
             )}
 
             <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end">
+              {/* Language Selector */}
               <div className="flex items-center gap-1.5 rounded-full border border-[#00f0ff]/40 bg-[#03050a]/80 px-3 py-1.5 shadow-[0_0_12px_rgba(0,240,255,0.2)]">
                 <span className="text-xs font-bold text-[#00f0ff]">🌐</span>
+                <select 
+                  value={selectedLanguage} 
+                  onChange={e => setSelectedLanguage(e.target.value)}
+                  className="bg-transparent text-white text-xs font-bold outline-none cursor-pointer"
+                >
+                  {LANGUAGES.map(lang => (
+                    <option key={lang.code} value={lang.name} className="bg-[#03050a] text-white">
+                      {lang.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Currency Selector */}
+              <div className="flex items-center gap-1.5 rounded-full border border-[#00f0ff]/40 bg-[#03050a]/80 px-3 py-1.5 shadow-[0_0_12px_rgba(0,240,255,0.2)]">
+                <span className="text-xs font-bold text-[#00f0ff]">💲</span>
                 <select 
                   value={currency} 
                   onChange={e => setCurrency(e.target.value)}

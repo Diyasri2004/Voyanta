@@ -121,6 +121,7 @@ class TripPlanRequest(BaseModel):
     pace: Optional[str] = None
     budget: Optional[str] = None
     travelers: Optional[TravelerGroup] = None
+    language: Optional[str] = "English"
 
 
 class TripStop(BaseModel):
@@ -439,6 +440,7 @@ async def generate_trip_with_groq(
     pace: Optional[str] = None,
     budget: Optional[str] = None,
     travelers: Optional[TravelerGroup] = None,
+    language: Optional[str] = "English",
 ) -> Optional[TripPlanResponse]:
     """
     Generate a trip itinerary using Groq's free hosted LLM API.
@@ -504,6 +506,7 @@ async def generate_trip_with_groq(
     system_prompt = (
         "You are a premier travel planner. Return only valid JSON, no markdown.\n\n"
         "CRITICAL MANDATE: You MUST ONLY generate famous, world-renowned tier-1 attractions, historic sites, and legendary culinary hubs for the target city.\n"
+        f"- LANGUAGE REQUIREMENT: Generate all stop titles, activity descriptions, summary, themes, and day itinerary notes in {language or 'English'}.\n"
         "TRAVELER CONTEXT GUIDELINES (SOFT PRIORITIES, NOT HARD RESTRICTIONS):\n"
         "Use the traveler demographics as a subtle thematic bias, but do NOT strictly exclude major iconic sights, top-rated local dining, or standard cultural highlights.\n"
         "MAIN GOAL: Provide a rich, comprehensive, and well-rounded destination experience for all travelers."
@@ -1155,7 +1158,7 @@ async def build_trip_plan(
         if GROQ_API_KEY:
             groq_trip = await generate_trip_with_groq(
                 client, destination_name, days, start_day, coordinates,
-                body.categories, body.pace, body.budget, body.travelers
+                body.categories, body.pace, body.budget, body.travelers, body.language
             )
             if groq_trip:
                 # Add TomTom map if available
