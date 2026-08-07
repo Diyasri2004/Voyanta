@@ -239,17 +239,10 @@ app = FastAPI(
 #  CORS — read allowed origins from env var
 # ─────────────────────────────────────────────
 
-_raw_origins = os.getenv("CORS_ORIGINS", "*")
-_parsed_origins: List[str] = (
-    [o.strip() for o in _raw_origins.split(",") if o.strip()]
-    if _raw_origins != "*"
-    else ["*"]
-)
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_parsed_origins,
-    allow_credentials=_raw_origins != "*",
+    allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -623,7 +616,7 @@ def fallback_coordinates_for(location: str) -> Coordinates:
     for city_name, coordinates in FALLBACK_CITY_COORDINATES.items():
         if city_name in location_lower:
             return coordinates
-    return Coordinates(lat=20.5937, lng=78.9629)
+    return Coordinates(lat=26.8467, lng=80.9462)
 
 
 async def build_fallback_trip_plan(location: str, days: int, start_day: date, client: httpx.AsyncClient) -> TripPlanResponse:

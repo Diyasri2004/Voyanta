@@ -6,6 +6,13 @@ const ai = new GoogleGenAI({ apiKey });
 
 export async function POST(req: Request) {
   try {
+    if (!process.env.GEMINI_API_KEY) {
+      console.error('Voya Chat API Error: GEMINI_API_KEY is missing from process.env');
+      return NextResponse.json(
+        { error: 'GEMINI_API_KEY is missing. Please set GEMINI_API_KEY in frontend/.env.local.' },
+        { status: 500 }
+      );
+    }
     const { message, history, tripContext } = await req.json();
 
     const systemInstruction = `
