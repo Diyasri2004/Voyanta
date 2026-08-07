@@ -189,6 +189,7 @@ class GroqTripContent(BaseModel):
 
 
 FALLBACK_CITY_COORDINATES = {
+    "lucknow": Coordinates(lat=26.8467, lng=80.9462),
     "chennai": Coordinates(lat=13.0827, lng=80.2707),
     "reykjavik": Coordinates(lat=64.1466, lng=-21.9426),
     "kyoto": Coordinates(lat=35.0116, lng=135.7681),
@@ -475,8 +476,9 @@ async def generate_trip_with_groq(
     system_prompt = (
         "You are a premier travel planner. Return only valid JSON, no markdown.\n\n"
         "CRITICAL MANDATE: You MUST ONLY generate famous, world-renowned tier-1 attractions, historic sites, and legendary culinary hubs for the target city.\n"
+        "- CRITICAL RULE: Never output generic names containing 'Trail', 'Walk', 'Tour', 'Check-in', or 'Arrival'. Every single item MUST be an exact named venue or monument.\n"
         "- NEVER generate generic gyms, local society parks, fitness centers, or obscure spots.\n"
-        "- IF DESTINATION IS LUCKNOW: You MUST select from: Bara Imambara, Chota Imambara, Rumi Darwaza, Hazratganj, Ambedkar Memorial Park, British Residency, Tunday Kababi (Chowk/Aminabad), and Dastarkhwan.\n"
+        "- IF DESTINATION IS LUCKNOW: You MUST select from: Bara Imambara & Bhool Bhulaiya, Chota Imambara, Rumi Darwaza, Hazratganj Market, Ambedkar Memorial Park, British Residency, Janeshwar Mishra Park, Tunday Kababi Chowk, and Dastarkhwan Lalbagh.\n"
         "- IF DESTINATION IS PARIS: Eiffel Tower, Louvre, Cathédrale Notre-Dame, Arc de Triomphe, Sacré-Cœur, Le Marais.\n"
         "- IF DESTINATION IS DELHI: Red Fort, Qutub Minar, India Gate, Humayun's Tomb, Chandni Chowk."
     )
@@ -541,10 +543,28 @@ async def generate_trip_with_groq(
             continue
 
         for stop_index, stop in enumerate(day_stops):
-            lat_offset = (stop_index - 1) * 0.022 + (day_index * 0.008)
-            lng_offset = (stop_index + 1) * 0.018 + (day_index * 0.008)
-            stop_lat = coordinates.lat + lat_offset
-            stop_lng = coordinates.lng + lng_offset
+            stop_lat = coordinates.lat
+            stop_lng = coordinates.lng
+            
+            # Geocoding Guardrail: query "{stop.title}, {destination}" via TomTom if key available
+            if TOMTOM_API_KEY:
+                try:
+                    geo_url = f"{TOMTOM_BASE}/search/2/geocode/{stop.title}, {destination}.json"
+                    geo_res = await client.get(geo_url, params={"key": TOMTOM_API_KEY, "limit": 1})
+                    if geo_res.status_code == 200:
+                        geo_data = geo_res.json().get("results", [])
+                        if geo_data:
+                            pos = geo_data[0].get("position", {})
+                            stop_lat = pos.get("lat", stop_lat)
+                            stop_lng = pos.get("lon", stop_lng)
+                except Exception as e:
+                    logger.warning("Geocoding failed for %s, %s: %s", stop.title, destination, e)
+
+            if stop_lat == coordinates.lat and stop_lng == coordinates.lng:
+                # Small micro-offset around city center if geocoding unavailable
+                stop_lat = coordinates.lat + (stop_index - 1) * 0.005 + (day_index * 0.003)
+                stop_lng = coordinates.lng + (stop_index + 1) * 0.004 + (day_index * 0.003)
+
             day_coordinates.append([stop_lng, stop_lat])
             stop_image = await fetch_real_image(client, stop.title, f"{stop.title} {destination}")
             itinerary.append(
@@ -650,12 +670,28 @@ async def build_fallback_trip_plan(location: str, days: int, start_day: date, cl
             venue_title = f"{destination} {title}"
             loc_lower = location.lower()
             if loc_lower == "lucknow":
-                if day_index == 0:
-                    venue_title = ["Bara Imambara", "Rumi Darwaza", "Gomti Riverfront"][stop_index % 3]
-                elif day_index == 1:
-                    venue_title = ["Tunday Kababi Chowk", "Hazratganj", "Ambedkar Memorial Park"][stop_index % 3]
-                elif day_index == 2:
-                    venue_title = ["British Residency", "Chota Imambara", "Dastarkhwan"][stop_index % 3]
+                lucknow_stops = [
+                    [
+                        ("Bara Imambara & Bhool Bhulaiya", 26.8689, 80.9128),
+                        ("Rumi Darwaza", 26.8710, 80.9126),
+                        ("Tunday Kababi Chowk", 26.8606, 80.9158),
+                    ],
+                    [
+                        ("Chota Imambara", 26.8738, 80.9064),
+                        ("Hazratganj Market & Royal Cafe", 26.8502, 80.9499),
+                        ("Dastarkhwan Lalbagh", 26.8488, 80.9431),
+                    ],
+                    [
+                        ("British Residency", 26.8605, 80.9272),
+                        ("Ambedkar Memorial Park", 26.8482, 80.9782),
+                        ("Janeshwar Mishra Park", 26.8373, 80.9936),
+                    ]
+                ]
+                day_lk = lucknow_stops[day_index % len(lucknow_stops)]
+                stop_lk = day_lk[stop_index % len(day_lk)]
+                venue_title = stop_lk[0]
+                stop_lat = stop_lk[1]
+                stop_lng = stop_lk[2]
             elif loc_lower == "paris":
                 if day_index == 0:
                     venue_title = ["Eiffel Tower", "Louvre Museum", "Seine River Cruise"][stop_index % 3]
