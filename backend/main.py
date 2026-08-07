@@ -7,6 +7,7 @@ import httpx
 from uuid import UUID
 from datetime import date
 from contextlib import asynccontextmanager
+import urllib.parse
 from typing import List, Optional
 
 from fastapi import FastAPI, HTTPException, Depends, Query
@@ -158,6 +159,30 @@ class CulinaryHighlight(BaseModel):
     price_tier: str
     cost_approx: str
 
+class PillarItem(BaseModel):
+    id: str
+    title: str
+    category: str
+    description: str
+    address: str
+    maps_url: str
+    lat: float = 0.0
+    lng: float = 0.0
+    image: str = ""
+    serving_style: Optional[str] = None
+    event_time: Optional[str] = None
+    price_range: Optional[str] = None
+
+
+class GroqPillarItem(BaseModel):
+    title: str
+    description: Optional[str] = ""
+    address: Optional[str] = "City Center"
+    serving_style: Optional[str] = None
+    event_time: Optional[str] = None
+    price_range: Optional[str] = "$$"
+
+
 class TripPlanResponse(BaseModel):
     destination: str
     destination_image: str
@@ -169,6 +194,13 @@ class TripPlanResponse(BaseModel):
     itinerary: List[TripStop]
     routes: List[TripDayRoute]
     culinary_highlights: List[CulinaryHighlight] = []
+    attractions: List[PillarItem] = []
+    events: List[PillarItem] = []
+    culinary: List[PillarItem] = []
+    bars_pubs: List[PillarItem] = []
+    wellness: List[PillarItem] = []
+    secret_spots: List[PillarItem] = []
+    essentials: List[PillarItem] = []
 
 
 class GroqTripStop(BaseModel):
@@ -198,6 +230,13 @@ class GroqTripContent(BaseModel):
     summary: Optional[str] = None
     days: List[GroqTripDay] = []
     culinary_highlights: List[GroqCulinaryHighlight] = []
+    attractions: List[GroqPillarItem] = []
+    events: List[GroqPillarItem] = []
+    culinary: List[GroqPillarItem] = []
+    bars_pubs: List[GroqPillarItem] = []
+    wellness: List[GroqPillarItem] = []
+    secret_spots: List[GroqPillarItem] = []
+    essentials: List[GroqPillarItem] = []
 
 
 FALLBACK_CITY_COORDINATES = {
@@ -304,12 +343,18 @@ def build_time_label(index: int) -> str:
 
 def clean_stop_title(title: str, destination: str = "") -> str:
     if not title:
-        return "Famous Attraction"
+        return "Famous Venue"
     clean = title.strip()
     if destination:
         clean = re.sub(rf"^(?:{re.escape(destination.strip())}|Lucknow|Delhi|Paris|Kyoto|Tokyo|Dubai|London|New York|Mumbai)[,\s\-]+", "", clean, flags=re.IGNORECASE).strip()
     clean = re.sub(r"^[,\-\:\s]+", "", clean).strip()
     return clean if clean else title.strip()
+
+
+def generate_maps_link(place_name: str, destination: str) -> str:
+    clean_name = clean_stop_title(place_name, destination)
+    query = f"{clean_name}, {destination.strip()}"
+    return f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(query)}"
 
 
 def build_image_url(query: str) -> str:
@@ -485,9 +530,15 @@ async def generate_trip_with_groq(
         '{"title":"<famous place name>","location":"<address>","category":"<category string>","duration_minutes":<int>,"best_time":"<HH:MM AM/PM>","cost_range":"<str>"},'
         f"...{stops_per_day} stops per day]}}],"
         '"culinary_highlights":['
-        '{"title":"<eatery name or dish>","description":"<brief description>","famous_for":"<local specialty>","location":"<address>","price_tier":"<str>","cost_approx":"<str>"},'
-        '...3 to 5 highlights]}\n'
-        f"Generate exactly {days} days with {stops_per_day} stops each. Focus strictly on top tier-1 famous landmarks."
+        '{"title":"<eatery or dish>","description":"<desc>","famous_for":"<specialty>","location":"<address>","price_tier":"$$","cost_approx":"<str>"}],'
+        '"attractions":[{"title":"<real landmark>","description":"<highlights>","address":"<area>","price_range":"$10 - $20"}],'
+        '"events":[{"title":"<real live event/venue>","description":"<details>","address":"<area>","event_time":"7:00 PM - 10:00 PM","price_range":"$15 - $30"}],'
+        '"culinary":[{"title":"<real restaurant>","description":"<famous dishes>","address":"<area>","serving_style":"A la carte / Buffet / Street Food","price_range":"$$"}],'
+        '"bars_pubs":[{"title":"<real nightlife venue>","description":"<atmosphere>","address":"<area>","price_range":"$$$"}],'
+        '"wellness":[{"title":"<real spa/gym/yoga center>","description":"<facilities>","address":"<area>","price_range":"$$"}],'
+        '"secret_spots":[{"title":"<real hidden gem>","description":"<local secret>","address":"<area>","price_range":"$"}],'
+        '"essentials":[{"title":"<practical advice/emergency item>","description":"<numbers, hospital, transit, scam tips>","address":"<citywide>"}]}\n'
+        f"Generate exactly {days} days with {stops_per_day} stops each, plus 3 to 5 real items for each of the 7 pillars (attractions, events, culinary, bars_pubs, wellness, secret_spots, essentials)."
     )
 
     traveler_context_str = ""
@@ -642,6 +693,27 @@ async def generate_trip_with_groq(
     if not itinerary:
         return None
 
+    def map_pillar_items(items: list, cat_label: str) -> List[PillarItem]:
+        res = []
+        for i, item in enumerate(items):
+            title = clean_stop_title(getattr(item, 'title', ''), destination)
+            res.append(
+                PillarItem(
+                    id=f"{cat_label.lower().replace(' ', '-')}-{i+1}",
+                    title=title,
+                    category=cat_label,
+                    description=getattr(item, 'description', '') or '',
+                    address=getattr(item, 'address', '') or destination,
+                    maps_url=generate_maps_link(title, destination),
+                    lat=coordinates.lat,
+                    lng=coordinates.lng,
+                    serving_style=getattr(item, 'serving_style', None),
+                    event_time=getattr(item, 'event_time', None),
+                    price_range=getattr(item, 'price_range', '$$'),
+                )
+            )
+        return res
+
     weather_label = await fetch_weather_label(client, coordinates.lat, coordinates.lng)
     return TripPlanResponse(
         destination=destination,
@@ -663,7 +735,14 @@ async def generate_trip_with_groq(
                 price_tier=getattr(h, 'price_tier', '$$'),
                 cost_approx=getattr(h, 'cost_approx', '$15 - $25 / person'),
             ) for h in ai_trip.culinary_highlights
-        ] if hasattr(ai_trip, "culinary_highlights") else []
+        ] if hasattr(ai_trip, "culinary_highlights") else [],
+        attractions=map_pillar_items(getattr(ai_trip, 'attractions', []), "Tourist Attractions"),
+        events=map_pillar_items(getattr(ai_trip, 'events', []), "Events"),
+        culinary=map_pillar_items(getattr(ai_trip, 'culinary', []), "Culinary"),
+        bars_pubs=map_pillar_items(getattr(ai_trip, 'bars_pubs', []), "Bars & Pubs"),
+        wellness=map_pillar_items(getattr(ai_trip, 'wellness', []), "Wellness & Meditation"),
+        secret_spots=map_pillar_items(getattr(ai_trip, 'secret_spots', []), "Secret Spots"),
+        essentials=map_pillar_items(getattr(ai_trip, 'essentials', []), "Travel Essentials"),
     )
 
 
@@ -787,6 +866,131 @@ async def build_fallback_trip_plan(location: str, days: int, start_day: date, cl
                 route.geojson["properties"] = {"fallback": True}
             routes.append(route)
 
+        # Build 7 Pillars for fallback
+        attractions = [
+            PillarItem(
+                id=f"attr-{i+1}",
+                title=clean_stop_title(stop.title, destination),
+                category="Tourist Attractions",
+                description=f"Iconic landmark in {destination}.",
+                address=stop.location or destination,
+                maps_url=generate_maps_link(stop.title, destination),
+                lat=stop.lat,
+                lng=stop.lng,
+                price_range=stop.cost_range
+            ) for i, stop in enumerate(itinerary[:6])
+        ]
+        
+        events = [
+            PillarItem(
+                id=f"event-{i+1}",
+                title=clean_stop_title(title, destination),
+                category="Events",
+                description=desc,
+                address=destination,
+                maps_url=generate_maps_link(title, destination),
+                lat=coordinates.lat,
+                lng=coordinates.lng,
+                event_time=e_time,
+                price_range=price
+            ) for i, (title, desc, e_time, price) in enumerate([
+                ("Live Music & Sunset Session", "Acoustic live performances and sunset social.", "07:00 PM - 10:00 PM", "$15 - $30"),
+                ("Local Standup Comedy Night", "Evening comedy show featuring top local talent.", "08:00 PM - 09:30 PM", "$10 - $20"),
+                ("Cultural Art Exhibition", "Contemporary regional art showcase and guided walk.", "11:00 AM - 05:00 PM", "$5 - $15")
+            ])
+        ]
+
+        culinary = [
+            PillarItem(
+                id=f"culinary-{i+1}",
+                title=clean_stop_title(title, destination),
+                category="Culinary",
+                description=desc,
+                address=destination,
+                maps_url=generate_maps_link(title, destination),
+                lat=coordinates.lat,
+                lng=coordinates.lng,
+                serving_style=style,
+                price_range=price
+            ) for i, (title, desc, style, price) in enumerate([
+                ("Heritage Signature Eatery", "Famous local specialty dishes and traditional recipe hub.", "A la carte", "$$$"),
+                ("Bustling Local Street Food Market", "Iconic street stalls serving legendary local snacks.", "Street Food", "$"),
+                ("Panoramic Rooftop Dining Cafe", "Multi-cuisine buffet with stunning city skyline views.", "Buffet", "$$")
+            ])
+        ]
+
+        bars_pubs = [
+            PillarItem(
+                id=f"pub-{i+1}",
+                title=clean_stop_title(title, destination),
+                category="Bars & Pubs",
+                description=desc,
+                address=destination,
+                maps_url=generate_maps_link(title, destination),
+                lat=coordinates.lat,
+                lng=coordinates.lng,
+                price_range=price
+            ) for i, (title, desc, price) in enumerate([
+                ("Cyber Rooftop Lounge", "Craft cocktails, DJ beats, and panoramic evening vibes.", "$$$"),
+                ("Speakeasy Underground Taproom", "Artisanal brews and vintage cocktail lounge.", "$$"),
+                ("High-Energy Social Pub", "Live sports screening, craft beer taps, and pub bites.", "$$")
+            ])
+        ]
+
+        wellness = [
+            PillarItem(
+                id=f"wellness-{i+1}",
+                title=clean_stop_title(title, destination),
+                category="Wellness & Meditation",
+                description=desc,
+                address=destination,
+                maps_url=generate_maps_link(title, destination),
+                lat=coordinates.lat,
+                lng=coordinates.lng,
+                price_range=price
+            ) for i, (title, desc, price) in enumerate([
+                ("Serene Urban Spa & Sauna", "Full body aromatherapy, hot stone massage, and herbal sauna.", "$$$"),
+                ("Sunrise Yoga & Meditation Studio", "Guided mindfulness sessions, breathwork, and sound bath.", "$$"),
+                ("Premium Fitness & Health Club", "State-of-the-art gym, hydrotherapy pool, and recovery lounge.", "$$")
+            ])
+        ]
+
+        secret_spots = [
+            PillarItem(
+                id=f"secret-{i+1}",
+                title=clean_stop_title(title, destination),
+                category="Secret Spots",
+                description=desc,
+                address=destination,
+                maps_url=generate_maps_link(title, destination),
+                lat=coordinates.lat,
+                lng=coordinates.lng,
+                price_range=price
+            ) for i, (title, desc, price) in enumerate([
+                ("Hidden Courtyard Artisanal Cafe", "Quiet leafy courtyard hidden behind historic alleyways.", "$"),
+                ("Secret Panoramic Skyline Alley", "Secluded viewpoint favored by local photographers.", "Free"),
+                ("Street Art & Vinyl Listening Room", "Underground music lounge and mural alleyway.", "$")
+            ])
+        ]
+
+        essentials = [
+            PillarItem(
+                id=f"essential-{i+1}",
+                title=title,
+                category="Travel Essentials",
+                description=desc,
+                address=destination,
+                maps_url=generate_maps_link(f"{title} {destination}", destination),
+                lat=coordinates.lat,
+                lng=coordinates.lng,
+                price_range="Info"
+            ) for i, (title, desc) in enumerate([
+                ("Emergency Contacts & Medical Hospitals", "Primary emergency response line: 112 / 911. Central City Hospital emergency desk open 24/7."),
+                ("Public Transit & Taxi Advice", "Use official metered cabs, ride-hailing apps, or subway passes. Agree on fare beforehand for local rickshaws."),
+                ("Safety & Scam Warning Notes", "Keep valuables secure in crowded markets. Only exchange currency at authorized bank counters.")
+            ])
+        ]
+
         return TripPlanResponse(
             destination=destination,
             destination_image=destination_image,
@@ -798,7 +1002,14 @@ async def build_fallback_trip_plan(location: str, days: int, start_day: date, cl
             coordinates=coordinates,
             itinerary=itinerary,
             routes=routes,
-            culinary_highlights=[]
+            culinary_highlights=[],
+            attractions=attractions,
+            events=events,
+            culinary=culinary,
+            bars_pubs=bars_pubs,
+            wellness=wellness,
+            secret_spots=secret_spots,
+            essentials=essentials,
         )
     except Exception as exc:
         logger.error("Critical error building fallback trip plan for %s: %s", location, exc, exc_info=True)

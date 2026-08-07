@@ -41,6 +41,15 @@ export interface TranslationDictionary {
   cyberMap2D: string;
   holoGlobe3D: string;
   newTrip: string;
+  // 7 Core Pillars
+  attractions: string;
+  events: string;
+  culinaryPillar: string;
+  barsPubs: string;
+  wellnessPillar: string;
+  secretSpots: string;
+  essentialsPillar: string;
+  navigateInMaps: string;
 }
 
 export const translations: Record<LanguageName, TranslationDictionary> = {
@@ -77,6 +86,14 @@ export const translations: Record<LanguageName, TranslationDictionary> = {
     cyberMap2D: "2D Cyber Map",
     holoGlobe3D: "3D Holo-Globe",
     newTrip: "New Trip",
+    attractions: "Tourist Attractions",
+    events: "Events",
+    culinaryPillar: "Culinary",
+    barsPubs: "Bars & Pubs",
+    wellnessPillar: "Wellness & Meditation",
+    secretSpots: "Secret Spots",
+    essentialsPillar: "Travel Essentials",
+    navigateInMaps: "Navigate in Maps",
   },
   Hindi: {
     heroTitle: "एक वास्तविक गंतव्य से शुरुआत करें",
@@ -111,6 +128,14 @@ export const translations: Record<LanguageName, TranslationDictionary> = {
     cyberMap2D: "2D साइबर मानचित्र",
     holoGlobe3D: "3D होलो-ग्लोब",
     newTrip: "नई यात्रा",
+    attractions: "प्रमुख आकर्षण",
+    events: "स्थानीय कार्यक्रम",
+    culinaryPillar: "खान-पान",
+    barsPubs: "बार और पब",
+    wellnessPillar: "वेलनेस और ध्यान",
+    secretSpots: "गुप्त स्थान",
+    essentialsPillar: "यात्रा संबंधी आवश्यक जानकारी",
+    navigateInMaps: "मानचित्र में दिशा देखें",
   },
   Spanish: {
     heroTitle: "Comienza con un destino real",
@@ -145,6 +170,14 @@ export const translations: Record<LanguageName, TranslationDictionary> = {
     cyberMap2D: "Mapa Cibernético 2D",
     holoGlobe3D: "Holo-Globo 3D",
     newTrip: "Nuevo Viaje",
+    attractions: "Atracciones Turísticas",
+    events: "Eventos Locales",
+    culinaryPillar: "Gastronomía",
+    barsPubs: "Bares y Pubs",
+    wellnessPillar: "Bienestar y Meditación",
+    secretSpots: "Lugares Secretos",
+    essentialsPillar: "Información Esencial",
+    navigateInMaps: "Navegar en Mapas",
   },
   French: {
     heroTitle: "Commencez par une vraie destination",
@@ -179,6 +212,14 @@ export const translations: Record<LanguageName, TranslationDictionary> = {
     cyberMap2D: "Carte Cyber 2D",
     holoGlobe3D: "Holo-Globe 3D",
     newTrip: "Nouveau Voyage",
+    attractions: "Attractions Touristiques",
+    events: "Événements Locaux",
+    culinaryPillar: "Gastronomie",
+    barsPubs: "Bars et Pubs",
+    wellnessPillar: "Bien-être et Méditation",
+    secretSpots: "Lieux Secrets",
+    essentialsPillar: "Infos Pratiques",
+    navigateInMaps: "Naviguer sur la Carte",
   },
   German: {
     heroTitle: "Starten Sie mit einem echten Reiseziel",
@@ -213,6 +254,14 @@ export const translations: Record<LanguageName, TranslationDictionary> = {
     cyberMap2D: "2D Cyber-Karte",
     holoGlobe3D: "3D Holo-Globus",
     newTrip: "Neue Reise",
+    attractions: "Sehenswürdigkeiten",
+    events: "Veranstaltungen",
+    culinaryPillar: "Kulinarik",
+    barsPubs: "Bars & Pubs",
+    wellnessPillar: "Wellness & Meditation",
+    secretSpots: "Geheimtipps",
+    essentialsPillar: "Reise-Informationen",
+    navigateInMaps: "In Maps navigieren",
   },
   Arabic: {
     heroTitle: "ابدأ بوجهة حقيقية",
@@ -247,6 +296,14 @@ export const translations: Record<LanguageName, TranslationDictionary> = {
     cyberMap2D: "خريطة سايبير ثنائية الأبعاد",
     holoGlobe3D: "مجسم هولوغرام ثلاثي الأبعاد",
     newTrip: "رحلة جديدة",
+    attractions: "المعالم السياحية",
+    events: "الفعاليات الحية",
+    culinaryPillar: "المأكولات والمطاعم",
+    barsPubs: "المقاهي والأمسيات",
+    wellnessPillar: "الاسترخاء واليوغا",
+    secretSpots: "الأماكن الخفية",
+    essentialsPillar: "معلومات السفر الأساسية",
+    navigateInMaps: "الانتقال في الخريطة",
   },
   Chinese: {
     heroTitle: "从真实目的地开始",
@@ -281,6 +338,14 @@ export const translations: Record<LanguageName, TranslationDictionary> = {
     cyberMap2D: "2D 赛博地图",
     holoGlobe3D: "3D 全息球体",
     newTrip: "新建行程",
+    attractions: "热门景点与地标",
+    events: "当地活动与演出",
+    culinaryPillar: "特色美食与餐厅",
+    barsPubs: "酒吧与夜生活",
+    wellnessPillar: "水疗与冥想放松",
+    secretSpots: "小众隐秘好去处",
+    essentialsPillar: "实用旅行指南与求助",
+    navigateInMaps: "地图导航",
   },
   Japanese: {
     heroTitle: "本物の目的地から始めましょう",
@@ -315,6 +380,14 @@ export const translations: Record<LanguageName, TranslationDictionary> = {
     cyberMap2D: "2D サイバーマップ",
     holoGlobe3D: "3D ホログローブ",
     newTrip: "新しい旅行",
+    attractions: "観光名所・史跡",
+    events: "イベント＆ライブ",
+    culinaryPillar: "グルメ・名物料理",
+    barsPubs: "バー＆ナイトライフ",
+    wellnessPillar: "スパ＆リラクゼーション",
+    secretSpots: "隠れた名所・ローカル穴場",
+    essentialsPillar: "旅行に必要な基本情報",
+    navigateInMaps: "マップでルート表示",
   },
 };
 
