@@ -19,6 +19,10 @@ import {
   PlaneTakeoff,
   PlaneLanding,
   Home,
+  Users,
+  ChevronDown,
+  Plus,
+  Minus,
 } from "lucide-react";
 
 const VoyantaMap = dynamic(() => import("@/components/VoyantaMap"), {
@@ -71,6 +75,13 @@ interface CulinaryHighlight {
   description: string;
   famous_for: string;
   location: string;
+}
+
+export interface TravelersState {
+  group_type: 'Solo' | 'Couple' | 'Family' | 'Friends' | 'Business';
+  adults: number;
+  seniors: number;
+  infants: number;
 }
 
 interface TripPlan {
@@ -248,6 +259,14 @@ export default function Page() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [travelers, setTravelers] = useState<TravelersState>({
+    group_type: "Couple",
+    adults: 2,
+    seniors: 0,
+    infants: 0,
+  });
+  const [isTravelersOpen, setIsTravelersOpen] = useState(false);
+
   const [isAutocompleteOpen, setIsAutocompleteOpen] = useState(false);
 
   useEffect(() => {
@@ -282,7 +301,7 @@ export default function Page() {
       const response = await fetch("/api/trip-plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ location, days, start_date: date, categories: [], pace: "", budget: "" }),
+        body: JSON.stringify({ location, days, start_date: date, categories: [], pace: "", budget: "", travelers }),
       });
 
       const payload = await response.json().catch(() => null);
@@ -685,6 +704,129 @@ export default function Page() {
                         <option value="AED" className="bg-[#03050a] text-white">AED (د.إ)</option>
                         <option value="SGD" className="bg-[#03050a] text-white">SGD (S$)</option>
                       </select>
+                    </div>
+
+                    {/* Travelers Popover */}
+                    <div className="relative flex-1 sm:flex-initial">
+                      <button
+                        type="button"
+                        onClick={() => setIsTravelersOpen(!isTravelersOpen)}
+                        className="w-full flex items-center justify-between gap-2 rounded-full border border-[#00f0ff]/40 bg-[#111827]/80 py-[14px] px-5 text-[0.85rem] font-bold text-white outline-none transition-all hover:border-[#00f0ff] focus:border-[#00f0ff] focus:shadow-[0_0_15px_rgba(0,240,255,0.3)] cursor-pointer"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Users className="h-4 w-4 text-[#00f0ff] shrink-0" />
+                          <span className="truncate">
+                            {travelers.group_type} ({travelers.adults + travelers.seniors + travelers.infants})
+                          </span>
+                        </div>
+                        <ChevronDown className="h-4 w-4 text-[#64748B] shrink-0" />
+                      </button>
+
+                      {isTravelersOpen && (
+                        <div className="absolute top-full mt-2 right-0 w-80 bg-[#03050a]/95 backdrop-blur-2xl border border-[#00f0ff]/40 rounded-3xl p-5 z-50 shadow-[0_10px_40px_rgba(0,240,255,0.25)] text-left">
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-[#00f0ff] mb-3">Group Type</p>
+                          <div className="flex flex-wrap gap-2 mb-5">
+                            {(['Solo', 'Couple', 'Family', 'Friends', 'Business'] as const).map((type) => (
+                              <button
+                                key={type}
+                                type="button"
+                                onClick={() => setTravelers((prev) => ({ ...prev, group_type: type }))}
+                                className={cn(
+                                  "px-3 py-1.5 rounded-full text-xs font-bold transition-all border",
+                                  travelers.group_type === type
+                                    ? "bg-[#00f0ff]/20 border-[#00f0ff] text-white shadow-[0_0_12px_rgba(0,240,255,0.3)]"
+                                    : "bg-white/5 border-white/10 text-[#94A3B8] hover:bg-white/10 hover:text-white"
+                                )}
+                              >
+                                {type}
+                              </button>
+                            ))}
+                          </div>
+
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-[#00f0ff] mb-3">Traveler Counts</p>
+                          <div className="flex flex-col gap-3.5">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-sm font-semibold text-white">Adults</p>
+                                <p className="text-[11px] text-[#64748B]">Age 13+</p>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <button
+                                  type="button"
+                                  onClick={() => setTravelers((prev) => ({ ...prev, adults: Math.max(1, prev.adults - 1) }))}
+                                  className="h-7 w-7 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-white hover:bg-white/20 transition"
+                                >
+                                  <Minus className="h-3.5 w-3.5" />
+                                </button>
+                                <span className="text-sm font-bold text-white w-4 text-center">{travelers.adults}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setTravelers((prev) => ({ ...prev, adults: prev.adults + 1 }))}
+                                  className="h-7 w-7 rounded-full bg-[#00f0ff]/20 border border-[#00f0ff]/40 flex items-center justify-center text-[#00f0ff] hover:bg-[#00f0ff]/30 transition"
+                                >
+                                  <Plus className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-sm font-semibold text-white">Senior Citizens</p>
+                                <p className="text-[11px] text-[#64748B]">Age 60+ (Accessibility)</p>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <button
+                                  type="button"
+                                  onClick={() => setTravelers((prev) => ({ ...prev, seniors: Math.max(0, prev.seniors - 1) }))}
+                                  className="h-7 w-7 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-white hover:bg-white/20 transition"
+                                >
+                                  <Minus className="h-3.5 w-3.5" />
+                                </button>
+                                <span className="text-sm font-bold text-white w-4 text-center">{travelers.seniors}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setTravelers((prev) => ({ ...prev, seniors: prev.seniors + 1 }))}
+                                  className="h-7 w-7 rounded-full bg-[#00f0ff]/20 border border-[#00f0ff]/40 flex items-center justify-center text-[#00f0ff] hover:bg-[#00f0ff]/30 transition"
+                                >
+                                  <Plus className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-sm font-semibold text-white">Infants & Children</p>
+                                <p className="text-[11px] text-[#64748B]">Age 0-12 (Stroller/Kid Friendly)</p>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <button
+                                  type="button"
+                                  onClick={() => setTravelers((prev) => ({ ...prev, infants: Math.max(0, prev.infants - 1) }))}
+                                  className="h-7 w-7 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-white hover:bg-white/20 transition"
+                                >
+                                  <Minus className="h-3.5 w-3.5" />
+                                </button>
+                                <span className="text-sm font-bold text-white w-4 text-center">{travelers.infants}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setTravelers((prev) => ({ ...prev, infants: prev.infants + 1 }))}
+                                  className="h-7 w-7 rounded-full bg-[#00f0ff]/20 border border-[#00f0ff]/40 flex items-center justify-center text-[#00f0ff] hover:bg-[#00f0ff]/30 transition"
+                                >
+                                  <Plus className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => setIsTravelersOpen(false)}
+                            className="w-full mt-5 py-2.5 rounded-full bg-[#00f0ff]/15 border border-[#00f0ff]/40 text-[#00f0ff] text-xs font-bold hover:bg-[#00f0ff]/30 transition"
+                          >
+                            Apply Selection
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     {/* Plan trip button */}

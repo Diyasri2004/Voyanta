@@ -105,6 +105,13 @@ class ReverseGeocodeResult(BaseModel):
     postal_code: Optional[str] = None
 
 
+class TravelerGroup(BaseModel):
+    group_type: Optional[str] = "Solo"
+    adults: Optional[int] = 1
+    seniors: Optional[int] = 0
+    infants: Optional[int] = 0
+
+
 class TripPlanRequest(BaseModel):
     location: Optional[str] = None
     destination: Optional[str] = None
@@ -113,6 +120,7 @@ class TripPlanRequest(BaseModel):
     categories: Optional[List[str]] = None
     pace: Optional[str] = None
     budget: Optional[str] = None
+    travelers: Optional[TravelerGroup] = None
 
 
 class TripStop(BaseModel):
@@ -430,6 +438,7 @@ async def generate_trip_with_groq(
     categories: Optional[List[str]] = None,
     pace: Optional[str] = None,
     budget: Optional[str] = None,
+    travelers: Optional[TravelerGroup] = None,
 ) -> Optional[TripPlanResponse]:
     """
     Generate a trip itinerary using Groq's free hosted LLM API.
@@ -469,9 +478,36 @@ async def generate_trip_with_groq(
         f"Generate exactly {days} days with {stops_per_day} stops each. Focus strictly on top tier-1 famous landmarks."
     )
 
+    traveler_context_str = ""
+    if travelers:
+        group_type = travelers.group_type or "Solo"
+        seniors = travelers.seniors or 0
+        infants = travelers.infants or 0
+        adults = travelers.adults or 1
+
+        guidelines = []
+        if seniors > 0:
+            guidelines.append("SENIOR CITIZENS PRESENT: Prefer accessible, comfortably paced venues and note low-walking options where possible, but still include iconic landmark stops with pacing notes (e.g. 'ground courtyard accessible; upper stairs optional').")
+        if infants > 0:
+            guidelines.append("INFANTS/CHILDREN PRESENT: Balance stroller-friendly spots or parks with essential city sights, adding gentle scheduling tips rather than omitting key attractions.")
+        if group_type.lower() == "couple":
+            guidelines.append("TRAVELING AS A COUPLE: Naturally lean towards atmospheric spots, scenic vistas, or cozy dining, while keeping core sightseeing balanced.")
+        elif group_type.lower() == "family":
+            guidelines.append("TRAVELING AS A FAMILY: Ensure a balanced mix of culture, open space, and comfortable dining options suitable for all ages.")
+        elif group_type.lower() == "friends":
+            guidelines.append("TRAVELING WITH FRIENDS: Include vibrant culinary hubs, iconic sights, and lively group-friendly experiences.")
+        elif group_type.lower() == "business":
+            guidelines.append("BUSINESS TRAVEL: Keep schedules efficient, with easy access to central landmarks and premium dining.")
+
+        traveler_context_str = f"\n\nTRAVELER GROUP CONTEXT ({group_type}, {adults} Adults, {seniors} Seniors, {infants} Infants):\n" + "\n".join(f"- {g}" for g in guidelines) if guidelines else f"\n\nTRAVELER GROUP CONTEXT: Group Type is {group_type}."
+
     system_prompt = (
         "You are a premier travel planner. Return only valid JSON, no markdown.\n\n"
         "CRITICAL MANDATE: You MUST ONLY generate famous, world-renowned tier-1 attractions, historic sites, and legendary culinary hubs for the target city.\n"
+        "TRAVELER CONTEXT GUIDELINES (SOFT PRIORITIES, NOT HARD RESTRICTIONS):\n"
+        "Use the traveler demographics as a subtle thematic bias, but do NOT strictly exclude major iconic sights, top-rated local dining, or standard cultural highlights.\n"
+        "MAIN GOAL: Provide a rich, comprehensive, and well-rounded destination experience for all travelers."
+        f"{traveler_context_str}\n"
         "- CRITICAL RULE: Never output generic names containing 'Trail', 'Walk', 'Tour', 'Check-in', or 'Arrival'. Every single item MUST be an exact named venue or monument.\n"
         "- NEVER generate generic gyms, local society parks, fitness centers, or obscure spots.\n"
         "- IF DESTINATION IS LUCKNOW: You MUST select from: Bara Imambara & Bhool Bhulaiya, Chota Imambara, Rumi Darwaza, Hazratganj Market, Ambedkar Memorial Park, British Residency, Janeshwar Mishra Park, Tunday Kababi Chowk, and Dastarkhwan Lalbagh.\n"
@@ -1119,7 +1155,7 @@ async def build_trip_plan(
         if GROQ_API_KEY:
             groq_trip = await generate_trip_with_groq(
                 client, destination_name, days, start_day, coordinates,
-                body.categories, body.pace, body.budget
+                body.categories, body.pace, body.budget, body.travelers
             )
             if groq_trip:
                 # Add TomTom map if available
