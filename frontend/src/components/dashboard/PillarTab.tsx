@@ -48,7 +48,7 @@ export default function PillarTab({
   const UNSPLASH_FALLBACK = "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=900&auto=format&fit=crop&q=80";
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 p-4">
       {items.map((item, idx) => {
         const itemId = item.id || `pillar-card-${idx}`;
         const mapsUrl =

@@ -538,29 +538,6 @@ export default function Page() {
                   {t.newTrip}
                 </button>
               )}
-              
-              <div className="flex items-center rounded-full border border-white/[0.08] bg-white/[0.03] p-1">
-              <button
-                onClick={() => setViewMode("grid")}
-                className={cn(
-                  "flex items-center gap-2 rounded-full px-3 py-2 text-xs font-bold transition",
-                  viewMode === "grid" ? "bg-white text-[#05070A]" : "text-[#94A3B8]"
-                )}
-              >
-                <LayoutGrid className="h-3.5 w-3.5" />
-                Grid
-              </button>
-              <button
-                onClick={() => setViewMode("split")}
-                className={cn(
-                  "flex items-center gap-2 rounded-full px-3 py-2 text-xs font-bold transition",
-                  viewMode === "split" ? "bg-white text-[#05070A]" : "text-[#94A3B8]"
-                )}
-              >
-                <MapIcon className="h-3.5 w-3.5" />
-                3D Map
-              </button>
-            </div>
             </div>
           </div>
         </header>
