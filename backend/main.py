@@ -511,7 +511,10 @@ async def generate_trip_with_groq(
         # Guardrail: Strip out banned generic terms
         banned_terms = ["gym", "fitness", "neighborhood park", "local society", "generic"]
         for day in ai_trip.days:
-            day.stops = [stop for stop in day.stops if not any(term in (stop.title.lower() + stop.location.lower()) for term in banned_terms)]
+            day.stops = [
+                stop for stop in day.stops 
+                if not any(term in (stop.title.lower() + (stop.location.lower() if stop.location else "")) for term in banned_terms)
+            ]
             
     except Exception as exc:
         logger.warning("Groq trip generation failed for %s: %s", location, exc)
