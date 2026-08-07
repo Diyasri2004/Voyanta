@@ -905,12 +905,12 @@ async def nearby_pois(
     pois = []
     for item in data.get("results", []):
         poi_data = item.get("poi", {})
-        name = poi_data.get("name", "Unknown")
+        name = poi_data.get("name") or "Unknown"
         category = poi_data.get("categories", [""])[0] if poi_data.get("categories") else "Place"
         
-        name_lower = name.lower()
-        cat_lower = category.lower()
-        if any(banned in name_lower or banned in cat_lower for banned in DISQUALIFIED_KEYWORDS):
+        name_str = str(name).lower()
+        cat_str = str(category).lower()
+        if any(banned in name_str or banned in cat_str for banned in DISQUALIFIED_KEYWORDS):
             continue
 
         pos = item.get("position", {})
@@ -967,12 +967,12 @@ async def fuzzy_search(
         poi_data = item.get("poi", {})
         addr = item.get("address", {})
         
-        name = poi_data.get("name") or addr.get("freeformAddress", "Unknown")
+        name = poi_data.get("name") or addr.get("freeformAddress") or "Unknown"
         category = poi_data.get("categories", [""])[0] if poi_data.get("categories") else item.get("type", "Place")
         
-        name_lower = name.lower()
-        cat_lower = category.lower()
-        if any(banned in name_lower or banned in cat_lower for banned in DISQUALIFIED_KEYWORDS):
+        name_str = str(name).lower()
+        cat_str = str(category).lower()
+        if any(banned in name_str or banned in cat_str for banned in DISQUALIFIED_KEYWORDS):
             continue
 
         pos = item.get("position", {})
