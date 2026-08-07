@@ -36,6 +36,12 @@ DATABASE_URL        = os.getenv("DATABASE_URL")  # required; no localhost defaul
 GROQ_API_KEY        = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL          = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
 GROQ_BASE           = "https://api.groq.com/openai/v1/chat/completions"
+GEMINI_API_KEY      = os.getenv("GEMINI_API_KEY", "")
+
+if not GROQ_API_KEY and not GEMINI_API_KEY:
+    logger.warning("CRITICAL WARNING: Neither GROQ_API_KEY nor GEMINI_API_KEY is set. Itinerary generation will fallback to hardcoded data.")
+if not TOMTOM_API_KEY:
+    logger.warning("WARNING: TOMTOM_API_KEY is not set. Map routing and POI images will fail back to defaults.")
 
 # ─────────────────────────────────────────────
 #  Pydantic response models
@@ -499,12 +505,10 @@ async def generate_trip_with_groq(
         response.raise_for_status()
         content = response.json()["choices"][0]["message"]["content"].strip()
 
-        # Strip markdown code fences if present
-        if content.startswith("```"):
-            content = content.split("```")[1]
-            if content.startswith("json"):
-                content = content[4:]
-            content = content.strip()
+        import re
+        content = re.sub(r"^```(?:json)?\s*", "", content, flags=re.IGNORECASE)
+        content = re.sub(r"\s*```$", "", content)
+        content = content.strip()
 
         ai_trip = GroqTripContent.model_validate_json(content)
         
@@ -1006,125 +1010,129 @@ async def build_trip_plan(
     because it gives beautifully themed, realistic travel experiences.
     Only uses TomTom POI search as a last resort fallback if Groq fails.
     """
-    days = max(1, min(body.days, 30))
-    start_day = body.start_date or date.today()
-    default_coordinates = fallback_coordinates_for(body.location)
+    try:
+        days = max(1, min(body.days, 30))
+        start_day = body.start_date or date.today()
+        default_coordinates = fallback_coordinates_for(body.location)
 
-    dest_lat = default_coordinates.lat
-    dest_lng = default_coordinates.lng
-    destination_name = body.location.title()
+        dest_lat = default_coordinates.lat
+        dest_lng = default_coordinates.lng
+        destination_name = body.location.title()
 
-    # 1. Geocode with TomTom to get accurate city center and name
-    if key:
-        geocode_url = f"{TOMTOM_BASE}/search/2/geocode/{body.location}.json"
-        try:
-            geocode_response = await client.get(geocode_url, params={"key": key, "limit": 1, "typeahead": True})
-            if geocode_response.status_code == 200:
-                results = geocode_response.json().get("results", [])
-                if results:
-                    dest = results[0]
-                    dest_lat = dest.get("position", {}).get("lat", dest_lat)
-                    dest_lng = dest.get("position", {}).get("lon", dest_lng)
-                    destination_name = dest.get("address", {}).get("freeformAddress") or destination_name
-        except Exception as e:
-            logger.warning("TomTom geocoding failed for %s: %s", body.location, e)
+        # 1. Geocode with TomTom to get accurate city center and name
+        if key:
+            geocode_url = f"{TOMTOM_BASE}/search/2/geocode/{body.location}.json"
+            try:
+                geocode_response = await client.get(geocode_url, params={"key": key, "limit": 1, "typeahead": True})
+                if geocode_response.status_code == 200:
+                    results = geocode_response.json().get("results", [])
+                    if results:
+                        dest = results[0]
+                        dest_lat = dest.get("position", {}).get("lat", dest_lat)
+                        dest_lng = dest.get("position", {}).get("lon", dest_lng)
+                        destination_name = dest.get("address", {}).get("freeformAddress") or destination_name
+            except Exception as e:
+                logger.warning("TomTom geocoding failed for %s: %s", body.location, e)
 
-    coordinates = Coordinates(lat=dest_lat, lng=dest_lng)
+        coordinates = Coordinates(lat=dest_lat, lng=dest_lng)
 
-    # 2. PRIORITY: Use Groq (LLM) to generate a realistic travel itinerary
-    if GROQ_API_KEY:
-        groq_trip = await generate_trip_with_groq(
-            client, destination_name, days, start_day, coordinates,
-            body.categories, body.pace, body.budget
-        )
-        if groq_trip:
-            # Add TomTom map if available
-            if key:
-                groq_trip.map_image_url = build_tomtom_static_map_url(dest_lat, dest_lng, zoom=10)
-            return groq_trip
+        # 2. PRIORITY: Use Groq (LLM) to generate a realistic travel itinerary
+        if GROQ_API_KEY:
+            groq_trip = await generate_trip_with_groq(
+                client, destination_name, days, start_day, coordinates,
+                body.categories, body.pace, body.budget
+            )
+            if groq_trip:
+                # Add TomTom map if available
+                if key:
+                    groq_trip.map_image_url = build_tomtom_static_map_url(dest_lat, dest_lng, zoom=10)
+                return groq_trip
 
-    stops_per_day = 3
-    if body.pace:
-        if "relaxed" in body.pace.lower():
-            stops_per_day = 2
-        elif "action" in body.pace.lower() or "packed" in body.pace.lower():
-            stops_per_day = 5
+        stops_per_day = 3
+        if body.pace:
+            if "relaxed" in body.pace.lower():
+                stops_per_day = 2
+            elif "action" in body.pace.lower() or "packed" in body.pace.lower():
+                stops_per_day = 5
 
-    # 3. FALLBACK 1: Disabled to enforce Iconic Landmark Map
-    if False:
-        poi_url = f"{TOMTOM_BASE}/search/2/nearbySearch/.json"
-        poi_params = {
-            "key": key, "lat": dest_lat, "lon": dest_lng,
-            "radius": 12000, "limit": max(days * 4, 8), "view": "Unified",
-            "categorySet": "7320,7374,9362" # Tourist Attraction, Museum, Park
-        }
-        try:
-            poi_response = await client.get(poi_url, params=poi_params)
-            poi_response.raise_for_status()
-            raw_pois = poi_response.json().get("results", [])
-            if raw_pois:
-                destination_image = await fetch_destination_image(client, destination_name)
-                weather_label = await fetch_weather_label(client, dest_lat, dest_lng)
-                itinerary = []
-                routes = []
-                fallback_map_image = build_tomtom_static_map_url(dest_lat, dest_lng, zoom=10)
+        # 3. FALLBACK 1: Disabled to enforce Iconic Landmark Map
+        if False:
+            poi_url = f"{TOMTOM_BASE}/search/2/nearbySearch/.json"
+            poi_params = {
+                "key": key, "lat": dest_lat, "lon": dest_lng,
+                "radius": 12000, "limit": max(days * 4, 8), "view": "Unified",
+                "categorySet": "7320,7374,9362" # Tourist Attraction, Museum, Park
+            }
+            try:
+                poi_response = await client.get(poi_url, params=poi_params)
+                poi_response.raise_for_status()
+                raw_pois = poi_response.json().get("results", [])
+                if raw_pois:
+                    destination_image = await fetch_destination_image(client, destination_name)
+                    weather_label = await fetch_weather_label(client, dest_lat, dest_lng)
+                    itinerary = []
+                    routes = []
+                    fallback_map_image = build_tomtom_static_map_url(dest_lat, dest_lng, zoom=10)
                 
-                for day_index in range(days):
-                    day_number = day_index + 1
-                    trip_date = start_day.fromordinal(start_day.toordinal() + day_index)
-                    start_idx = day_index * stops_per_day
-                    day_pois = raw_pois[start_idx:start_idx + stops_per_day]
-                    if not day_pois:
-                        day_pois = raw_pois[:min(stops_per_day, len(raw_pois))]
+                    for day_index in range(days):
+                        day_number = day_index + 1
+                        trip_date = start_day.fromordinal(start_day.toordinal() + day_index)
+                        start_idx = day_index * stops_per_day
+                        day_pois = raw_pois[start_idx:start_idx + stops_per_day]
+                        if not day_pois:
+                            day_pois = raw_pois[:min(stops_per_day, len(raw_pois))]
 
-                    day_waypoints = []
-                    for stop_index, poi in enumerate(day_pois):
-                        pos = poi.get("position", {})
-                        title = poi.get("poi", {}).get("name") or f"Stop {stop_index + 1}"
-                        stop_lat_poi = pos.get("lat", dest_lat)
-                        stop_lng_poi = pos.get("lon", dest_lng)
-                        stop_image = await fetch_real_image(client, title, destination_name)
-                        itinerary.append(
-                            TripStop(
-                                id=f"poi-{day_number}-{stop_index + 1}",
-                                day=day_number,
-                                date=trip_date.strftime("%b %d"),
-                                time=build_time_label(stop_index),
-                                title=title,
-                                location=poi.get("address", {}).get("freeformAddress") or destination_name,
-                                type="ATTRACTION",
-                                creators=f"Starts at {build_time_label(stop_index)}",
-                                distance="Local",
-                                elevation="N/A",
-                                duration="60m",
-                                image=stop_image,
-                                map_image_url=fallback_map_image,
-                                lat=stop_lat_poi,
-                                lng=stop_lng_poi,
-                                cost_range="$10 - $25 / person",
+                        day_waypoints = []
+                        for stop_index, poi in enumerate(day_pois):
+                            pos = poi.get("position", {})
+                            title = poi.get("poi", {}).get("name") or f"Stop {stop_index + 1}"
+                            stop_lat_poi = pos.get("lat", dest_lat)
+                            stop_lng_poi = pos.get("lon", dest_lng)
+                            stop_image = await fetch_real_image(client, title, destination_name)
+                            itinerary.append(
+                                TripStop(
+                                    id=f"poi-{day_number}-{stop_index + 1}",
+                                    day=day_number,
+                                    date=trip_date.strftime("%b %d"),
+                                    time=build_time_label(stop_index),
+                                    title=title,
+                                    location=poi.get("address", {}).get("freeformAddress") or destination_name,
+                                    type="ATTRACTION",
+                                    creators=f"Starts at {build_time_label(stop_index)}",
+                                    distance="Local",
+                                    elevation="N/A",
+                                    duration="60m",
+                                    image=stop_image,
+                                    map_image_url=fallback_map_image,
+                                    lat=stop_lat_poi,
+                                    lng=stop_lng_poi,
+                                    cost_range="$10 - $25 / person",
+                                )
                             )
-                        )
-                        day_waypoints.append([stop_lng_poi, stop_lat_poi])
+                            day_waypoints.append([stop_lng_poi, stop_lat_poi])
 
-                    routes.append(build_day_route_from_coordinates(day_number, day_waypoints))
+                        routes.append(build_day_route_from_coordinates(day_number, day_waypoints))
 
-                return TripPlanResponse(
-                    destination=destination_name,
-                    destination_image=destination_image,
-                    map_image_url=fallback_map_image,
-                    weather=weather_label,
-                    dates=format_date_range(start_day, days),
-                    days=days,
-                    coordinates=coordinates,
-                    itinerary=itinerary,
-                    routes=routes,
-                    culinary_highlights=[]
-                )
-        except Exception as e:
-            logger.warning("TomTom POI fallback failed for %s: %s", destination_name, e)
+                    return TripPlanResponse(
+                        destination=destination_name,
+                        destination_image=destination_image,
+                        map_image_url=fallback_map_image,
+                        weather=weather_label,
+                        dates=format_date_range(start_day, days),
+                        days=days,
+                        coordinates=coordinates,
+                        itinerary=itinerary,
+                        routes=routes,
+                        culinary_highlights=[]
+                    )
+            except Exception as e:
+                logger.warning("TomTom POI fallback failed for %s: %s", destination_name, e)
 
-    # 4. FALLBACK 2: Hardcoded generic templates
-    return await build_fallback_trip_plan(destination_name, days, start_day, client)
+        # 4. FALLBACK 2: Hardcoded generic templates
+        return await build_fallback_trip_plan(destination_name, days, start_day, client)
+    except Exception as e:
+        logger.error('Trip plan failed entirely: %s', e, exc_info=True)
+        return await build_fallback_trip_plan(body.location.title(), max(1, min(body.days, 30)), body.start_date or date.today(), client)
 
 
 # ─────────────────────────────────────────────
