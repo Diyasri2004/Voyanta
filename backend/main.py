@@ -1102,6 +1102,9 @@ async def build_fallback_trip_plan(location: str, days: int, start_day: date, cl
         c = fallback_coordinates_for(dest)
         s_date = start_day or date.today()
         d_num = days or 3
+        emerg_attractions = [
+            PillarItem(id="emerg-attr-1", title="Heritage Landmark", category="Tourist Attractions", description="Iconic city attraction.", address=dest, maps_url=generate_maps_link("Heritage Landmark", dest), lat=c.lat, lng=c.lng)
+        ]
         return TripPlanResponse(
             destination=dest,
             destination_image=PEXELS_FALLBACK,
@@ -1134,7 +1137,17 @@ async def build_fallback_trip_plan(location: str, days: int, start_day: date, cl
                 )
             ],
             routes=[],
-            culinary_highlights=[]
+            culinary_highlights=[],
+            attractions=emerg_attractions,
+            events=[],
+            culinary=[],
+            bars_pubs=[],
+            wellness=[],
+            secret_spots=[],
+            essentials=[],
+            shopping=[],
+            adventures=[],
+            theme_parks=[],
         )
 
 
