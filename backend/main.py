@@ -598,7 +598,7 @@ async def generate_trip_with_groq(
                 "temperature": 0.3,
                 "max_tokens": 3000,
             },
-            timeout=30.0,
+            timeout=7.0,
         )
         if response.status_code != 200:
             logger.error("Groq API error response (%s): %s", response.status_code, response.text)

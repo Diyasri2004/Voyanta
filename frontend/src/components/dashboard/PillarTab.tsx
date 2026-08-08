@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Navigation } from "lucide-react";
 import { getTranslation, LanguageName } from "@/lib/i18n";
 import { DestinationCard } from "@/components/ui/destination-card";
+import { TravelerWaitIndicator } from "@/components/ui/traveler-wait-indicator";
 
 export interface PillarItemData {
   id?: string;
@@ -36,13 +37,7 @@ export default function PillarTab({
   };
 
   if (!items || items.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center p-8 text-center bg-white/5 rounded-2xl border border-white/10 my-4">
-        <Navigation className="h-8 w-8 text-[#00f0ff] mb-2 animate-pulse" />
-        <p className="text-sm text-white font-bold mb-1">Discovering Local Spots</p>
-        <p className="text-xs text-[#94A3B8]">Curating top verified locations in {destination}...</p>
-      </div>
-    );
+    return <TravelerWaitIndicator destination={destination} />;
   }
 
   const UNSPLASH_FALLBACK = "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=900&auto=format&fit=crop&q=80";

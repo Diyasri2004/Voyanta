@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import CyberDashboard from "@/components/dashboard/CyberDashboard";
 import VoyAI from "@/components/ai/Voya";
 import CityHeroImage from "@/components/CityHeroImage";
+import { TravelerWaitIndicator } from "@/components/ui/traveler-wait-indicator";
 import { AnimatePresence, motion } from "framer-motion";
 import { useCurrency } from "@/context/CurrencyContext";
 import {
@@ -586,12 +587,7 @@ export default function Page() {
           ) : null}
 
           {loading && !trip ? (
-            <div className="flex my-auto items-center justify-center">
-              <div className="flex items-center gap-3 rounded-full border border-blue-500/20 bg-blue-500/5 px-5 py-3 text-sm text-[#CBD5E1] shadow-[0_0_24px_rgba(59,130,246,0.12)]">
-                <Loader2 className="h-4 w-4 animate-spin text-blue-400" />
-                {t.buildingDashboard}
-              </div>
-            </div>
+            <TravelerWaitIndicator destination={locationInput} />
           ) : null}
 
           {!loading && !trip && !error ? (
