@@ -3,7 +3,7 @@
 import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
-import { Heart, Navigation } from "lucide-react";
+import { Heart, Navigation, Plus } from "lucide-react";
 
 const cardVariants = cva(
   "relative grid h-full w-full transform-gpu overflow-hidden rounded-2xl border border-white/10 shadow-lg transition-all duration-300 ease-in-out group hover:shadow-2xl hover:border-[#39ff14]/40 min-h-[420px]",
@@ -22,6 +22,7 @@ export interface DestinationCardProps
   mapsUrl?: string;
   onLike?: () => void;
   isLiked?: boolean;
+  onAddToPlan?: () => void;
 }
 
 const DestinationCard = React.forwardRef<
@@ -37,6 +38,7 @@ const DestinationCard = React.forwardRef<
       mapsUrl,
       onLike,
       isLiked = false,
+      onAddToPlan,
       ...props
     },
     ref
@@ -47,11 +49,11 @@ const DestinationCard = React.forwardRef<
         className={cn(cardVariants({ className }))}
         {...props}
       >
-        {/* Background Image with Hover Zoom */}
+        {/* Background Image with Hover Zoom & Top Focus */}
         <img
           src={imageUrl}
           alt={title}
-          className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-110"
+          className="absolute inset-0 h-full w-full object-cover object-[center_25%] transition-transform duration-500 ease-out group-hover:scale-105"
           onError={(e) => {
             const target = e.target as HTMLImageElement;
             target.onerror = null;
@@ -64,6 +66,22 @@ const DestinationCard = React.forwardRef<
 
         {/* Action Header */}
         <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
+          {onAddToPlan && (
+            <button
+              type="button"
+              aria-label="Add to Itinerary Plan"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onAddToPlan();
+              }}
+              className="flex items-center justify-center w-8 h-8 rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-white hover:bg-emerald-500 hover:text-black hover:border-emerald-500 transition-all active:scale-95 shadow-md"
+              title="Add to Itinerary Plan"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+          )}
+
           {mapsUrl && (
             <a
               href={mapsUrl}
@@ -76,6 +94,7 @@ const DestinationCard = React.forwardRef<
               <span>Navigate</span>
             </a>
           )}
+
           {onLike && (
             <button
               aria-label={isLiked ? "Unlike place" : "Like place"}
@@ -98,10 +117,7 @@ const DestinationCard = React.forwardRef<
 
         {/* Text Content */}
         <div className="relative z-10 flex h-full flex-col justify-end p-6 text-white transition-transform duration-500 ease-in-out group-hover:-translate-y-1">
-          <p className="text-xs font-mono font-semibold uppercase tracking-widest text-[#39ff14]">
-            - {category} -
-          </p>
-          <h2 className="mt-1 text-2xl font-bold leading-tight tracking-tight text-white md:text-3xl line-clamp-2">
+          <h2 className="text-2xl font-bold leading-tight tracking-tight text-white md:text-3xl line-clamp-2 drop-shadow-md">
             {title}
           </h2>
         </div>

@@ -24,10 +24,12 @@ export default function PillarTab({
   items,
   destination,
   selectedLanguage = "English",
+  onAddToPlan,
 }: {
   items: PillarItemData[];
   destination: string;
   selectedLanguage?: LanguageName;
+  onAddToPlan?: (item: PillarItemData) => void;
 }) {
   const t = getTranslation(selectedLanguage);
   const [likedIds, setLikedIds] = useState<Record<string, boolean>>({});
@@ -62,6 +64,7 @@ export default function PillarTab({
             mapsUrl={mapsUrl}
             isLiked={!!likedIds[itemId]}
             onLike={() => toggleLike(itemId)}
+            onAddToPlan={onAddToPlan ? () => onAddToPlan(item) : undefined}
           />
         );
       })}

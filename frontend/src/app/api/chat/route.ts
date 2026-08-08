@@ -6,6 +6,24 @@ const ai = new GoogleGenAI({ apiKey });
 
 export async function POST(req: Request) {
   try {
+    const { message, history, tripContext } = await req.json();
+
+    // Try backend FastAPI endpoint first if available
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+    try {
+      const res = await fetch(`${backendUrl}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message, destination: tripContext?.destination || 'Lucknow', history }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return NextResponse.json({ text: data.text, reply: data.text, tool_called: data.tool_called, result: data.result });
+      }
+    } catch {
+      // Fallback to Gemini JS client below
+    }
+
     if (!process.env.GEMINI_API_KEY) {
       console.error('Voya Chat API Error: GEMINI_API_KEY is missing from process.env');
       return NextResponse.json(
@@ -13,10 +31,9 @@ export async function POST(req: Request) {
         { status: 500 }
       );
     }
-    const { message, history, tripContext } = await req.json();
 
     const systemInstruction = `
-      You are "Voya", an energetic, highly knowledgeable, and polite AI Travel Concierge for VOYANTA.
+      You are "Voya", an energetic, highly knowledgeable AI Travel Concierge for VOYANTA.
       
       YOUR CORE RESPONSIBILITIES:
       1. Provide accurate, realistic recommendations for travel destinations worldwide.

@@ -17,6 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import asyncpg
 from models import EventFestival
+from chat_agent import get_chat_agent_tools, execute_tool_call
 
 load_dotenv()
 
@@ -659,18 +660,14 @@ async def generate_trip_with_groq(
         traveler_context_str = f"\n\nTRAVELER GROUP CONTEXT ({group_type}, {adults} Adults, {seniors} Seniors, {infants} Infants):\n" + "\n".join(f"- {g}" for g in guidelines) if guidelines else f"\n\nTRAVELER GROUP CONTEXT: Group Type is {group_type}."
 
     system_prompt = (
-        "You are a premier travel planner. Return only valid JSON, no markdown.\n\n"
-        "CRITICAL MANDATE: You MUST ONLY generate famous, world-renowned tier-1 attractions, historic sites, and legendary culinary hubs for the target city.\n"
-        f"- STRICT LANGUAGE INSTRUCTION: You MUST generate and translate ALL Agenda stop titles, activity descriptions, day summaries, Live Radar spots, category tags, expenses, and packing gear lists directly in {language or 'English'}. Do NOT default to English if another language is selected.\n"
-        f"- NO CITY PREFIXES IN TITLES: Do NOT prefix stop titles with the city or state name (e.g., NEVER write 'Lucknow, Uttar Pradesh Bara Imambara' or 'Paris Eiffel Tower'). Output ONLY the exact landmark name.\n"
-        f"- NO GENERIC PLACEHOLDERS: NEVER return generic titles like 'Grand Art Center', 'Bustling Local Market', 'Local Sightseeing', 'City Walk', 'Signature Trail', or 'Check-in'. Every stop MUST be a real, famous, verifiable attraction in {location}.\n"
-        "TRAVELER CONTEXT GUIDELINES (SOFT PRIORITIES, NOT HARD RESTRICTIONS):\n"
-        "Use the traveler demographics as a subtle thematic bias, but do NOT strictly exclude major iconic sights, top-rated local dining, or standard cultural highlights.\n"
-        "MAIN GOAL: Provide a rich, comprehensive, and well-rounded destination experience for all travelers."
+        "STRICT 25+ REAL VENUE PER PILLAR MANDATE:\n"
+        f"You are VOYANTA's master local curator. For the requested {location}, you MUST return AT LEAST 25 SPECIFIC REAL-WORLD VENUES for each of the 10 Explorer Pillars (250+ total venues).\n\n"
+        f"SHOPPING COVERAGE MANDATE FOR {location}:\n"
+        f"You MUST return at least 25 shopping spots covering luxury malls, high street shopping boulevards, local old-town bazaars, street shopping lanes, flea markets, bangle/textile alleys, and wholesale markets in {location}.\n\n"
+        "STRICTLY BAN generic placeholders like 'Central Plaza', 'Grand Art Museum', 'Local Market', 'Downtown Walk', 'Signature Trail', or 'Check-in'.\n"
+        f"- STRICT LANGUAGE INSTRUCTION: You MUST generate and translate ALL titles, descriptions, and pillar items directly in {language or 'English'}. Do NOT default to English if another language is selected.\n"
+        f"- NO CITY PREFIXES IN TITLES: Output ONLY the exact landmark or venue name without prefixing state/country.\n"
         f"{traveler_context_str}\n"
-        "- IF DESTINATION IS LUCKNOW: You MUST select from: Bara Imambara & Bhool Bhulaiya, Chota Imambara, Rumi Darwaza, Hazratganj Market, Ambedkar Memorial Park, British Residency, Janeshwar Mishra Park, Tunday Kababi Chowk, and Dastarkhwan Lalbagh.\n"
-        "- IF DESTINATION IS PARIS: Eiffel Tower, Louvre, Cathédrale Notre-Dame, Arc de Triomphe, Sacré-Cœur, Le Marais.\n"
-        "- IF DESTINATION IS DELHI: Red Fort, Qutub Minar, India Gate, Humayun's Tomb, Chandni Chowk."
     )
 
     try:
@@ -692,7 +689,7 @@ async def generate_trip_with_groq(
                 "temperature": 0.3,
                 "max_tokens": 3000,
             },
-            timeout=12.0,
+            timeout=15.0,
         )
         if response.status_code != 200:
             logger.error("Groq API error response (%s): %s", response.status_code, response.text)
@@ -1407,7 +1404,7 @@ async def handle_trip_plan_request(
                         client, destination_name, days, start_day, coordinates,
                         body.categories, body.pace, body.budget, body.travelers, body.language
                     ),
-                    timeout=12.0
+                    timeout=15.0
                 )
                 if groq_trip:
                     if key:
@@ -1546,6 +1543,39 @@ async def get_smart_suggestions(
             raise HTTPException(status_code=500, detail=f"Database operational error: {str(e)}")
 
     return [EventFestival(**dict(record)) for record in records]
+
+
+class ChatMessageRequest(BaseModel):
+    message: str
+    destination: Optional[str] = "Lucknow"
+    history: Optional[List[Dict[str, Any]]] = None
+
+@app.post("/api/chat", tags=["Chat"])
+async def chat_with_agent(body: ChatMessageRequest):
+    try:
+        tools = get_chat_agent_tools()
+        msg_lower = body.message.lower()
+        if "search" in msg_lower or "find" in msg_lower or "market" in msg_lower or "bazaar" in msg_lower:
+            result = await execute_tool_call("search_additional_venues", {"destination": body.destination or "Lucknow", "query": body.message})
+            return {
+                "text": f"Found venue for {body.destination}: {result['venue']['title']} ({result['venue']['category']})",
+                "tool_called": "search_additional_venues",
+                "result": result
+            }
+        elif "add" in msg_lower or "itinerary" in msg_lower:
+            result = await execute_tool_call("add_venue_to_itinerary", {"destination": body.destination or "Lucknow", "venue_name": body.message})
+            return {
+                "text": result.get("message", "Item added to itinerary plan."),
+                "tool_called": "add_venue_to_itinerary",
+                "result": result
+            }
+        return {
+            "text": f"Voya Assistant: Happy to help you explore {body.destination or 'your trip'}!",
+            "tool_called": None
+        }
+    except Exception as e:
+        logger.error("Chat agent error: %s", e)
+        return {"text": f"Voya Assistant: Ready to help with your trip to {body.destination or 'Lucknow'}!"}
 
 
 if __name__ == "__main__":

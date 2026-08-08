@@ -1,6 +1,8 @@
 "use client";
 
-import PillarTab from "./PillarTab";
+import { useState } from "react";
+import PillarTab, { PillarItemData } from "./PillarTab";
+import PlanBuilderDrawer, { SavedPlanItem } from "./PlanBuilderDrawer";
 import {
   Compass,
   Ticket,
@@ -12,6 +14,7 @@ import {
   ShoppingBag,
   Mountain,
   Palmtree,
+  Calendar,
 } from "lucide-react";
 import { getTranslation, LanguageName } from "@/lib/i18n";
 
@@ -29,6 +32,8 @@ export default function TabController({
   selectedLanguage?: LanguageName;
 }) {
   const t = getTranslation(selectedLanguage);
+  const [savedPlanItems, setSavedPlanItems] = useState<SavedPlanItem[]>([]);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   const tabs = [
     { id: "attractions", icon: Compass, label: t.attractions },
@@ -45,10 +50,33 @@ export default function TabController({
 
   const destination = trip?.destination || "Destination";
 
+  const handleAddToPlan = (item: PillarItemData) => {
+    setSavedPlanItems((prev) => {
+      if (prev.some((p) => p.title === item.title)) return prev;
+      return [...prev, item];
+    });
+    setIsDrawerOpen(true);
+  };
+
+  const handleRemovePlanItem = (idx: number) => {
+    setSavedPlanItems((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleClearAllPlanItems = () => {
+    setSavedPlanItems([]);
+  };
+
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full relative">
       <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 shrink-0">
         <h2 className="font-syne font-bold text-lg text-white">{t.commandCenter}</h2>
+        <button
+          onClick={() => setIsDrawerOpen(true)}
+          className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-mono font-bold hover:bg-emerald-500 hover:text-black transition-all shadow-md"
+        >
+          <Calendar className="w-3.5 h-3.5" />
+          <span>Itinerary Plan ({savedPlanItems.length})</span>
+        </button>
       </div>
 
       {/* Tab Navigation */}
@@ -80,6 +108,7 @@ export default function TabController({
             items={trip?.attractions || []}
             destination={destination}
             selectedLanguage={selectedLanguage}
+            onAddToPlan={handleAddToPlan}
           />
         )}
         {activeTab === "events" && (
@@ -87,6 +116,7 @@ export default function TabController({
             items={trip?.events || []}
             destination={destination}
             selectedLanguage={selectedLanguage}
+            onAddToPlan={handleAddToPlan}
           />
         )}
         {activeTab === "culinary" && (
@@ -94,6 +124,7 @@ export default function TabController({
             items={trip?.culinary || []}
             destination={destination}
             selectedLanguage={selectedLanguage}
+            onAddToPlan={handleAddToPlan}
           />
         )}
         {activeTab === "bars_pubs" && (
@@ -101,6 +132,7 @@ export default function TabController({
             items={trip?.bars_pubs || []}
             destination={destination}
             selectedLanguage={selectedLanguage}
+            onAddToPlan={handleAddToPlan}
           />
         )}
         {activeTab === "wellness" && (
@@ -108,6 +140,7 @@ export default function TabController({
             items={trip?.wellness || []}
             destination={destination}
             selectedLanguage={selectedLanguage}
+            onAddToPlan={handleAddToPlan}
           />
         )}
         {activeTab === "secret_spots" && (
@@ -115,6 +148,7 @@ export default function TabController({
             items={trip?.secret_spots || []}
             destination={destination}
             selectedLanguage={selectedLanguage}
+            onAddToPlan={handleAddToPlan}
           />
         )}
         {activeTab === "essentials" && (
@@ -122,6 +156,7 @@ export default function TabController({
             items={trip?.essentials || []}
             destination={destination}
             selectedLanguage={selectedLanguage}
+            onAddToPlan={handleAddToPlan}
           />
         )}
         {activeTab === "shopping" && (
@@ -129,6 +164,7 @@ export default function TabController({
             items={trip?.shopping || []}
             destination={destination}
             selectedLanguage={selectedLanguage}
+            onAddToPlan={handleAddToPlan}
           />
         )}
         {activeTab === "adventures" && (
@@ -136,6 +172,7 @@ export default function TabController({
             items={trip?.adventures || []}
             destination={destination}
             selectedLanguage={selectedLanguage}
+            onAddToPlan={handleAddToPlan}
           />
         )}
         {activeTab === "theme_parks" && (
@@ -143,9 +180,20 @@ export default function TabController({
             items={trip?.theme_parks || []}
             destination={destination}
             selectedLanguage={selectedLanguage}
+            onAddToPlan={handleAddToPlan}
           />
         )}
       </div>
+
+      {/* Plan Builder Drawer Slide-over */}
+      <PlanBuilderDrawer
+        isOpen={isDrawerOpen}
+        onClose={() => setIsDrawerOpen(false)}
+        items={savedPlanItems}
+        onRemoveItem={handleRemovePlanItem}
+        onClearAll={handleClearAllPlanItems}
+        destination={destination}
+      />
     </div>
   );
 }
