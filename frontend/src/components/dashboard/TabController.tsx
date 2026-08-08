@@ -15,6 +15,7 @@ import {
   Mountain,
   Palmtree,
   Calendar,
+  Landmark,
 } from "lucide-react";
 import { getTranslation, LanguageName } from "@/lib/i18n";
 
@@ -46,6 +47,7 @@ export default function TabController({
     { id: "shopping", icon: ShoppingBag, label: t.shoppingPillar },
     { id: "adventures", icon: Mountain, label: t.adventuresPillar },
     { id: "theme_parks", icon: Palmtree, label: t.themeParksPillar },
+    { id: "sacred_temples", icon: Landmark, label: t.sacredTemples },
   ];
 
   const destination = trip?.destination || "Destination";
@@ -178,6 +180,14 @@ export default function TabController({
         {activeTab === "theme_parks" && (
           <PillarTab
             items={trip?.theme_parks || []}
+            destination={destination}
+            selectedLanguage={selectedLanguage}
+            onAddToPlan={handleAddToPlan}
+          />
+        )}
+        {activeTab === "sacred_temples" && (
+          <PillarTab
+            items={trip?.sacred_temples || []}
             destination={destination}
             selectedLanguage={selectedLanguage}
             onAddToPlan={handleAddToPlan}

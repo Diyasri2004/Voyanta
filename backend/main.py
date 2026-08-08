@@ -229,6 +229,7 @@ class TripPlanResponse(BaseModel):
     shopping: List[PillarItem] = Field(default_factory=list)
     adventures: List[PillarItem] = Field(default_factory=list)
     theme_parks: List[PillarItem] = Field(default_factory=list)
+    sacred_temples: List[PillarItem] = Field(default_factory=list)
 
 
 class GroqTripStop(BaseModel):
@@ -268,6 +269,7 @@ class GroqTripContent(BaseModel):
     shopping: List[GroqPillarItem] = []
     adventures: List[GroqPillarItem] = []
     theme_parks: List[GroqPillarItem] = []
+    sacred_temples: List[GroqPillarItem] = []
 
 
 FALLBACK_CITY_COORDINATES = {
@@ -660,11 +662,13 @@ async def generate_trip_with_groq(
         traveler_context_str = f"\n\nTRAVELER GROUP CONTEXT ({group_type}, {adults} Adults, {seniors} Seniors, {infants} Infants):\n" + "\n".join(f"- {g}" for g in guidelines) if guidelines else f"\n\nTRAVELER GROUP CONTEXT: Group Type is {group_type}."
 
     system_prompt = (
-        "STRICT 25+ REAL VENUE PER PILLAR MANDATE:\n"
-        f"You are VOYANTA's master local curator. For the requested {location}, you MUST return AT LEAST 25 SPECIFIC REAL-WORLD VENUES for each of the 10 Explorer Pillars (250+ total venues).\n\n"
+        "STRICT 25+ REAL VENUE PER PILLAR MANDATE (11 PILLARS TOTAL):\n"
+        f"You are VOYANTA's master local curator. For the requested {location}, you MUST return AT LEAST 25 SPECIFIC REAL-WORLD VENUES for each of the 11 Explorer Pillars (275+ total venues).\n\n"
+        f"TEMPLES & SACRED SHRINES REQUIREMENT FOR {location}:\n"
+        f"You MUST return at least 25 specific temples, ancient shrines, sacred heritage sites, and spiritual landmarks for {location}.\n\n"
         f"SHOPPING COVERAGE MANDATE FOR {location}:\n"
         f"You MUST return at least 25 shopping spots covering luxury malls, high street shopping boulevards, local old-town bazaars, street shopping lanes, flea markets, bangle/textile alleys, and wholesale markets in {location}.\n\n"
-        "STRICTLY BAN generic placeholders like 'Central Plaza', 'Grand Art Museum', 'Local Market', 'Downtown Walk', 'Signature Trail', or 'Check-in'.\n"
+        "STRICTLY BAN generic placeholders like 'Central Plaza', 'Grand Art Museum', 'Local Market', 'Downtown Walk', 'Signature Trail', or 'Local Temple'.\n"
         f"- STRICT LANGUAGE INSTRUCTION: You MUST generate and translate ALL titles, descriptions, and pillar items directly in {language or 'English'}. Do NOT default to English if another language is selected.\n"
         f"- NO CITY PREFIXES IN TITLES: Output ONLY the exact landmark or venue name without prefixing state/country.\n"
         f"{traveler_context_str}\n"
@@ -808,7 +812,7 @@ async def generate_trip_with_groq(
 
     (
         attractions, events, culinary, bars_pubs, wellness,
-        secret_spots, essentials, shopping, adventures, theme_parks
+        secret_spots, essentials, shopping, adventures, theme_parks, sacred_temples
     ) = await asyncio.gather(
         map_pillar_items_async(getattr(ai_trip, 'attractions', []), "Tourist Attractions"),
         map_pillar_items_async(getattr(ai_trip, 'events', []), "Events"),
@@ -820,6 +824,7 @@ async def generate_trip_with_groq(
         map_pillar_items_async(getattr(ai_trip, 'shopping', []), "Shopping"),
         map_pillar_items_async(getattr(ai_trip, 'adventures', []), "Adventures"),
         map_pillar_items_async(getattr(ai_trip, 'theme_parks', []), "Theme Parks"),
+        map_pillar_items_async(getattr(ai_trip, 'sacred_temples', []), "Sacred Temples & Heritage Shrines"),
     )
 
     weather_label = await fetch_weather_label(client, coordinates.lat, coordinates.lng)
@@ -854,11 +859,22 @@ async def generate_trip_with_groq(
         shopping=shopping,
         adventures=adventures,
         theme_parks=theme_parks,
+        sacred_temples=sacred_temples,
     )
 
 
 CITY_REAL_VENUES = {
     "lucknow": {
+        "sacred_temples": [
+            "Mankameshwar Temple (Babuganj)", "Hanuman Setu Temple", "Chandrika Devi Temple (Kathwara)",
+            "Sankat Mochan Hanuman Temple", "Buddha Vihar Shanti Upavan", "Aliganj Bada Hanuman Temple",
+            "Sheetla Devi Temple (Mehendiganj)", "ISKCON Temple Lucknow", "Naya Hanuman Mandir (Aliganj)",
+            "Khamman Pir Dargah", "Bada Imambara Mosque Complex", "Surya Temple (Gomti Riverfront)",
+            "Kali Bari Mandir (Ghanshyam Nagar)", "Shiv Temple (Hazratganj)", "Sanatan Dharam Mandir",
+            "Sai Baba Temple (Aliganj)", "Laxmi Narayan Mandir", "Annapurna Mandir", "Siddhi Vinayak Temple",
+            "Charbagh Railway Temple Complex", "Panchmukhi Hanuman Mandir", "Durga Puri Mandir",
+            "Arya Samaj Mandir Chowk", "Bhootnath Temple", "Hanuman Garhi Alambagh"
+        ],
         "attractions": ["Bara Imambara & Bhool Bhulaiya", "Rumi Darwaza", "Chota Imambara", "Ambedkar Memorial Park"],
         "events": ["Lucknow Mahotsav Cultural Night", "Gomti Riverfront Light Show", "Hazratganj Live Music Evenings"],
         "culinary": ["Tunday Kababi (Aminabad)", "Dastarkhwan (Hazratganj)", "Prakash Ki Kulfi", "Sharma Tea Stall"],
@@ -988,7 +1004,7 @@ async def build_fallback_trip_plan(
 
         (
             attractions, events, culinary, bars_pubs, wellness,
-            secret_spots, essentials, shopping, adventures, theme_parks
+            secret_spots, essentials, shopping, adventures, theme_parks, sacred_temples
         ) = await asyncio.gather(
             build_pillar_list("attractions", "Tourist Attractions", ["Historic Landmark", "Cultural Center", "City Promenade", "Royal Monument"]),
             build_pillar_list("events", "Events", ["Cultural Evening Gala", "Live Music Session", "Heritage Art Showcase"]),
@@ -1000,6 +1016,7 @@ async def build_fallback_trip_plan(
             build_pillar_list("shopping", "Shopping", ["Traditional Artisan Bazaar", "Bustling Street Market", "Luxury Shopping Galleria"]),
             build_pillar_list("adventures", "Adventures", ["Outdoor Nature Reserve", "Riverfront Kayaking & Trails", "Scenic Ridge Trek"]),
             build_pillar_list("theme_parks", "Theme Parks", ["Grand Water Kingdom", "Thrill Amusement World", "Family Adventure Resort"]),
+            build_pillar_list("sacred_temples", "Sacred Temples & Heritage Shrines", ["Ancient Heritage Temple", "Sacred Spiritual Shrine", "Historic Royal Mosque"]),
         )
 
         return TripPlanResponse(
@@ -1024,6 +1041,7 @@ async def build_fallback_trip_plan(
             shopping=shopping,
             adventures=adventures,
             theme_parks=theme_parks,
+            sacred_temples=sacred_temples,
         )
     except Exception as exc:
         logger.error("Critical error building fallback trip plan for %s: %s", location, exc, exc_info=True)

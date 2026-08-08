@@ -52,6 +52,7 @@ export interface TranslationDictionary {
   shoppingPillar: string;
   adventuresPillar: string;
   themeParksPillar: string;
+  sacredTemples: string;
   navigateInMaps: string;
 }
 
@@ -99,6 +100,7 @@ export const translations: Record<LanguageName, TranslationDictionary> = {
     shoppingPillar: "Shopping",
     adventuresPillar: "Adventures",
     themeParksPillar: "Theme Parks",
+    sacredTemples: "Temples & Shrines",
     navigateInMaps: "Navigate in Maps",
   },
   Hindi: {
@@ -144,6 +146,7 @@ export const translations: Record<LanguageName, TranslationDictionary> = {
     shoppingPillar: "खरीदारी",
     adventuresPillar: "साहसिक गतिविधियाँ",
     themeParksPillar: "थीम पार्क",
+    sacredTemples: "मंदिर और तीर्थ",
     navigateInMaps: "मानचित्र में दिशा देखें",
   },
   Spanish: {
@@ -189,6 +192,7 @@ export const translations: Record<LanguageName, TranslationDictionary> = {
     shoppingPillar: "Compras",
     adventuresPillar: "Aventuras",
     themeParksPillar: "Parques Temáticos",
+    sacredTemples: "Templos y Santuarios",
     navigateInMaps: "Navegar en Mapas",
   },
   French: {
@@ -234,6 +238,7 @@ export const translations: Record<LanguageName, TranslationDictionary> = {
     shoppingPillar: "Shopping",
     adventuresPillar: "Aventures",
     themeParksPillar: "Parcs à Thème",
+    sacredTemples: "Temples et Sanctuaires",
     navigateInMaps: "Naviguer sur la Carte",
   },
   German: {
@@ -279,6 +284,7 @@ export const translations: Record<LanguageName, TranslationDictionary> = {
     shoppingPillar: "Shopping",
     adventuresPillar: "Abenteuer",
     themeParksPillar: "Freizeitparks",
+    sacredTemples: "Tempel & Heiligtümer",
     navigateInMaps: "In Maps navigieren",
   },
   Arabic: {
@@ -324,6 +330,7 @@ export const translations: Record<LanguageName, TranslationDictionary> = {
     shoppingPillar: "التسوق",
     adventuresPillar: "المغامرات",
     themeParksPillar: "المدن الترفيهية",
+    sacredTemples: "المعابد والأضرحة",
     navigateInMaps: "الانتقال في الخريطة",
   },
   Chinese: {
@@ -369,6 +376,7 @@ export const translations: Record<LanguageName, TranslationDictionary> = {
     shoppingPillar: "购物天地",
     adventuresPillar: "户外冒险",
     themeParksPillar: "主题乐园",
+    sacredTemples: "寺庙与圣地",
     navigateInMaps: "地图导航",
   },
   Japanese: {
@@ -414,6 +422,7 @@ export const translations: Record<LanguageName, TranslationDictionary> = {
     shoppingPillar: "ショッピング",
     adventuresPillar: "アクティビティ・冒険",
     themeParksPillar: "テーマパーク",
+    sacredTemples: "寺院と神社",
     navigateInMaps: "マップでルート表示",
   },
 };
