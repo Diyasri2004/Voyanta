@@ -7,12 +7,14 @@ import httpx
 from uuid import UUID
 from datetime import date
 from contextlib import asynccontextmanager
+import re
 import urllib.parse
-from typing import List, Optional
+import asyncio
+from typing import List, Optional, Dict, Any
 
 from fastapi import FastAPI, HTTPException, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import asyncpg
 from models import EventFestival
 
@@ -160,19 +162,18 @@ class CulinaryHighlight(BaseModel):
     cost_approx: str
 
 class PillarItem(BaseModel):
-    id: str = ""
-    title: str
-    category: str
+    id: str = Field(default_factory=lambda: "item-" + str(int(asyncio.get_event_loop().time() * 1000)))
+    title: str = "Famous Venue"
+    category: str = "Explorer Spot"
     description: str = ""
     address: str = ""
     maps_url: str = ""
-    lat: float = 0.0
-    lng: float = 0.0
-    image: str = ""
     image_url: str = ""
-    serving_style: Optional[str] = ""
-    event_time: Optional[str] = ""
-    price_range: Optional[str] = ""
+    serving_style: str = ""
+    event_time: str = ""
+    price_range: str = ""
+    lat: Optional[float] = None
+    lng: Optional[float] = None
 
 
 class GroqPillarItem(BaseModel):
@@ -186,25 +187,26 @@ class GroqPillarItem(BaseModel):
 
 class TripPlanResponse(BaseModel):
     destination: str
-    destination_image: str
-    map_image_url: str
-    weather: str
-    dates: str
-    days: int
-    coordinates: Coordinates
-    itinerary: List[TripStop]
-    routes: List[TripDayRoute]
-    culinary_highlights: List[CulinaryHighlight] = []
-    attractions: List[PillarItem] = []
-    events: List[PillarItem] = []
-    culinary: List[PillarItem] = []
-    bars_pubs: List[PillarItem] = []
-    wellness: List[PillarItem] = []
-    secret_spots: List[PillarItem] = []
-    essentials: List[PillarItem] = []
-    shopping: List[PillarItem] = []
-    adventures: List[PillarItem] = []
-    theme_parks: List[PillarItem] = []
+    language: str = "en"
+    destination_image: str = ""
+    map_image_url: str = ""
+    weather: str = "Clear"
+    dates: str = ""
+    days: int = 3
+    coordinates: Optional[Coordinates] = None
+    itinerary: List[TripStop] = Field(default_factory=list)
+    routes: List[TripDayRoute] = Field(default_factory=list)
+    culinary_highlights: List[CulinaryHighlight] = Field(default_factory=list)
+    attractions: List[PillarItem] = Field(default_factory=list)
+    events: List[PillarItem] = Field(default_factory=list)
+    culinary: List[PillarItem] = Field(default_factory=list)
+    bars_pubs: List[PillarItem] = Field(default_factory=list)
+    wellness: List[PillarItem] = Field(default_factory=list)
+    secret_spots: List[PillarItem] = Field(default_factory=list)
+    essentials: List[PillarItem] = Field(default_factory=list)
+    shopping: List[PillarItem] = Field(default_factory=list)
+    adventures: List[PillarItem] = Field(default_factory=list)
+    theme_parks: List[PillarItem] = Field(default_factory=list)
 
 
 class GroqTripStop(BaseModel):
@@ -1432,36 +1434,30 @@ async def fuzzy_search(
 
 
 # ─────────────────────────────────────────────
-#  6. TRIP PLAN — main endpoint
+#  6. TRIP PLAN — main endpoints
 # ─────────────────────────────────────────────
 
-@app.post("/trip-plan", response_model=TripPlanResponse, tags=["Trips"])
-async def build_trip_plan(
+async def handle_trip_plan_request(
     body: TripPlanRequest,
-    client: httpx.AsyncClient = Depends(get_http_client),
-    key: Optional[str] = Depends(optional_tomtom_key)
-):
-    """
-    Build a full trip dashboard. ALWAYS prioritizes Groq LLM for the itinerary 
-    because it gives beautifully themed, realistic travel experiences.
-    Only uses TomTom POI search as a last resort fallback if Groq fails.
-    """
-    try:
-        target_location = (body.location or body.destination or "Lucknow").strip()
-        num_days = body.days or 3
-        days = max(1, min(num_days, 30))
-        start_day = body.start_date or date.today()
-        default_coordinates = fallback_coordinates_for(target_location)
+    client: httpx.AsyncClient,
+    key: Optional[str] = None
+) -> TripPlanResponse:
+    target_location = (body.location or body.destination or "Lucknow").strip()
+    num_days = body.days or 3
+    days = max(1, min(num_days, 30))
+    start_day = body.start_date or date.today()
+    lang = body.language or "en"
 
+    try:
+        default_coordinates = fallback_coordinates_for(target_location)
         dest_lat = default_coordinates.lat
         dest_lng = default_coordinates.lng
         destination_name = target_location.title()
 
-        # 1. Geocode with TomTom to get accurate city center and name
         if key:
             geocode_url = f"{TOMTOM_BASE}/search/2/geocode/{target_location}.json"
             try:
-                geocode_response = await client.get(geocode_url, params={"key": key, "limit": 1, "typeahead": True})
+                geocode_response = await client.get(geocode_url, params={"key": key, "limit": 1, "typeahead": True}, timeout=3.0)
                 if geocode_response.status_code == 200:
                     results = geocode_response.json().get("results", [])
                     if results:
@@ -1474,105 +1470,47 @@ async def build_trip_plan(
 
         coordinates = Coordinates(lat=dest_lat, lng=dest_lng)
 
-        # 2. PRIORITY: Use Groq (LLM) to generate a realistic travel itinerary
         if GROQ_API_KEY:
-            groq_trip = await generate_trip_with_groq(
-                client, destination_name, days, start_day, coordinates,
-                body.categories, body.pace, body.budget, body.travelers, body.language
-            )
-            if groq_trip:
-                # Add TomTom map if available
-                if key:
-                    groq_trip.map_image_url = build_tomtom_static_map_url(dest_lat, dest_lng, zoom=10)
-                return groq_trip
-
-        stops_per_day = 3
-        if body.pace:
-            if "relaxed" in body.pace.lower():
-                stops_per_day = 2
-            elif "action" in body.pace.lower() or "packed" in body.pace.lower():
-                stops_per_day = 5
-
-        # 3. FALLBACK 1: Disabled to enforce Iconic Landmark Map
-        if False:
-            poi_url = f"{TOMTOM_BASE}/search/2/nearbySearch/.json"
-            poi_params = {
-                "key": key, "lat": dest_lat, "lon": dest_lng,
-                "radius": 12000, "limit": max(days * 4, 8), "view": "Unified",
-                "categorySet": "7320,7374,9362" # Tourist Attraction, Museum, Park
-            }
             try:
-                poi_response = await client.get(poi_url, params=poi_params)
-                poi_response.raise_for_status()
-                raw_pois = poi_response.json().get("results", [])
-                if raw_pois:
-                    destination_image = await fetch_destination_image(client, destination_name)
-                    weather_label = await fetch_weather_label(client, dest_lat, dest_lng)
-                    itinerary = []
-                    routes = []
-                    fallback_map_image = build_tomtom_static_map_url(dest_lat, dest_lng, zoom=10)
-                
-                    for day_index in range(days):
-                        day_number = day_index + 1
-                        trip_date = start_day.fromordinal(start_day.toordinal() + day_index)
-                        start_idx = day_index * stops_per_day
-                        day_pois = raw_pois[start_idx:start_idx + stops_per_day]
-                        if not day_pois:
-                            day_pois = raw_pois[:min(stops_per_day, len(raw_pois))]
-
-                        day_waypoints = []
-                        for stop_index, poi in enumerate(day_pois):
-                            pos = poi.get("position", {})
-                            title = poi.get("poi", {}).get("name") or f"Stop {stop_index + 1}"
-                            stop_lat_poi = pos.get("lat", dest_lat)
-                            stop_lng_poi = pos.get("lon", dest_lng)
-                            stop_image = await fetch_real_image(client, title, destination_name)
-                            itinerary.append(
-                                TripStop(
-                                    id=f"poi-{day_number}-{stop_index + 1}",
-                                    day=day_number,
-                                    date=trip_date.strftime("%b %d"),
-                                    time=build_time_label(stop_index),
-                                    title=title,
-                                    location=poi.get("address", {}).get("freeformAddress") or destination_name,
-                                    type="ATTRACTION",
-                                    creators=f"Starts at {build_time_label(stop_index)}",
-                                    distance="Local",
-                                    elevation="N/A",
-                                    duration="60m",
-                                    image=stop_image,
-                                    map_image_url=fallback_map_image,
-                                    lat=stop_lat_poi,
-                                    lng=stop_lng_poi,
-                                    cost_range="$10 - $25 / person",
-                                )
-                            )
-                            day_waypoints.append([stop_lng_poi, stop_lat_poi])
-
-                        routes.append(build_day_route_from_coordinates(day_number, day_waypoints))
-
-                    return TripPlanResponse(
-                        destination=destination_name,
-                        destination_image=destination_image,
-                        map_image_url=fallback_map_image,
-                        weather=weather_label,
-                        dates=format_date_range(start_day, days),
-                        days=days,
-                        coordinates=coordinates,
-                        itinerary=itinerary,
-                        routes=routes,
-                        culinary_highlights=[]
-                    )
+                groq_trip = await asyncio.wait_for(
+                    generate_trip_with_groq(
+                        client, destination_name, days, start_day, coordinates,
+                        body.categories, body.pace, body.budget, body.travelers, body.language
+                    ),
+                    timeout=5.0
+                )
+                if groq_trip:
+                    if key:
+                        groq_trip.map_image_url = build_tomtom_static_map_url(dest_lat, dest_lng, zoom=10)
+                    groq_trip.language = lang
+                    return groq_trip
             except Exception as e:
-                logger.warning("TomTom POI fallback failed for %s: %s", destination_name, e)
+                logger.error("Execution error or timeout (%s: %s). Returning instant fallback response.", type(e).__name__, e)
 
-        # 4. FALLBACK 2: Hardcoded generic templates
-        return await build_fallback_trip_plan(destination_name, days, start_day, client)
+        res = await build_fallback_trip_plan(destination_name, days, start_day, client)
+        res.language = lang
+        return res
     except Exception as e:
-        logger.error('Trip plan failed entirely: %s', e, exc_info=True)
-        fallback_loc = (getattr(body, 'location', None) or getattr(body, 'destination', None) or "Lucknow").title()
-        fallback_days = max(1, min(getattr(body, 'days', None) or 3, 30))
-        return await build_fallback_trip_plan(fallback_loc, fallback_days, getattr(body, 'start_date', None) or date.today(), client)
+        logger.error("Execution error or timeout (%s: %s). Returning instant fallback response.", type(e).__name__, e)
+        res = await build_fallback_trip_plan(target_location, days, start_day, client)
+        res.language = lang
+        return res
+
+@app.post("/trip-plan", response_model=TripPlanResponse, tags=["Trips"])
+async def build_trip_plan_legacy(
+    body: TripPlanRequest,
+    client: httpx.AsyncClient = Depends(get_http_client),
+    key: Optional[str] = Depends(optional_tomtom_key)
+):
+    return await handle_trip_plan_request(body, client, key)
+
+@app.post("/api/trip-plan", response_model=TripPlanResponse, tags=["Trips"])
+async def build_trip_plan_api(
+    body: TripPlanRequest,
+    client: httpx.AsyncClient = Depends(get_http_client),
+    key: Optional[str] = Depends(optional_tomtom_key)
+):
+    return await handle_trip_plan_request(body, client, key)
 
 
 # ─────────────────────────────────────────────
