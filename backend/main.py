@@ -160,18 +160,19 @@ class CulinaryHighlight(BaseModel):
     cost_approx: str
 
 class PillarItem(BaseModel):
-    id: str
+    id: str = ""
     title: str
     category: str
-    description: str
-    address: str
-    maps_url: str
+    description: str = ""
+    address: str = ""
+    maps_url: str = ""
     lat: float = 0.0
     lng: float = 0.0
     image: str = ""
-    serving_style: Optional[str] = None
-    event_time: Optional[str] = None
-    price_range: Optional[str] = None
+    image_url: str = ""
+    serving_style: Optional[str] = ""
+    event_time: Optional[str] = ""
+    price_range: Optional[str] = ""
 
 
 class GroqPillarItem(BaseModel):
@@ -487,6 +488,21 @@ async def fetch_weather_label(client: httpx.AsyncClient, lat: float, lng: float)
     return "Weather unavailable"
 
 
+def clean_stop_title(title: str, destination: str = "") -> str:
+    if not title:
+        return "Famous Venue"
+    clean = str(title).strip()
+    if destination:
+        clean = re.sub(rf"^(?:{re.escape(destination.strip())})[,\s\-]+", "", clean, flags=re.IGNORECASE).strip()
+    clean = re.sub(r"^[,\-\:\s]+", "", clean).strip()
+    return clean if clean else str(title).strip()
+
+def generate_maps_link(place_name: str, destination: str) -> str:
+    clean_name = clean_stop_title(place_name, destination)
+    query = f"{clean_name}, {destination.strip()}"
+    return f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(query)}"
+
+
 # ─────────────────────────────────────────────
 #  Groq AI — replaces local Ollama
 # ─────────────────────────────────────────────
@@ -607,7 +623,7 @@ async def generate_trip_with_groq(
                 "temperature": 0.3,
                 "max_tokens": 3000,
             },
-            timeout=7.0,
+            timeout=5.0,
         )
         if response.status_code != 200:
             logger.error("Groq API error response (%s): %s", response.status_code, response.text)
