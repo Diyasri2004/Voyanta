@@ -514,14 +514,55 @@ async def fetch_weather_label(client: httpx.AsyncClient, lat: float, lng: float)
     return "Weather unavailable"
 
 
-def clean_stop_title(title: str, destination: str = "") -> str:
+# ─── Robust venue title cleaner ──────────────────────────────────────────────
+# Common US state abbreviations and major destination aliases that appear
+# erroneously as prefixes in AI-generated venue titles.
+_STATE_ABBR = (
+    r"al|ak|az|ar|ca|co|ct|de|fl|ga|hi|id|il|in|ia|ks|ky|la|me|md|ma|mi|mn"
+    r"|ms|mo|mt|ne|nv|nh|nj|nm|ny|nc|nd|oh|ok|or|pa|ri|sc|sd|tn|tx|ut|vt"
+    r"|va|wa|wv|wi|wy|dc"
+)
+
+def clean_venue_title(title: str, destination: str = "") -> str:
+    """Strip city/state prefixes and return a clean venue name.
+
+    Handles patterns like:
+      'New York, NY Historic District' -> 'Historic District'
+      'Dubai, Dubai Mall'              -> 'Mall'
+      'Lucknow, Lucknow Bara Imambara' -> 'Bara Imambara'
+    """
     if not title:
         return "Famous Venue"
     clean = str(title).strip()
+
+    # 1. Strip "City, ST " style prefixes (US + generic)
+    clean = re.sub(
+        rf"^(?:[^,]{{1,40}},\s*(?:{_STATE_ABBR})[\s,:\-]+)+",
+        "",
+        clean,
+        flags=re.IGNORECASE,
+    ).strip()
+
+    # 2. Strip repeated destination name (e.g. "Dubai, Dubai" or "Lucknow, Lucknow")
     if destination:
-        clean = re.sub(rf"^(?:{re.escape(destination.strip())})[,\s\-]+", "", clean, flags=re.IGNORECASE).strip()
-    clean = re.sub(r"^[,\-\:\s]+", "", clean).strip()
+        dest_esc = re.escape(destination.strip())
+        # Handle "Dest, Dest " or "Dest - " or "Dest: " repeated up to 3 times
+        clean = re.sub(
+            rf"^(?:{dest_esc}[\s,:\-]+){{1,3}}",
+            "",
+            clean,
+            flags=re.IGNORECASE,
+        ).strip()
+
+    # 3. Strip leading punctuation / whitespace debris
+    clean = re.sub(r"^[,\-:\s]+", "", clean).strip()
+
     return clean if clean else str(title).strip()
+
+
+# Keep legacy alias so callers of clean_stop_title still work
+def clean_stop_title(title: str, destination: str = "") -> str:
+    return clean_venue_title(title, destination)
 
 def generate_maps_link(place_name: str, destination: str) -> str:
     clean_name = clean_stop_title(place_name, destination)
@@ -1486,15 +1527,34 @@ async def get_destination_weather(
     start_date: str = "",
     end_date: str = "",
 ):
+    """Live weather via OpenWeatherMap (if key set) then free Open-Meteo fallback."""
     coords = fallback_coordinates_for(destination)
 
-    # Tier 1: OpenWeatherMap (if key present)
+    # ── Normalise ISO dates: accept DD-MM-YYYY or YYYY-MM-DD ───────────────
+    def _normalise_date(raw: str) -> str:
+        raw = raw.strip()
+        if not raw:
+            return ""
+        # Already YYYY-MM-DD
+        if re.match(r"^\d{4}-\d{2}-\d{2}$", raw):
+            return raw
+        # DD-MM-YYYY
+        m = re.match(r"^(\d{2})-(\d{2})-(\d{4})$", raw)
+        if m:
+            return f"{m.group(3)}-{m.group(2)}-{m.group(1)}"
+        return raw
+
+    iso_start = _normalise_date(start_date)
+    iso_end   = _normalise_date(end_date) or iso_start
+
+    # ── Tier 1: OpenWeatherMap ──────────────────────────────────────────────
     if OPENWEATHER_API_KEY:
         try:
             async with httpx.AsyncClient(timeout=4.0) as cli:
                 r = await cli.get(
                     "https://api.openweathermap.org/data/2.5/weather",
-                    params={"lat": coords.lat, "lon": coords.lng, "units": "metric", "appid": OPENWEATHER_API_KEY},
+                    params={"lat": coords.lat, "lon": coords.lng,
+                            "units": "metric", "appid": OPENWEATHER_API_KEY},
                 )
                 if r.status_code == 200:
                     d = r.json()
@@ -1506,51 +1566,68 @@ async def get_destination_weather(
                         "icon": d["weather"][0]["icon"],
                         "emoji": "🌤️",
                         "humidity": d["main"].get("humidity", 60),
+                        "daily": [],
                         "source": "openweathermap",
                     }
         except Exception as exc:
             logger.warning("OpenWeather failed for %s: %s", destination, exc)
 
-    # Tier 2: Free Open-Meteo (no key required)
+    # ── Tier 2: Free Open-Meteo (no API key needed) ─────────────────────────
     try:
-        params: Dict[str, Any] = {
-            "latitude": coords.lat, "longitude": coords.lng,
+        om_params: Dict[str, Any] = {
+            "latitude": coords.lat,
+            "longitude": coords.lng,
+            # Include BOTH param names for backward compat across API versions
+            "current_weather": "true",
             "current": "temperature_2m,weathercode,relativehumidity_2m,apparent_temperature",
             "timezone": "auto",
         }
-        # Add date range if provided
-        if start_date:
-            params["start_date"] = start_date
-            params["end_date"] = end_date or start_date
-            params["daily"] = "temperature_2m_max,temperature_2m_min,weathercode"
-        async with httpx.AsyncClient(timeout=4.0) as cli:
-            r = await cli.get("https://api.open-meteo.com/v1/forecast", params=params)
+        if iso_start:
+            om_params["start_date"] = iso_start
+            om_params["end_date"]   = iso_end
+            om_params["daily"]      = "temperature_2m_max,temperature_2m_min,weathercode"
+
+        async with httpx.AsyncClient(timeout=5.0) as cli:
+            r = await cli.get("https://api.open-meteo.com/v1/forecast", params=om_params)
             if r.status_code == 200:
                 data = r.json()
-                cw = data.get("current", {})
-                temp = round(cw.get("temperature_2m", 28))
-                wmo = cw.get("weathercode", 1)
-                cond, emoji = WMO_CODE_MAP.get(wmo, ("Partly Cloudy", "🌤️"))
-                humidity = cw.get("relativehumidity_2m", 60)
 
-                # Build daily breakdown if date range requested
+                # Prefer new 'current' block, fall back to legacy 'current_weather'
+                cw_new    = data.get("current", {})
+                cw_legacy = data.get("current_weather", {})
+
+                temp = round(
+                    cw_new.get("temperature_2m")
+                    or cw_legacy.get("temperature")
+                    or 28
+                )
+                wmo = (
+                    cw_new.get("weathercode")
+                    or cw_legacy.get("weathercode")
+                    or 1
+                )
+                cond, emoji = WMO_CODE_MAP.get(int(wmo), ("Partly Cloudy", "🌤️"))
+                humidity = cw_new.get("relativehumidity_2m", 60)
+
+                # Build daily breakdown
                 daily_breakdown = []
-                if start_date and "daily" in data:
+                for i, dt in enumerate(data.get("daily", {}).get("time", [])):
                     daily = data["daily"]
-                    for i, dt in enumerate(daily.get("time", [])):
-                        wmo_d = daily.get("weathercode", [])[i] if i < len(daily.get("weathercode", [])) else 1
-                        cond_d, emoji_d = WMO_CODE_MAP.get(wmo_d, ("Partly Cloudy", "🌤️"))
-                        daily_breakdown.append({
-                            "date": dt,
-                            "max_c": round(daily.get("temperature_2m_max", [temp])[i] if i < len(daily.get("temperature_2m_max", [])) else temp),
-                            "min_c": round(daily.get("temperature_2m_min", [temp])[i] if i < len(daily.get("temperature_2m_min", [])) else temp),
-                            "condition": cond_d,
-                            "emoji": emoji_d,
-                        })
+                    wmo_d = daily.get("weathercode", [1])
+                    cond_d, emoji_d = WMO_CODE_MAP.get(
+                        int(wmo_d[i]) if i < len(wmo_d) else 1, ("Partly Cloudy", "🌤️")
+                    )
+                    daily_breakdown.append({
+                        "date": dt,
+                        "max_c": round(daily.get("temperature_2m_max", [temp])[i] if i < len(daily.get("temperature_2m_max", [])) else temp),
+                        "min_c": round(daily.get("temperature_2m_min", [temp])[i] if i < len(daily.get("temperature_2m_min", [])) else temp),
+                        "condition": cond_d,
+                        "emoji": emoji_d,
+                    })
 
                 return {
                     "temp_c": temp,
-                    "feels_like_c": round(cw.get("apparent_temperature", temp)),
+                    "feels_like_c": round(cw_new.get("apparent_temperature") or temp),
                     "condition": cond,
                     "description": cond,
                     "icon": "02d",
@@ -1562,7 +1639,10 @@ async def get_destination_weather(
     except Exception as exc:
         logger.warning("Open-Meteo failed for %s: %s", destination, exc)
 
-    return {"temp_c": 30, "condition": "Sunny", "description": "Clear Sky", "icon": "01d", "emoji": "☀️", "humidity": 50, "daily": [], "source": "fallback"}
+    return {
+        "temp_c": 30, "condition": "Sunny", "description": "Clear Sky",
+        "icon": "01d", "emoji": "☀️", "humidity": 50, "daily": [], "source": "fallback"
+    }
 
 
 # ─────────────────────────────────────────────
