@@ -30,8 +30,8 @@ logger = logging.getLogger(__name__)
 TOMTOM_API_KEY      = os.getenv("TOMTOM_API_KEY")
 TOMTOM_BASE         = "https://api.tomtom.com"
 OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
-UNSPLASH_ACCESS_KEY = os.getenv("UNSPLASH_ACCESS_KEY", "")
-PEXELS_API_KEY      = os.getenv("PEXELS_API_KEY", "")
+UNSPLASH_ACCESS_KEY = os.getenv("UNSPLASH_ACCESS_KEY", "NaJtl01BUQuN6F1KxWYRAdCFHi3DTIRnxNXHYaegLg8")
+PEXELS_API_KEY      = os.getenv("PEXELS_API_KEY", "rMYuM4ugKNz9f8qaj4zKDIohSR0HAHsqlodYVJk3JqRNglPRVs2AGNMF")
 PEXELS_BASE         = "https://api.pexels.com/v1/search"
 PEXELS_FALLBACK     = (
     "https://images.pexels.com/photos/1483769/pexels-photo-1483769.jpeg"
