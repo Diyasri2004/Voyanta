@@ -54,8 +54,28 @@ if not TOMTOM_API_KEY:
 # ─────────────────────────────────────────────
 
 class Coordinates(BaseModel):
-    lat: float
-    lng: float
+    lat: float = 26.8467
+    lng: float = 80.9462
+
+CITY_COORDINATES = {
+    "lucknow": Coordinates(lat=26.8467, lng=80.9462),
+    "delhi": Coordinates(lat=28.6139, lng=77.2090),
+    "mumbai": Coordinates(lat=19.0760, lng=72.8777),
+    "paris": Coordinates(lat=48.8566, lng=2.3522),
+    "dubai": Coordinates(lat=25.2048, lng=55.2708),
+    "tokyo": Coordinates(lat=35.6762, lng=139.6503),
+    "new york": Coordinates(lat=40.7128, lng=-74.0060)
+}
+
+def fallback_coordinates_for(destination: str) -> Coordinates:
+    """Return specific lat/lng coordinates for known cities or default center."""
+    if not destination:
+        return Coordinates(lat=26.8467, lng=80.9462)
+    dest_key = str(destination).lower().strip()
+    for city, coords in CITY_COORDINATES.items():
+        if city in dest_key:
+            return coords
+    return Coordinates(lat=26.8467, lng=80.9462)
 
 class GeocodeResult(BaseModel):
     address: str
@@ -1412,7 +1432,11 @@ async def build_trip_plan_legacy(
     client: httpx.AsyncClient = Depends(get_http_client),
     key: Optional[str] = Depends(optional_tomtom_key)
 ):
-    return await handle_trip_plan_request(body, client, key)
+    try:
+        return await handle_trip_plan_request(body, client, key)
+    except Exception as e:
+        logger.error(f"Fallback caught endpoint error: {e}")
+        return await build_fallback_trip_plan(body.destination or body.location or "Lucknow", body.days or 3, body.start_date, client)
 
 @app.post("/api/trip-plan", response_model=TripPlanResponse, tags=["Trips"])
 async def build_trip_plan_api(
@@ -1420,7 +1444,11 @@ async def build_trip_plan_api(
     client: httpx.AsyncClient = Depends(get_http_client),
     key: Optional[str] = Depends(optional_tomtom_key)
 ):
-    return await handle_trip_plan_request(body, client, key)
+    try:
+        return await handle_trip_plan_request(body, client, key)
+    except Exception as e:
+        logger.error(f"Fallback caught endpoint error: {e}")
+        return await build_fallback_trip_plan(body.destination or body.location or "Lucknow", body.days or 3, body.start_date, client)
 
 
 # ─────────────────────────────────────────────
