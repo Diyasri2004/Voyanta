@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 TOMTOM_API_KEY      = os.getenv("TOMTOM_API_KEY")
 TOMTOM_BASE         = "https://api.tomtom.com"
 OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
+UNSPLASH_ACCESS_KEY = os.getenv("UNSPLASH_ACCESS_KEY", "")
 PEXELS_API_KEY      = os.getenv("PEXELS_API_KEY", "")
 PEXELS_BASE         = "https://api.pexels.com/v1/search"
 PEXELS_FALLBACK     = (
@@ -505,6 +506,52 @@ def generate_maps_link(place_name: str, destination: str) -> str:
     return f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(query)}"
 
 
+async def get_async_place_photo(client: httpx.AsyncClient, place_name: str, destination: str) -> str:
+    clean_name = clean_stop_title(place_name, destination)
+    query = f"{clean_name} {destination}".strip()
+    encoded = urllib.parse.quote(query)
+
+    # Tier 1: Unsplash Search API
+    if UNSPLASH_ACCESS_KEY:
+        try:
+            url = f"https://api.unsplash.com/search/photos?page=1&query={encoded}&client_id={UNSPLASH_ACCESS_KEY}&per_page=1"
+            res = await client.get(url, timeout=2.0)
+            if res.status_code == 200:
+                data = res.json()
+                if data.get("results") and len(data["results"]) > 0:
+                    return data["results"][0]["urls"]["regular"]
+        except Exception:
+            pass
+
+    # Tier 2: Pexels Search API
+    if PEXELS_API_KEY:
+        try:
+            url = f"https://api.pexels.com/v1/search?query={encoded}&per_page=1"
+            headers = {"Authorization": PEXELS_API_KEY}
+            res = await client.get(url, headers=headers, timeout=2.0)
+            if res.status_code == 200:
+                data = res.json()
+                if data.get("photos") and len(data["photos"]) > 0:
+                    return data["photos"][0]["src"]["medium"]
+        except Exception:
+            pass
+
+    # Tier 3: Wikimedia Commons Search API (Free, high-res landmark search)
+    try:
+        wiki_url = f"https://commons.wikimedia.org/w/api.php?action=query&generator=search&prop=pageimages&piprop=original&gsrsearch={encoded}&format=json"
+        res = await client.get(wiki_url, headers={"User-Agent": "VoyantaTravel/1.0"}, timeout=2.0)
+        if res.status_code == 200:
+            pages = res.json().get("query", {}).get("pages", {})
+            for _, page_data in pages.items():
+                if "original" in page_data and "source" in page_data["original"]:
+                    return page_data["original"]["source"]
+    except Exception:
+        pass
+
+    # Tier 4: Reliable Unsplash Direct Keyword Fallback
+    return "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=900&auto=format&fit=crop&q=80"
+
+
 # ─────────────────────────────────────────────
 #  Groq AI — replaces local Ollama
 # ─────────────────────────────────────────────
@@ -625,7 +672,7 @@ async def generate_trip_with_groq(
                 "temperature": 0.3,
                 "max_tokens": 3000,
             },
-            timeout=5.0,
+            timeout=8.0,
         )
         if response.status_code != 200:
             logger.error("Groq API error response (%s): %s", response.status_code, response.text)
@@ -720,26 +767,43 @@ async def generate_trip_with_groq(
     if not itinerary:
         return None
 
-    def map_pillar_items(items: list, cat_label: str) -> List[PillarItem]:
-        res = []
-        for i, item in enumerate(items):
+    async def map_pillar_items_async(items: list, cat_label: str) -> List[PillarItem]:
+        async def create_item(i: int, item: Any) -> PillarItem:
             title = clean_stop_title(getattr(item, 'title', ''), destination)
-            res.append(
-                PillarItem(
-                    id=f"{cat_label.lower().replace(' ', '-')}-{i+1}",
-                    title=title,
-                    category=cat_label,
-                    description=getattr(item, 'description', '') or '',
-                    address=getattr(item, 'address', '') or destination,
-                    maps_url=generate_maps_link(title, destination),
-                    lat=coordinates.lat,
-                    lng=coordinates.lng,
-                    serving_style=getattr(item, 'serving_style', None),
-                    event_time=getattr(item, 'event_time', None),
-                    price_range=getattr(item, 'price_range', '$$'),
-                )
+            image_url = await get_async_place_photo(client, title, destination)
+            return PillarItem(
+                id=f"{cat_label.lower().replace(' ', '-')}-{i+1}",
+                title=title,
+                category=cat_label,
+                description=getattr(item, 'description', '') or '',
+                address=getattr(item, 'address', '') or destination,
+                maps_url=generate_maps_link(title, destination),
+                image_url=image_url,
+                lat=coordinates.lat,
+                lng=coordinates.lng,
+                serving_style=getattr(item, 'serving_style', '') or '',
+                event_time=getattr(item, 'event_time', '') or '',
+                price_range=getattr(item, 'price_range', '$$') or '$$',
             )
-        return res
+
+        tasks = [create_item(i, item) for i, item in enumerate(items)]
+        return list(await asyncio.gather(*tasks)) if tasks else []
+
+    (
+        attractions, events, culinary, bars_pubs, wellness,
+        secret_spots, essentials, shopping, adventures, theme_parks
+    ) = await asyncio.gather(
+        map_pillar_items_async(getattr(ai_trip, 'attractions', []), "Tourist Attractions"),
+        map_pillar_items_async(getattr(ai_trip, 'events', []), "Events"),
+        map_pillar_items_async(getattr(ai_trip, 'culinary', []), "Culinary"),
+        map_pillar_items_async(getattr(ai_trip, 'bars_pubs', []), "Bars & Pubs"),
+        map_pillar_items_async(getattr(ai_trip, 'wellness', []), "Wellness & Meditation"),
+        map_pillar_items_async(getattr(ai_trip, 'secret_spots', []), "Secret Spots"),
+        map_pillar_items_async(getattr(ai_trip, 'essentials', []), "Travel Essentials"),
+        map_pillar_items_async(getattr(ai_trip, 'shopping', []), "Shopping"),
+        map_pillar_items_async(getattr(ai_trip, 'adventures', []), "Adventures"),
+        map_pillar_items_async(getattr(ai_trip, 'theme_parks', []), "Theme Parks"),
+    )
 
     weather_label = await fetch_weather_label(client, coordinates.lat, coordinates.lng)
     return TripPlanResponse(
@@ -763,16 +827,16 @@ async def generate_trip_with_groq(
                 cost_approx=getattr(h, 'cost_approx', '$15 - $25 / person'),
             ) for h in ai_trip.culinary_highlights
         ] if hasattr(ai_trip, "culinary_highlights") else [],
-        attractions=map_pillar_items(getattr(ai_trip, 'attractions', []), "Tourist Attractions"),
-        events=map_pillar_items(getattr(ai_trip, 'events', []), "Events"),
-        culinary=map_pillar_items(getattr(ai_trip, 'culinary', []), "Culinary"),
-        bars_pubs=map_pillar_items(getattr(ai_trip, 'bars_pubs', []), "Bars & Pubs"),
-        wellness=map_pillar_items(getattr(ai_trip, 'wellness', []), "Wellness & Meditation"),
-        secret_spots=map_pillar_items(getattr(ai_trip, 'secret_spots', []), "Secret Spots"),
-        essentials=map_pillar_items(getattr(ai_trip, 'essentials', []), "Travel Essentials"),
-        shopping=map_pillar_items(getattr(ai_trip, 'shopping', []), "Shopping"),
-        adventures=map_pillar_items(getattr(ai_trip, 'adventures', []), "Adventures"),
-        theme_parks=map_pillar_items(getattr(ai_trip, 'theme_parks', []), "Theme Parks"),
+        attractions=attractions,
+        events=events,
+        culinary=culinary,
+        bars_pubs=bars_pubs,
+        wellness=wellness,
+        secret_spots=secret_spots,
+        essentials=essentials,
+        shopping=shopping,
+        adventures=adventures,
+        theme_parks=theme_parks,
     )
 
 
@@ -1477,7 +1541,7 @@ async def handle_trip_plan_request(
                         client, destination_name, days, start_day, coordinates,
                         body.categories, body.pace, body.budget, body.travelers, body.language
                     ),
-                    timeout=5.0
+                    timeout=8.0
                 )
                 if groq_trip:
                     if key:
