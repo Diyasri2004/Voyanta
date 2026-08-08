@@ -55,14 +55,14 @@ const DestinationCard = React.forwardRef<
           onError={(e) => {
             const target = e.target as HTMLImageElement;
             target.onerror = null;
-            target.src = `https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=900&auto=format&fit=crop&q=80`;
+            target.src = "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=900&auto=format&fit=crop&q=80";
           }}
         />
 
-        {/* Gradient Overlay for Readable Text */}
+        {/* Gradient Overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent" />
 
-        {/* Action Buttons Header */}
+        {/* Action Header */}
         <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
           {mapsUrl && (
             <a
@@ -96,7 +96,7 @@ const DestinationCard = React.forwardRef<
           )}
         </div>
 
-        {/* Card Title & Category Footer */}
+        {/* Text Content */}
         <div className="relative z-10 flex h-full flex-col justify-end p-6 text-white transition-transform duration-500 ease-in-out group-hover:-translate-y-1">
           <p className="text-xs font-mono font-semibold uppercase tracking-widest text-[#39ff14]">
             - {category} -

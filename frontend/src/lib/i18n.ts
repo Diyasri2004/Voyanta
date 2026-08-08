@@ -41,7 +41,7 @@ export interface TranslationDictionary {
   cyberMap2D: string;
   holoGlobe3D: string;
   newTrip: string;
-  // 7 Core Pillars
+  // 10 Core Pillars
   attractions: string;
   events: string;
   culinaryPillar: string;
@@ -49,6 +49,9 @@ export interface TranslationDictionary {
   wellnessPillar: string;
   secretSpots: string;
   essentialsPillar: string;
+  shoppingPillar: string;
+  adventuresPillar: string;
+  themeParksPillar: string;
   navigateInMaps: string;
 }
 
@@ -93,6 +96,9 @@ export const translations: Record<LanguageName, TranslationDictionary> = {
     wellnessPillar: "Wellness & Meditation",
     secretSpots: "Secret Spots",
     essentialsPillar: "Travel Essentials",
+    shoppingPillar: "Shopping",
+    adventuresPillar: "Adventures",
+    themeParksPillar: "Theme Parks",
     navigateInMaps: "Navigate in Maps",
   },
   Hindi: {
@@ -135,6 +141,9 @@ export const translations: Record<LanguageName, TranslationDictionary> = {
     wellnessPillar: "वेलनेस और ध्यान",
     secretSpots: "गुप्त स्थान",
     essentialsPillar: "यात्रा संबंधी आवश्यक जानकारी",
+    shoppingPillar: "खरीदारी",
+    adventuresPillar: "साहसिक गतिविधियाँ",
+    themeParksPillar: "थीम पार्क",
     navigateInMaps: "मानचित्र में दिशा देखें",
   },
   Spanish: {
@@ -177,6 +186,9 @@ export const translations: Record<LanguageName, TranslationDictionary> = {
     wellnessPillar: "Bienestar y Meditación",
     secretSpots: "Lugares Secretos",
     essentialsPillar: "Información Esencial",
+    shoppingPillar: "Compras",
+    adventuresPillar: "Aventuras",
+    themeParksPillar: "Parques Temáticos",
     navigateInMaps: "Navegar en Mapas",
   },
   French: {
@@ -219,6 +231,9 @@ export const translations: Record<LanguageName, TranslationDictionary> = {
     wellnessPillar: "Bien-être et Méditation",
     secretSpots: "Lieux Secrets",
     essentialsPillar: "Infos Pratiques",
+    shoppingPillar: "Shopping",
+    adventuresPillar: "Aventures",
+    themeParksPillar: "Parcs à Thème",
     navigateInMaps: "Naviguer sur la Carte",
   },
   German: {
@@ -261,6 +276,9 @@ export const translations: Record<LanguageName, TranslationDictionary> = {
     wellnessPillar: "Wellness & Meditation",
     secretSpots: "Geheimtipps",
     essentialsPillar: "Reise-Informationen",
+    shoppingPillar: "Shopping",
+    adventuresPillar: "Abenteuer",
+    themeParksPillar: "Freizeitparks",
     navigateInMaps: "In Maps navigieren",
   },
   Arabic: {
@@ -303,6 +321,9 @@ export const translations: Record<LanguageName, TranslationDictionary> = {
     wellnessPillar: "الاسترخاء واليوغا",
     secretSpots: "الأماكن الخفية",
     essentialsPillar: "معلومات السفر الأساسية",
+    shoppingPillar: "التسوق",
+    adventuresPillar: "المغامرات",
+    themeParksPillar: "المدن الترفيهية",
     navigateInMaps: "الانتقال في الخريطة",
   },
   Chinese: {
@@ -345,6 +366,9 @@ export const translations: Record<LanguageName, TranslationDictionary> = {
     wellnessPillar: "水疗与冥想放松",
     secretSpots: "小众隐秘好去处",
     essentialsPillar: "实用旅行指南与求助",
+    shoppingPillar: "购物天地",
+    adventuresPillar: "户外冒险",
+    themeParksPillar: "主题乐园",
     navigateInMaps: "地图导航",
   },
   Japanese: {
@@ -387,6 +411,9 @@ export const translations: Record<LanguageName, TranslationDictionary> = {
     wellnessPillar: "スパ＆リラクゼーション",
     secretSpots: "隠れた名所・ローカル穴場",
     essentialsPillar: "旅行に必要な基本情報",
+    shoppingPillar: "ショッピング",
+    adventuresPillar: "アクティビティ・冒険",
+    themeParksPillar: "テーマパーク",
     navigateInMaps: "マップでルート表示",
   },
 };

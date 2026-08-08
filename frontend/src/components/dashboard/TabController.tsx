@@ -10,6 +10,9 @@ import {
   Sparkles,
   Eye,
   ShieldCheck,
+  ShoppingBag,
+  Mountain,
+  Palmtree,
   LayoutList,
 } from "lucide-react";
 import { getTranslation, LanguageName } from "@/lib/i18n";
@@ -37,6 +40,9 @@ export default function TabController({
     { id: "wellness", icon: Sparkles, label: t.wellnessPillar },
     { id: "secret_spots", icon: Eye, label: t.secretSpots },
     { id: "essentials", icon: ShieldCheck, label: t.essentialsPillar },
+    { id: "shopping", icon: ShoppingBag, label: t.shoppingPillar },
+    { id: "adventures", icon: Mountain, label: t.adventuresPillar },
+    { id: "theme_parks", icon: Palmtree, label: t.themeParksPillar },
     { id: "agenda", icon: LayoutList, label: t.agenda },
   ];
 
@@ -117,6 +123,27 @@ export default function TabController({
         {activeTab === "essentials" && (
           <PillarTab
             items={trip?.essentials || []}
+            destination={destination}
+            selectedLanguage={selectedLanguage}
+          />
+        )}
+        {activeTab === "shopping" && (
+          <PillarTab
+            items={trip?.shopping || []}
+            destination={destination}
+            selectedLanguage={selectedLanguage}
+          />
+        )}
+        {activeTab === "adventures" && (
+          <PillarTab
+            items={trip?.adventures || []}
+            destination={destination}
+            selectedLanguage={selectedLanguage}
+          />
+        )}
+        {activeTab === "theme_parks" && (
+          <PillarTab
+            items={trip?.theme_parks || []}
             destination={destination}
             selectedLanguage={selectedLanguage}
           />

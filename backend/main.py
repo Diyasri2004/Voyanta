@@ -201,6 +201,9 @@ class TripPlanResponse(BaseModel):
     wellness: List[PillarItem] = []
     secret_spots: List[PillarItem] = []
     essentials: List[PillarItem] = []
+    shopping: List[PillarItem] = []
+    adventures: List[PillarItem] = []
+    theme_parks: List[PillarItem] = []
 
 
 class GroqTripStop(BaseModel):
@@ -237,6 +240,9 @@ class GroqTripContent(BaseModel):
     wellness: List[GroqPillarItem] = []
     secret_spots: List[GroqPillarItem] = []
     essentials: List[GroqPillarItem] = []
+    shopping: List[GroqPillarItem] = []
+    adventures: List[GroqPillarItem] = []
+    theme_parks: List[GroqPillarItem] = []
 
 
 FALLBACK_CITY_COORDINATES = {
@@ -537,8 +543,11 @@ async def generate_trip_with_groq(
         '"bars_pubs":[{"title":"<real nightlife venue>","description":"<atmosphere>","address":"<area>","price_range":"$$$"}],'
         '"wellness":[{"title":"<real spa/gym/yoga center>","description":"<facilities>","address":"<area>","price_range":"$$"}],'
         '"secret_spots":[{"title":"<real hidden gem>","description":"<local secret>","address":"<area>","price_range":"$"}],'
-        '"essentials":[{"title":"<practical advice/emergency item>","description":"<numbers, hospital, transit, scam tips>","address":"<citywide>"}]}\n'
-        f"Generate exactly {days} days with {stops_per_day} stops each, plus 3 to 5 real items for each of the 7 pillars (attractions, events, culinary, bars_pubs, wellness, secret_spots, essentials)."
+        '"essentials":[{"title":"<practical advice/emergency item>","description":"<numbers, hospital, transit, scam tips>","address":"<citywide>"}],'
+        '"shopping":[{"title":"<real bazaar or mall>","description":"<handicrafts or brands>","address":"<area>","price_range":"$$"}],'
+        '"adventures":[{"title":"<real outdoor thrill/trek>","description":"<activity details>","address":"<area>","price_range":"$$$"}],'
+        '"theme_parks":[{"title":"<real amusement or water park>","description":"<attractions>","address":"<area>","price_range":"$$"}]}\n'
+        f"Generate exactly {days} days with {stops_per_day} stops each, plus 3 to 5 real items for each of the 10 pillars (attractions, events, culinary, bars_pubs, wellness, secret_spots, essentials, shopping, adventures, theme_parks)."
     )
 
     traveler_context_str = ""
@@ -743,6 +752,9 @@ async def generate_trip_with_groq(
         wellness=map_pillar_items(getattr(ai_trip, 'wellness', []), "Wellness & Meditation"),
         secret_spots=map_pillar_items(getattr(ai_trip, 'secret_spots', []), "Secret Spots"),
         essentials=map_pillar_items(getattr(ai_trip, 'essentials', []), "Travel Essentials"),
+        shopping=map_pillar_items(getattr(ai_trip, 'shopping', []), "Shopping"),
+        adventures=map_pillar_items(getattr(ai_trip, 'adventures', []), "Adventures"),
+        theme_parks=map_pillar_items(getattr(ai_trip, 'theme_parks', []), "Theme Parks"),
     )
 
 
@@ -991,6 +1003,60 @@ async def build_fallback_trip_plan(location: str, days: int, start_day: date, cl
             ])
         ]
 
+        shopping = [
+            PillarItem(
+                id=f"shop-{i+1}",
+                title=clean_stop_title(title, destination),
+                category="Shopping",
+                description=desc,
+                address=destination,
+                maps_url=generate_maps_link(title, destination),
+                lat=coordinates.lat,
+                lng=coordinates.lng,
+                price_range=price
+            ) for i, (title, desc, price) in enumerate([
+                ("Central Heritage Bazaar & Handicrafts", "Historic market lane famous for local embroidery, crafts, and souvenirs.", "$$"),
+                ("Grand City Galleria Mall", "Modern luxury shopping complex featuring global fashion brands and arcade.", "$$$"),
+                ("Artisanal Street Flea Market", "Vibrant evening flea market offering vintage finds, jewelry, and art.", "$")
+            ])
+        ]
+
+        adventures = [
+            PillarItem(
+                id=f"adv-{i+1}",
+                title=clean_stop_title(title, destination),
+                category="Adventures",
+                description=desc,
+                address=destination,
+                maps_url=generate_maps_link(title, destination),
+                lat=coordinates.lat,
+                lng=coordinates.lng,
+                price_range=price
+            ) for i, (title, desc, price) in enumerate([
+                ("Scenic Nature Trail & Ridge Trek", "Guided outdoor hiking trail with stunning panoramic valley views.", "$$"),
+                ("River Kayaking & Water Thrills", "Exciting water sports adventure along scenic riverways.", "$$$"),
+                ("Off-Road Quad Biking Safari", "High-octane terrain safari adventure through scenic wilderness.", "$$$")
+            ])
+        ]
+
+        theme_parks = [
+            PillarItem(
+                id=f"park-{i+1}",
+                title=clean_stop_title(title, destination),
+                category="Theme Parks",
+                description=desc,
+                address=destination,
+                maps_url=generate_maps_link(title, destination),
+                lat=coordinates.lat,
+                lng=coordinates.lng,
+                price_range=price
+            ) for i, (title, desc, price) in enumerate([
+                ("Grand Water Kingdom & Wave Pool", "Massive water park with thrilling slides, lazy river, and wave pool.", "$$$"),
+                ("Cyber Thrill Amusement Park", "Roller coasters, 4D dark rides, and family entertainment zones.", "$$$"),
+                ("Retro VR & Arcade World", "Futuristic virtual reality gaming zone and classic arcade arena.", "$$")
+            ])
+        ]
+
         return TripPlanResponse(
             destination=destination,
             destination_image=destination_image,
@@ -1010,6 +1076,9 @@ async def build_fallback_trip_plan(location: str, days: int, start_day: date, cl
             wellness=wellness,
             secret_spots=secret_spots,
             essentials=essentials,
+            shopping=shopping,
+            adventures=adventures,
+            theme_parks=theme_parks,
         )
     except Exception as exc:
         logger.error("Critical error building fallback trip plan for %s: %s", location, exc, exc_info=True)
