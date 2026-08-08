@@ -1,6 +1,5 @@
 "use client";
 
-import AgendaTab from "./AgendaTab";
 import PillarTab from "./PillarTab";
 import {
   Compass,
@@ -13,7 +12,6 @@ import {
   ShoppingBag,
   Mountain,
   Palmtree,
-  LayoutList,
 } from "lucide-react";
 import { getTranslation, LanguageName } from "@/lib/i18n";
 
@@ -43,7 +41,6 @@ export default function TabController({
     { id: "shopping", icon: ShoppingBag, label: t.shoppingPillar },
     { id: "adventures", icon: Mountain, label: t.adventuresPillar },
     { id: "theme_parks", icon: Palmtree, label: t.themeParksPillar },
-    { id: "agenda", icon: LayoutList, label: t.agenda },
   ];
 
   const destination = trip?.destination || "Destination";
@@ -148,7 +145,6 @@ export default function TabController({
             selectedLanguage={selectedLanguage}
           />
         )}
-        {activeTab === "agenda" && <AgendaTab trip={trip} setTrip={setTrip} />}
       </div>
     </div>
   );
