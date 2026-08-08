@@ -672,7 +672,7 @@ async def generate_trip_with_groq(
                 "temperature": 0.3,
                 "max_tokens": 3000,
             },
-            timeout=8.0,
+            timeout=12.0,
         )
         if response.status_code != 200:
             logger.error("Groq API error response (%s): %s", response.status_code, response.text)
@@ -840,97 +840,85 @@ async def generate_trip_with_groq(
     )
 
 
-def fallback_coordinates_for(location: str) -> Coordinates:
-    location_lower = location.lower()
-    for city_name, coordinates in FALLBACK_CITY_COORDINATES.items():
-        if city_name in location_lower:
-            return coordinates
-    return Coordinates(lat=26.8467, lng=80.9462)
+CITY_REAL_VENUES = {
+    "lucknow": {
+        "attractions": ["Bara Imambara & Bhool Bhulaiya", "Rumi Darwaza", "Chota Imambara", "Ambedkar Memorial Park"],
+        "events": ["Lucknow Mahotsav Cultural Night", "Gomti Riverfront Light Show", "Hazratganj Live Music Evenings"],
+        "culinary": ["Tunday Kababi (Aminabad)", "Dastarkhwan (Hazratganj)", "Prakash Ki Kulfi", "Sharma Tea Stall"],
+        "bars_pubs": ["Sky Glasshouse", "The Flying Saucer Cafe", "Vintageland Lucknow", "Mocobos Bar"],
+        "wellness": ["Gomti Riverfront Yoga Park", "Janasheen Herbal Spa", "Lohia Park Morning Walk Trail"],
+        "secret_spots": ["Residency Historical Gardens", "Kudia Ghat Sunset Point", "Chattar Manzil Complex"],
+        "essentials": ["Charbagh Railway Station Hub", "Chowk Medical Store", "Hazratganj Tourist Information Center"],
+        "shopping": ["Hazratganj Market", "Aminabad Street Bazaar", "Chowk Chikan Embroidery Market", "Phoenix Palassio Mall"],
+        "adventures": ["Kukrail Reserve Forest Trail", "Gomti River Kayaking Club", "Anandi Water Park Zip Line"],
+        "theme_parks": ["Anandi Water Park", "Dream World Amusement Park", "Nilansh Theme Resort & Water Park"]
+    },
+    "paris": {
+        "attractions": ["Eiffel Tower", "Louvre Museum", "Cathédrale Notre-Dame", "Arc de Triomphe"],
+        "events": ["Seine Sunset Music Cruise", "Montmartre Art Walk", "Paris Fashion Week Showcase"],
+        "culinary": ["Le Relais de l'Entrecôte", "L'As du Fallafel", "Angelina Paris", "Du Pain et des Idées"],
+        "bars_pubs": ["Le Syndicat", "Café de Flore", "Little Red Door", "Harry's New York Bar"],
+        "wellness": ["Spa Pont-Neuf", "Jardin du Luxembourg Yoga", "Ritz Club & Spa"],
+        "secret_spots": ["Promenade Plantée", "Rue Crémieux", "Musée de l'Orangerie", "Sainte-Chapelle"],
+        "essentials": ["Hôtel-Dieu Emergency Desk (112)", "RATP Metro Station Hub", "Charles de Gaulle Express Center"],
+        "shopping": ["Galeries Lafayette Haussmann", "Champs-Élysées Boutiques", "Marché aux Puces de Saint-Ouen"],
+        "adventures": ["Seine Kayaking Expedition", "Bois de Boulogne Bike Loop", "Catacombes Deep Exploration"],
+        "theme_parks": ["Disneyland Paris", "Parc Astérix", "Jardin d'Acclimatation"]
+    },
+    "delhi": {
+        "attractions": ["Red Fort", "Qutub Minar", "India Gate", "Humayun's Tomb"],
+        "events": ["Dilli Haat Cultural Festival", "India Habitat Centre Art Showcase", "Chandni Chowk Night Food Walk"],
+        "culinary": ["Karim's Chandni Chowk", "Bukhara (ITC Maurya)", "Saravana Bhavan", "Natraj Dahi Bhalle"],
+        "bars_pubs": ["Sidecar GK2", "PCO Speakeasy", "The Electric Room", "Local CP"],
+        "wellness": ["Lodhi Garden Sunrise Yoga", "Kairali Ayurvedic Center", "The Imperial Spa"],
+        "secret_spots": ["Agrasen ki Baoli", "Hauz Khas Fort Sunset Point", "Majnu ka Tilla Secret Alley"],
+        "essentials": ["AIIMS Emergency Desk (112)", "Delhi Metro Card Center", "New Delhi Railway Station Help Desk"],
+        "shopping": ["Chandni Chowk Bazaar", "Khan Market Boutiques", "Dilli Haat Handicrafts", "Select CITYWALK"],
+        "adventures": ["Aravalli Biodiversity Park Trail", "Yamuna Sports Complex Cycling", "Asola Bhatti Wildlife Safari"],
+        "theme_parks": ["Adventure Island Rohini", "Worlds of Wonder Noida", "Fun N Food Village"]
+    }
+}
 
 
-async def build_fallback_trip_plan(location: str, days: int, start_day: date, client: httpx.AsyncClient) -> TripPlanResponse:
+async def build_fallback_trip_plan(
+    location: str,
+    days: int = 3,
+    start_day: Optional[date] = None,
+    client: Optional[httpx.AsyncClient] = None
+) -> TripPlanResponse:
+    destination = (location or "Lucknow").strip().title()
+    dest_key = destination.lower().strip()
+    start_day = start_day or date.today()
+    coordinates = fallback_coordinates_for(destination)
+    destination_image = await get_async_place_photo(client, f"{destination} landmark", destination) if client else PEXELS_FALLBACK
+
+    matched_venues = None
+    for k, v in CITY_REAL_VENUES.items():
+        if k in dest_key or dest_key in k:
+            matched_venues = v
+            break
+
+    def get_fallback_venue(cat_key: str, index: int, default_pattern: str) -> str:
+        if matched_venues and cat_key in matched_venues and index < len(matched_venues[cat_key]):
+            return matched_venues[cat_key][index]
+        return f"{destination} {default_pattern}"
+
     try:
-        coordinates = fallback_coordinates_for(location)
-        destination = location.title()
-        destination_image = await fetch_real_image(client, destination)
-        routes: List[TripDayRoute] = []
         itinerary: List[TripStop] = []
-        stop_templates = [
-            # Day 1
-            [("Central Plaza & Downtown Walk", "Sightseeing", 0.00, 0.00),
-             ("Historic Quarter Exploration", "Culture", 0.01, 0.02),
-             ("Sunset Viewpoint & Lounge", "Relaxation", -0.01, 0.03)],
-            # Day 2
-            [("Grand Art Museum", "Art", 0.03, 0.04),
-             ("Bustling Local Market & Street Food", "Culinary", 0.02, 0.01),
-             ("Botanical Gardens", "Nature", -0.02, -0.01)],
-            # Day 3
-            [("Cultural Heritage Monument", "Culture", -0.03, 0.02),
-             ("Riverside Promenade", "Sightseeing", 0.01, -0.02),
-             ("Neon Night Market", "Shopping", 0.04, 0.00)],
-            # Day 4
-            [("Hidden Gem Alleyways", "Sightseeing", 0.02, 0.03),
-             ("Famous Local Eatery", "Culinary", 0.00, -0.03),
-             ("City Skyline Observatory", "Sightseeing", -0.01, -0.01)],
-            # Day 5+ (Fallback)
-            [("Morning Cafe & Walk", "Relaxation", 0.01, 0.01),
-             ("Shopping District", "Shopping", -0.02, 0.02),
-             ("Evening Theater or Show", "Entertainment", 0.03, -0.02)]
-        ]
+        routes: List[TripDayRoute] = []
 
         for day_index in range(days):
             day_number = day_index + 1
             trip_date = start_day.fromordinal(start_day.toordinal() + day_index)
             day_coordinates: List[List[float]] = []
 
-            day_templates = stop_templates[day_index % len(stop_templates)]
-
-            for stop_index, (title, category, lat_offset, lng_offset) in enumerate(day_templates):
-                stop_lat = coordinates.lat + lat_offset + (day_index * 0.01)
-                stop_lng = coordinates.lng + lng_offset + (day_index * 0.01)
+            for stop_index in range(3):
+                stop_lat = coordinates.lat + (stop_index * 0.005) + (day_index * 0.01)
+                stop_lng = coordinates.lng + (stop_index * 0.005) + (day_index * 0.01)
                 
-                # Special hardcode for famous test cases
-                venue_title = clean_stop_title(title, destination)
-                loc_lower = location.lower()
-                if loc_lower == "lucknow":
-                    lucknow_stops = [
-                        [
-                            ("Bara Imambara & Bhool Bhulaiya", 26.8689, 80.9128),
-                            ("Rumi Darwaza", 26.8710, 80.9126),
-                            ("Tunday Kababi Chowk", 26.8606, 80.9158),
-                        ],
-                        [
-                            ("Chota Imambara", 26.8738, 80.9064),
-                            ("Hazratganj Market & Royal Cafe", 26.8502, 80.9499),
-                            ("Dastarkhwan Lalbagh", 26.8488, 80.9431),
-                        ],
-                        [
-                            ("British Residency", 26.8605, 80.9272),
-                            ("Ambedkar Memorial Park", 26.8482, 80.9782),
-                            ("Janeshwar Mishra Park", 26.8373, 80.9936),
-                        ]
-                    ]
-                    day_lk = lucknow_stops[day_index % len(lucknow_stops)]
-                    stop_lk = day_lk[stop_index % len(day_lk)]
-                    venue_title = stop_lk[0]
-                    stop_lat = stop_lk[1]
-                    stop_lng = stop_lk[2]
-                elif loc_lower == "paris":
-                    if day_index == 0:
-                        venue_title = ["Eiffel Tower", "Louvre Museum", "Seine River Cruise"][stop_index % 3]
-                    elif day_index == 1:
-                        venue_title = ["Cathédrale Notre-Dame", "Le Marais", "Sainte-Chapelle"][stop_index % 3]
-                    elif day_index == 2:
-                        venue_title = ["Arc de Triomphe", "Champs-Élysées", "Sacré-Cœur"][stop_index % 3]
-                elif loc_lower == "delhi":
-                    if day_index == 0:
-                        venue_title = ["Red Fort", "Chandni Chowk", "Jama Masjid"][stop_index % 3]
-                    elif day_index == 1:
-                        venue_title = ["Qutub Minar", "Lotus Temple", "Hauz Khas Village"][stop_index % 3]
-                    elif day_index == 2:
-                        venue_title = ["India Gate", "Humayun's Tomb", "Connaught Place"][stop_index % 3]
+                venue_title = get_fallback_venue("attractions", (day_index * 3) + stop_index, f"Heritage Spot {stop_index + 1}")
+                stop_image = await get_async_place_photo(client, venue_title, destination) if client else PEXELS_FALLBACK
 
-                stop_image = await fetch_real_image(client, venue_title, f"{title} {destination}")
                 itinerary.append(
                     TripStop(
                         id=f"fallback-{day_number}-{stop_index + 1}",
@@ -939,7 +927,7 @@ async def build_fallback_trip_plan(location: str, days: int, start_day: date, cl
                         time=build_time_label(stop_index),
                         title=venue_title,
                         location=destination,
-                        type=category.upper(),
+                        type="ATTRACTION",
                         creators=f"Starts at {build_time_label(stop_index)}",
                         distance=f"{round((stop_index + 1) * 1.8, 1)}km",
                         elevation="N/A",
@@ -960,184 +948,42 @@ async def build_fallback_trip_plan(location: str, days: int, start_day: date, cl
                 route.geojson["properties"] = {"fallback": True}
             routes.append(route)
 
-        # Build 7 Pillars for fallback
-        attractions = [
-            PillarItem(
-                id=f"attr-{i+1}",
-                title=clean_stop_title(stop.title, destination),
-                category="Tourist Attractions",
-                description=f"Iconic landmark in {destination}.",
-                address=stop.location or destination,
-                maps_url=generate_maps_link(stop.title, destination),
-                lat=stop.lat,
-                lng=stop.lng,
-                price_range=stop.cost_range
-            ) for i, stop in enumerate(itinerary[:6])
-        ]
-        
-        events = [
-            PillarItem(
-                id=f"event-{i+1}",
-                title=clean_stop_title(title, destination),
-                category="Events",
-                description=desc,
-                address=destination,
-                maps_url=generate_maps_link(title, destination),
-                lat=coordinates.lat,
-                lng=coordinates.lng,
-                event_time=e_time,
-                price_range=price
-            ) for i, (title, desc, e_time, price) in enumerate([
-                ("Live Music & Sunset Session", "Acoustic live performances and sunset social.", "07:00 PM - 10:00 PM", "$15 - $30"),
-                ("Local Standup Comedy Night", "Evening comedy show featuring top local talent.", "08:00 PM - 09:30 PM", "$10 - $20"),
-                ("Cultural Art Exhibition", "Contemporary regional art showcase and guided walk.", "11:00 AM - 05:00 PM", "$5 - $15")
-            ])
-        ]
+        async def build_pillar_list(cat_key: str, cat_label: str, defaults: List[str]) -> List[PillarItem]:
+            res = []
+            for i, default_pat in enumerate(defaults):
+                v_title = get_fallback_venue(cat_key, i, default_pat)
+                img = await get_async_place_photo(client, v_title, destination) if client else PEXELS_FALLBACK
+                res.append(
+                    PillarItem(
+                        id=f"{cat_key}-{i+1}",
+                        title=v_title,
+                        category=cat_label,
+                        description=f"Verified landmark experience in {destination}.",
+                        address=destination,
+                        maps_url=generate_maps_link(v_title, destination),
+                        image_url=img,
+                        lat=coordinates.lat,
+                        lng=coordinates.lng,
+                        price_range="$$"
+                    )
+                )
+            return res
 
-        culinary = [
-            PillarItem(
-                id=f"culinary-{i+1}",
-                title=clean_stop_title(title, destination),
-                category="Culinary",
-                description=desc,
-                address=destination,
-                maps_url=generate_maps_link(title, destination),
-                lat=coordinates.lat,
-                lng=coordinates.lng,
-                serving_style=style,
-                price_range=price
-            ) for i, (title, desc, style, price) in enumerate([
-                ("Heritage Signature Eatery", "Famous local specialty dishes and traditional recipe hub.", "A la carte", "$$$"),
-                ("Bustling Local Street Food Market", "Iconic street stalls serving legendary local snacks.", "Street Food", "$"),
-                ("Panoramic Rooftop Dining Cafe", "Multi-cuisine buffet with stunning city skyline views.", "Buffet", "$$")
-            ])
-        ]
-
-        bars_pubs = [
-            PillarItem(
-                id=f"pub-{i+1}",
-                title=clean_stop_title(title, destination),
-                category="Bars & Pubs",
-                description=desc,
-                address=destination,
-                maps_url=generate_maps_link(title, destination),
-                lat=coordinates.lat,
-                lng=coordinates.lng,
-                price_range=price
-            ) for i, (title, desc, price) in enumerate([
-                ("Cyber Rooftop Lounge", "Craft cocktails, DJ beats, and panoramic evening vibes.", "$$$"),
-                ("Speakeasy Underground Taproom", "Artisanal brews and vintage cocktail lounge.", "$$"),
-                ("High-Energy Social Pub", "Live sports screening, craft beer taps, and pub bites.", "$$")
-            ])
-        ]
-
-        wellness = [
-            PillarItem(
-                id=f"wellness-{i+1}",
-                title=clean_stop_title(title, destination),
-                category="Wellness & Meditation",
-                description=desc,
-                address=destination,
-                maps_url=generate_maps_link(title, destination),
-                lat=coordinates.lat,
-                lng=coordinates.lng,
-                price_range=price
-            ) for i, (title, desc, price) in enumerate([
-                ("Serene Urban Spa & Sauna", "Full body aromatherapy, hot stone massage, and herbal sauna.", "$$$"),
-                ("Sunrise Yoga & Meditation Studio", "Guided mindfulness sessions, breathwork, and sound bath.", "$$"),
-                ("Premium Fitness & Health Club", "State-of-the-art gym, hydrotherapy pool, and recovery lounge.", "$$")
-            ])
-        ]
-
-        secret_spots = [
-            PillarItem(
-                id=f"secret-{i+1}",
-                title=clean_stop_title(title, destination),
-                category="Secret Spots",
-                description=desc,
-                address=destination,
-                maps_url=generate_maps_link(title, destination),
-                lat=coordinates.lat,
-                lng=coordinates.lng,
-                price_range=price
-            ) for i, (title, desc, price) in enumerate([
-                ("Hidden Courtyard Artisanal Cafe", "Quiet leafy courtyard hidden behind historic alleyways.", "$"),
-                ("Secret Panoramic Skyline Alley", "Secluded viewpoint favored by local photographers.", "Free"),
-                ("Street Art & Vinyl Listening Room", "Underground music lounge and mural alleyway.", "$")
-            ])
-        ]
-
-        essentials = [
-            PillarItem(
-                id=f"essential-{i+1}",
-                title=title,
-                category="Travel Essentials",
-                description=desc,
-                address=destination,
-                maps_url=generate_maps_link(f"{title} {destination}", destination),
-                lat=coordinates.lat,
-                lng=coordinates.lng,
-                price_range="Info"
-            ) for i, (title, desc) in enumerate([
-                ("Emergency Contacts & Medical Hospitals", "Primary emergency response line: 112 / 911. Central City Hospital emergency desk open 24/7."),
-                ("Public Transit & Taxi Advice", "Use official metered cabs, ride-hailing apps, or subway passes. Agree on fare beforehand for local rickshaws."),
-                ("Safety & Scam Warning Notes", "Keep valuables secure in crowded markets. Only exchange currency at authorized bank counters.")
-            ])
-        ]
-
-        shopping = [
-            PillarItem(
-                id=f"shop-{i+1}",
-                title=clean_stop_title(title, destination),
-                category="Shopping",
-                description=desc,
-                address=destination,
-                maps_url=generate_maps_link(title, destination),
-                lat=coordinates.lat,
-                lng=coordinates.lng,
-                price_range=price
-            ) for i, (title, desc, price) in enumerate([
-                ("Central Heritage Bazaar & Handicrafts", "Historic market lane famous for local embroidery, crafts, and souvenirs.", "$$"),
-                ("Grand City Galleria Mall", "Modern luxury shopping complex featuring global fashion brands and arcade.", "$$$"),
-                ("Artisanal Street Flea Market", "Vibrant evening flea market offering vintage finds, jewelry, and art.", "$")
-            ])
-        ]
-
-        adventures = [
-            PillarItem(
-                id=f"adv-{i+1}",
-                title=clean_stop_title(title, destination),
-                category="Adventures",
-                description=desc,
-                address=destination,
-                maps_url=generate_maps_link(title, destination),
-                lat=coordinates.lat,
-                lng=coordinates.lng,
-                price_range=price
-            ) for i, (title, desc, price) in enumerate([
-                ("Scenic Nature Trail & Ridge Trek", "Guided outdoor hiking trail with stunning panoramic valley views.", "$$"),
-                ("River Kayaking & Water Thrills", "Exciting water sports adventure along scenic riverways.", "$$$"),
-                ("Off-Road Quad Biking Safari", "High-octane terrain safari adventure through scenic wilderness.", "$$$")
-            ])
-        ]
-
-        theme_parks = [
-            PillarItem(
-                id=f"park-{i+1}",
-                title=clean_stop_title(title, destination),
-                category="Theme Parks",
-                description=desc,
-                address=destination,
-                maps_url=generate_maps_link(title, destination),
-                lat=coordinates.lat,
-                lng=coordinates.lng,
-                price_range=price
-            ) for i, (title, desc, price) in enumerate([
-                ("Grand Water Kingdom & Wave Pool", "Massive water park with thrilling slides, lazy river, and wave pool.", "$$$"),
-                ("Cyber Thrill Amusement Park", "Roller coasters, 4D dark rides, and family entertainment zones.", "$$$"),
-                ("Retro VR & Arcade World", "Futuristic virtual reality gaming zone and classic arcade arena.", "$$")
-            ])
-        ]
+        (
+            attractions, events, culinary, bars_pubs, wellness,
+            secret_spots, essentials, shopping, adventures, theme_parks
+        ) = await asyncio.gather(
+            build_pillar_list("attractions", "Tourist Attractions", ["Historic Landmark", "Cultural Center", "City Promenade", "Royal Monument"]),
+            build_pillar_list("events", "Events", ["Cultural Evening Gala", "Live Music Session", "Heritage Art Showcase"]),
+            build_pillar_list("culinary", "Culinary", ["Legendary Specialty Eatery", "Street Food Haven", "Rooftop Dining Lounge"]),
+            build_pillar_list("bars_pubs", "Bars & Pubs", ["Skyline Lounge & Bar", "Craft Cocktail Taproom", "Vibrant Social Club"]),
+            build_pillar_list("wellness", "Wellness & Meditation", ["Serene Herbal Spa", "Sunrise Meditation Park", "Luxury Wellness Pavilion"]),
+            build_pillar_list("secret_spots", "Secret Spots", ["Hidden Courtyard Cafe", "Scenic Sunset Point", "Historic Alleyway Walk"]),
+            build_pillar_list("essentials", "Travel Essentials", ["Medical & Emergency Desk", "Central Transit Station", "Tourist Information Center"]),
+            build_pillar_list("shopping", "Shopping", ["Traditional Artisan Bazaar", "Bustling Street Market", "Luxury Shopping Galleria"]),
+            build_pillar_list("adventures", "Adventures", ["Outdoor Nature Reserve", "Riverfront Kayaking & Trails", "Scenic Ridge Trek"]),
+            build_pillar_list("theme_parks", "Theme Parks", ["Grand Water Kingdom", "Thrill Amusement World", "Family Adventure Resort"]),
+        )
 
         return TripPlanResponse(
             destination=destination,
@@ -1541,7 +1387,7 @@ async def handle_trip_plan_request(
                         client, destination_name, days, start_day, coordinates,
                         body.categories, body.pace, body.budget, body.travelers, body.language
                     ),
-                    timeout=8.0
+                    timeout=12.0
                 )
                 if groq_trip:
                     if key:
