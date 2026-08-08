@@ -3,6 +3,7 @@
 import { useState } from "react";
 import PillarTab, { PillarItemData } from "./PillarTab";
 import PlanBuilderDrawer, { SavedPlanItem } from "./PlanBuilderDrawer";
+import WeatherBadge from "./WeatherBadge";
 import {
   Compass,
   Ticket,
@@ -72,13 +73,22 @@ export default function TabController({
     <div className="flex flex-col h-full relative">
       <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 shrink-0">
         <h2 className="font-syne font-bold text-lg text-white">{t.commandCenter}</h2>
-        <button
-          onClick={() => setIsDrawerOpen(true)}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-mono font-bold hover:bg-emerald-500 hover:text-black transition-all shadow-md"
-        >
-          <Calendar className="w-3.5 h-3.5" />
-          <span>Itinerary Plan ({savedPlanItems.length})</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {destination && destination !== "Destination" && (
+            <WeatherBadge
+              destination={destination}
+              startDate={trip?.start_date || ""}
+              endDate={trip?.end_date || ""}
+            />
+          )}
+          <button
+            onClick={() => setIsDrawerOpen(true)}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-mono font-bold hover:bg-emerald-500 hover:text-black transition-all shadow-md"
+          >
+            <Calendar className="w-3.5 h-3.5" />
+            <span>Itinerary Plan ({savedPlanItems.length})</span>
+          </button>
+        </div>
       </div>
 
       {/* Tab Navigation */}

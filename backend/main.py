@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 TOMTOM_API_KEY      = os.getenv("TOMTOM_API_KEY")
 TOMTOM_BASE         = "https://api.tomtom.com"
-OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
+OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY") or os.getenv("WEATHER_API_KEY")
 UNSPLASH_ACCESS_KEY = os.getenv("UNSPLASH_ACCESS_KEY", "NaJtl01BUQuN6F1KxWYRAdCFHi3DTIRnxNXHYaegLg8")
 PEXELS_API_KEY      = os.getenv("PEXELS_API_KEY", "rMYuM4ugKNz9f8qaj4zKDIohSR0HAHsqlodYVJk3JqRNglPRVs2AGNMF")
 PEXELS_BASE         = "https://api.pexels.com/v1/search"
@@ -1464,6 +1464,105 @@ async def build_trip_plan_api(
     except Exception as e:
         logger.error(f"Fallback caught endpoint error: {e}")
         return await build_fallback_trip_plan(body.destination or body.location or "Lucknow", body.days or 3, body.start_date, client)
+
+
+# ─────────────────────────────────────────────
+#  6b. LIVE WEATHER ENDPOINT
+# ─────────────────────────────────────────────
+
+WMO_CODE_MAP = {
+    0: ("Clear Sky", "☀️"), 1: ("Mainly Clear", "🌤️"), 2: ("Partly Cloudy", "⛅"),
+    3: ("Overcast", "☁️"), 45: ("Foggy", "🌫️"), 48: ("Icy Fog", "🌫️"),
+    51: ("Light Drizzle", "🌦️"), 53: ("Drizzle", "🌦️"), 55: ("Heavy Drizzle", "🌧️"),
+    61: ("Light Rain", "🌧️"), 63: ("Rain", "🌧️"), 65: ("Heavy Rain", "🌧️"),
+    71: ("Light Snow", "🌨️"), 73: ("Snow", "❄️"), 75: ("Heavy Snow", "❄️"),
+    80: ("Rain Showers", "🌦️"), 81: ("Showers", "🌦️"), 82: ("Violent Showers", "⛈️"),
+    95: ("Thunderstorm", "⛈️"), 96: ("Thunderstorm + Hail", "⛈️"), 99: ("Severe Thunderstorm", "⛈️"),
+}
+
+@app.get("/api/weather", tags=["Weather"])
+async def get_destination_weather(
+    destination: str,
+    start_date: str = "",
+    end_date: str = "",
+):
+    coords = fallback_coordinates_for(destination)
+
+    # Tier 1: OpenWeatherMap (if key present)
+    if OPENWEATHER_API_KEY:
+        try:
+            async with httpx.AsyncClient(timeout=4.0) as cli:
+                r = await cli.get(
+                    "https://api.openweathermap.org/data/2.5/weather",
+                    params={"lat": coords.lat, "lon": coords.lng, "units": "metric", "appid": OPENWEATHER_API_KEY},
+                )
+                if r.status_code == 200:
+                    d = r.json()
+                    return {
+                        "temp_c": round(d["main"]["temp"]),
+                        "feels_like_c": round(d["main"].get("feels_like", d["main"]["temp"])),
+                        "condition": d["weather"][0]["main"],
+                        "description": d["weather"][0]["description"].title(),
+                        "icon": d["weather"][0]["icon"],
+                        "emoji": "🌤️",
+                        "humidity": d["main"].get("humidity", 60),
+                        "source": "openweathermap",
+                    }
+        except Exception as exc:
+            logger.warning("OpenWeather failed for %s: %s", destination, exc)
+
+    # Tier 2: Free Open-Meteo (no key required)
+    try:
+        params: Dict[str, Any] = {
+            "latitude": coords.lat, "longitude": coords.lng,
+            "current": "temperature_2m,weathercode,relativehumidity_2m,apparent_temperature",
+            "timezone": "auto",
+        }
+        # Add date range if provided
+        if start_date:
+            params["start_date"] = start_date
+            params["end_date"] = end_date or start_date
+            params["daily"] = "temperature_2m_max,temperature_2m_min,weathercode"
+        async with httpx.AsyncClient(timeout=4.0) as cli:
+            r = await cli.get("https://api.open-meteo.com/v1/forecast", params=params)
+            if r.status_code == 200:
+                data = r.json()
+                cw = data.get("current", {})
+                temp = round(cw.get("temperature_2m", 28))
+                wmo = cw.get("weathercode", 1)
+                cond, emoji = WMO_CODE_MAP.get(wmo, ("Partly Cloudy", "🌤️"))
+                humidity = cw.get("relativehumidity_2m", 60)
+
+                # Build daily breakdown if date range requested
+                daily_breakdown = []
+                if start_date and "daily" in data:
+                    daily = data["daily"]
+                    for i, dt in enumerate(daily.get("time", [])):
+                        wmo_d = daily.get("weathercode", [])[i] if i < len(daily.get("weathercode", [])) else 1
+                        cond_d, emoji_d = WMO_CODE_MAP.get(wmo_d, ("Partly Cloudy", "🌤️"))
+                        daily_breakdown.append({
+                            "date": dt,
+                            "max_c": round(daily.get("temperature_2m_max", [temp])[i] if i < len(daily.get("temperature_2m_max", [])) else temp),
+                            "min_c": round(daily.get("temperature_2m_min", [temp])[i] if i < len(daily.get("temperature_2m_min", [])) else temp),
+                            "condition": cond_d,
+                            "emoji": emoji_d,
+                        })
+
+                return {
+                    "temp_c": temp,
+                    "feels_like_c": round(cw.get("apparent_temperature", temp)),
+                    "condition": cond,
+                    "description": cond,
+                    "icon": "02d",
+                    "emoji": emoji,
+                    "humidity": humidity,
+                    "daily": daily_breakdown,
+                    "source": "open-meteo",
+                }
+    except Exception as exc:
+        logger.warning("Open-Meteo failed for %s: %s", destination, exc)
+
+    return {"temp_c": 30, "condition": "Sunny", "description": "Clear Sky", "icon": "01d", "emoji": "☀️", "humidity": 50, "daily": [], "source": "fallback"}
 
 
 # ─────────────────────────────────────────────
