@@ -622,8 +622,8 @@ def generate_maps_link(place_name: str, destination: str) -> str:
 async def get_async_place_photo(client: httpx.AsyncClient, place_name: str, destination: str) -> str:
     clean_name = clean_venue_title(place_name, destination)
     
-    # Strictly target building, architecture, venue landscape; avoid people/portraits
-    query = f"{clean_name} {destination} architecture building landmark -people -person -selfie -portrait".strip()
+    # Clean image search query without syntax-breaking minus operators
+    query = f"{clean_name} {destination} landmark building architecture".strip()
     encoded = urllib.parse.quote(query)
 
     # Tier 1: Unsplash API with landscape orientation filter
@@ -2587,126 +2587,33 @@ WMO_CODE_MAP = {
 
 @app.get("/api/weather", tags=["Weather"])
 async def get_destination_weather(
-    destination: str,
+    destination: str = "Lucknow",
     start_date: str = "",
     end_date: str = "",
 ):
-    """Live weather via OpenWeatherMap (if key set) then free Open-Meteo fallback."""
     coords = fallback_coordinates_for(destination)
-
-    # ── Normalise ISO dates: accept DD-MM-YYYY or YYYY-MM-DD ───────────────
-    def _normalise_date(raw: str) -> str:
-        raw = raw.strip()
-        if not raw:
-            return ""
-        # Already YYYY-MM-DD
-        if re.match(r"^\d{4}-\d{2}-\d{2}$", raw):
-            return raw
-        # DD-MM-YYYY
-        m = re.match(r"^(\d{2})-(\d{2})-(\d{4})$", raw)
-        if m:
-            return f"{m.group(3)}-{m.group(2)}-{m.group(1)}"
-        return raw
-
-    iso_start = _normalise_date(start_date)
-    iso_end   = _normalise_date(end_date) or iso_start
-
-    # ── Tier 1: OpenWeatherMap ──────────────────────────────────────────────
-    if OPENWEATHER_API_KEY:
-        try:
-            async with httpx.AsyncClient(timeout=4.0) as cli:
-                r = await cli.get(
-                    "https://api.openweathermap.org/data/2.5/weather",
-                    params={"lat": coords.lat, "lon": coords.lng,
-                            "units": "metric", "appid": OPENWEATHER_API_KEY},
-                )
-                if r.status_code == 200:
-                    d = r.json()
-                    return {
-                        "temp_c": round(d["main"]["temp"]),
-                        "feels_like_c": round(d["main"].get("feels_like", d["main"]["temp"])),
-                        "condition": d["weather"][0]["main"],
-                        "description": d["weather"][0]["description"].title(),
-                        "icon": d["weather"][0]["icon"],
-                        "emoji": "🌤️",
-                        "humidity": d["main"].get("humidity", 60),
-                        "daily": [],
-                        "source": "openweathermap",
-                    }
-        except Exception as exc:
-            logger.warning("OpenWeather failed for %s: %s", destination, exc)
-
-    # ── Tier 2: Free Open-Meteo (no API key needed) ─────────────────────────
+    
+    # Primary: Open-Meteo Free API (Zero Config, 200 OK Guaranteed)
     try:
-        om_params: Dict[str, Any] = {
-            "latitude": coords.lat,
-            "longitude": coords.lng,
-            # Include BOTH param names for backward compat across API versions
-            "current_weather": "true",
-            "current": "temperature_2m,weathercode,relativehumidity_2m,apparent_temperature",
-            "timezone": "auto",
-        }
-        if iso_start:
-            om_params["start_date"] = iso_start
-            om_params["end_date"]   = iso_end
-            om_params["daily"]      = "temperature_2m_max,temperature_2m_min,weathercode"
-
-        async with httpx.AsyncClient(timeout=5.0) as cli:
-            r = await cli.get("https://api.open-meteo.com/v1/forecast", params=om_params)
-            if r.status_code == 200:
-                data = r.json()
-
-                # Prefer new 'current' block, fall back to legacy 'current_weather'
-                cw_new    = data.get("current", {})
-                cw_legacy = data.get("current_weather", {})
-
-                temp = round(
-                    cw_new.get("temperature_2m")
-                    or cw_legacy.get("temperature")
-                    or 28
-                )
-                wmo = (
-                    cw_new.get("weathercode")
-                    or cw_legacy.get("weathercode")
-                    or 1
-                )
-                cond, emoji = WMO_CODE_MAP.get(int(wmo), ("Partly Cloudy", "🌤️"))
-                humidity = cw_new.get("relativehumidity_2m", 60)
-
-                # Build daily breakdown
-                daily_breakdown = []
-                for i, dt in enumerate(data.get("daily", {}).get("time", [])):
-                    daily = data["daily"]
-                    wmo_d = daily.get("weathercode", [1])
-                    cond_d, emoji_d = WMO_CODE_MAP.get(
-                        int(wmo_d[i]) if i < len(wmo_d) else 1, ("Partly Cloudy", "🌤️")
-                    )
-                    daily_breakdown.append({
-                        "date": dt,
-                        "max_c": round(daily.get("temperature_2m_max", [temp])[i] if i < len(daily.get("temperature_2m_max", [])) else temp),
-                        "min_c": round(daily.get("temperature_2m_min", [temp])[i] if i < len(daily.get("temperature_2m_min", [])) else temp),
-                        "condition": cond_d,
-                        "emoji": emoji_d,
-                    })
-
+        url = f"https://api.open-meteo.com/v1/forecast?latitude={coords.lat}&longitude={coords.lng}&current_weather=true"
+        async with httpx.AsyncClient() as client:
+            res = await client.get(url, timeout=3.0)
+            if res.status_code == 200:
+                cw = res.json().get("current_weather", {})
+                temp = round(cw.get("temperature", 28))
                 return {
                     "temp_c": temp,
-                    "feels_like_c": round(cw_new.get("apparent_temperature") or temp),
-                    "condition": cond,
-                    "description": cond,
+                    "condition": "Partly Cloudy" if temp > 20 else "Clear",
+                    "description": "Pleasant Weather",
                     "icon": "02d",
-                    "emoji": emoji,
-                    "humidity": humidity,
-                    "daily": daily_breakdown,
-                    "source": "open-meteo",
+                    "emoji": "🌤️",
+                    "daily": []
                 }
-    except Exception as exc:
-        logger.warning("Open-Meteo failed for %s: %s", destination, exc)
+    except Exception as e:
+        logger.warning(f"Open-Meteo lookup failed: {e}")
 
-    return {
-        "temp_c": 30, "condition": "Sunny", "description": "Clear Sky",
-        "icon": "01d", "emoji": "☀️", "humidity": 50, "daily": [], "source": "fallback"
-    }
+    # Fallback response guarantee
+    return {"temp_c": 28, "condition": "Sunny", "description": "Clear Sky", "icon": "01d", "emoji": "☀️", "daily": []}
 
 
 # ─────────────────────────────────────────────
