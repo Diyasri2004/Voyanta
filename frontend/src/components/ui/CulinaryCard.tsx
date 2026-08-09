@@ -46,16 +46,18 @@ export function CulinaryCard({
         <p className="text-xs text-zinc-400 leading-relaxed pt-1 line-clamp-2">{description}</p>
       </div>
 
-      <div className="pt-3 mt-3 border-t border-zinc-800/80 flex items-center justify-between">
-        <div className="flex items-center gap-1.5 text-xs text-zinc-400 max-w-[180px]">
+      <div className="pt-3 mt-3 border-t border-zinc-800/80 flex items-center justify-between gap-2 w-full">
+        <div className="flex items-center gap-1 text-xs text-zinc-400 min-w-0 flex-1">
           <MapPin className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
-          <span className="truncate">{location}</span>
+          <span className="truncate text-[11px] text-zinc-400">
+            {location || `${destination} Area`}
+          </span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {onAddToPlan && (
             <button
               onClick={() => onAddToPlan(item)}
-              className="px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-medium hover:bg-emerald-500/20 transition-all"
+              className="px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-medium hover:bg-emerald-500/20 transition-all shrink-0"
             >
               + Plan
             </button>
@@ -64,9 +66,9 @@ export function CulinaryCard({
             href={mapsUrl}
             target="_blank"
             rel="noreferrer"
-            className="px-3.5 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-medium hover:bg-cyan-500/20 transition-all"
+            className="shrink-0 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-medium hover:bg-cyan-500/20 transition-all flex items-center gap-1"
           >
-            Navigate
+            <span>Navigate</span>
           </a>
         </div>
       </div>
