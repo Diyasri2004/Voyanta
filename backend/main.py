@@ -619,6 +619,22 @@ def generate_maps_link(place_name: str, destination: str) -> str:
     return f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(query)}"
 
 
+def get_activity_specific_keywords(item_title: str) -> str:
+    title = item_title.lower()
+    if "cruise" in title or "boat" in title or "ferry" in title:
+        return "river cruise boat ride riverfront"
+    elif "cycle" in title or "bike" in title or "cycling" in title:
+        return "cycling tour bicycle road trail"
+    elif "kayak" in title or "rafting" in title:
+        return "kayaking water sports canoeing"
+    elif "safari" in title or "wildlife" in title or "forest" in title:
+        return "wildlife safari forest reserve nature"
+    elif "golf" in title:
+        return "golf course fairway green"
+    elif "zip" in title or "rope" in title or "climbing" in title:
+        return "zipline adventure park climbing wall"
+    return "outdoor adventure activity sports"
+
 def get_category_search_suffix(category: str) -> str:
     """Returns category-specific search intent keywords across all 11 Explorer Pillars."""
     cat = (category or "").lower()
@@ -650,13 +666,14 @@ def get_category_search_suffix(category: str) -> str:
 
 async def get_async_place_photo(client: httpx.AsyncClient, place_name: str, destination: str, category: str = "") -> str:
     clean_name = clean_venue_title(place_name, destination)
+    activity_suffix = get_activity_specific_keywords(clean_name)
     suffix = get_category_search_suffix(category)
     
-    # Target clean venue name + destination + category intent
-    query = f"{clean_name} {destination} {suffix}".strip()
+    # Target exact activity name + destination
+    query = f"{clean_name} {destination} {activity_suffix} {suffix}".strip()
     encoded = urllib.parse.quote(query)
 
-    # 1. Unsplash API (Landscape Only)
+    # 1. Unsplash API (Unique photo per activity title)
     if UNSPLASH_ACCESS_KEY:
         try:
             url = f"https://api.unsplash.com/search/photos?page=1&query={encoded}&orientation=landscape&client_id={UNSPLASH_ACCESS_KEY}&per_page=1"
@@ -668,7 +685,7 @@ async def get_async_place_photo(client: httpx.AsyncClient, place_name: str, dest
         except Exception:
             pass
 
-    # 2. Pexels API (Landscape Only)
+    # 2. Pexels API
     if PEXELS_API_KEY:
         try:
             url = f"https://api.pexels.com/v1/search?query={encoded}&orientation=landscape&per_page=1"
@@ -681,7 +698,21 @@ async def get_async_place_photo(client: httpx.AsyncClient, place_name: str, dest
         except Exception:
             pass
 
-    # 3. Universal High-Res Category Fallbacks (Guaranteed relevant imagery)
+    # Dynamic fallback based on title keywords (prevents duplicate images)
+    name_low = clean_name.lower()
+    if "cycle" in name_low or "bike" in name_low or "cycling" in name_low:
+        return "https://images.unsplash.com/photo-1541625602330-2277a4c46182?w=900&auto=format&fit=crop&q=80"
+    elif "cruise" in name_low or "boat" in name_low or "ferry" in name_low or "rowing" in name_low:
+        return "https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=900&auto=format&fit=crop&q=80"
+    elif "kayak" in name_low or "rafting" in name_low or "paddle" in name_low:
+        return "https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=900&auto=format&fit=crop&q=80"
+    elif "golf" in name_low:
+        return "https://images.unsplash.com/photo-1535131749006-b7f58c99034b?w=900&auto=format&fit=crop&q=80"
+    elif "safari" in name_low or "wildlife" in name_low or "forest" in name_low or "bird" in name_low or "zoo" in name_low:
+        return "https://images.unsplash.com/photo-1516426122078-c23e76319801?w=900&auto=format&fit=crop&q=80"
+    elif "zip" in name_low or "rope" in name_low or "climb" in name_low:
+        return "https://images.unsplash.com/photo-1502680390469-be75c86b636f?w=900&auto=format&fit=crop&q=80"
+
     cat_fallbacks = {
         "theme_parks": "https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?w=900&auto=format&fit=crop&q=80",
         "adventures": "https://images.unsplash.com/photo-1502680390469-be75c86b636f?w=900&auto=format&fit=crop&q=80",
@@ -694,7 +725,8 @@ async def get_async_place_photo(client: httpx.AsyncClient, place_name: str, dest
         "events": "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=900&auto=format&fit=crop&q=80",
         "essentials": "https://images.unsplash.com/photo-1517649763962-0c623266010b?w=900&auto=format&fit=crop&q=80"
     }
-    return cat_fallbacks.get(category, "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=900&auto=format&fit=crop&q=80")
+
+    return cat_fallbacks.get(category, "https://images.unsplash.com/photo-1502680390469-be75c86b636f?w=900&auto=format&fit=crop&q=80")
 
 
 # ─────────────────────────────────────────────
@@ -1084,18 +1116,18 @@ CITY_REAL_VENUES = {
             "Rumi Gate Antiques Lane", "Leathercraft Market (Charbagh)", "Khan Market Lucknow (Gomti Nagar)"
         ],
         "adventures": [
-            "Kukrail Reserve Forest Trail", "Gomti River Kayaking Club", "Anandi Water Park Zip Line",
-            "Indira Canal Cycling Route", "Janeshwar Mishra Park Cycling Track",
-            "Forest Trekking (Dudhwa Day Trip)", "Cricket at Bharat Ratna Atal Bihari Vajpayee Stadium",
-            "Archery Club Lucknow", "Para NCC Rock Climbing Wall",
-            "Lucknow Golf Club (9-hole)", "Shooting Range (Indira Nagar)",
-            "Adventure Island Rope Courses", "Ekana Stadium Sports Events",
-            "Kart Circuit Lucknow", "Skating Rink (Eldeco)",
-            "Laser Tag Arena (Lulu Mall)", "Paintball Arena Gomti Nagar",
-            "Badminton & Squash Academy Alambagh", "Swimming at Lohia Sports Complex",
-            "Early Morning River Walk (Gomti Ghat)", "Chidiya Ghar (Zoo) Wildlife Walk",
-            "Sports Authority of India Complex", "Night Cycling Event (VeloCity LKO)",
-            "River Boat Safari (Gomti Eco Boat)", "Sunrise Hike Dudhwa Edge"
+            "Kukrail Reserve Forest & Gharial Rehabilitation Center", "Gomti Riverfront Kayaking & Paddle Boating",
+            "Janeshwar Mishra Park Cycling Track", "Lucknow Golf Club 18-Hole Green",
+            "Nilansh Theme Park Zip Line & Rope Course", "Gomti Riverfront Morning Speedboat Cruise",
+            "Anandi Water Park Extreme Slides", "Dilkusha Kothi Open-Air Photography Walk",
+            "Nawabganj Bird Sanctuary Wildlife Trail", "Lucknow Flying Club Glider Aviation",
+            "Kukrail Nature Walk & Trekking Circuit", "Gomti Riverfront Open Cycling Expedition",
+            "Dream World Resort Paintball Arena", "Amrapali Water Park Wave Pool Thrills",
+            "Bakhira Bird Sanctuary Eco Tour", "Sikandar Bagh Historical Heritage Trail",
+            "Mahatama Gandhi Park Outdoor Exercise Zone", "Kukrail Deer Park Safari Trail",
+            "PGI Open Green Jogging & Running Track", "Riverfront Night Stargazing Point",
+            "Colvin Taluqdars Ground Archery Club", "Gomti Riverfront Rowing Club",
+            "Gyaneshwar Mishra Park Boating Deck", "Lucknow Zoo Wilderness Walk", "Chinat Eco Resort Adventure Obstacle Course"
         ],
         "theme_parks": [
             "Anandi Water Park", "Dream World Amusement Park", "Nilansh Theme Resort & Water Park",
@@ -2114,7 +2146,10 @@ async def build_fallback_trip_plan(
 
         async def build_pillar_list(cat_key: str, cat_label: str, defaults: List[str]) -> List[PillarItem]:
             res = []
-            for i, default_pat in enumerate(defaults):
+            venues_list = matched_venues.get(cat_key, []) if matched_venues else []
+            count = max(len(defaults), len(venues_list))
+            for i in range(count):
+                default_pat = defaults[i % len(defaults)]
                 v_title = get_fallback_venue(cat_key, i, default_pat)
                 img = await get_async_place_photo(client, v_title, destination, cat_key) if client else PEXELS_FALLBACK
                 res.append(
@@ -2145,7 +2180,20 @@ async def build_fallback_trip_plan(
             build_pillar_list("secret_spots", "Secret Spots", ["Hidden Courtyard Cafe", "Scenic Sunset Point", "Historic Alleyway Walk"]),
             build_pillar_list("essentials", "Travel Essentials", ["Medical & Emergency Desk", "Central Transit Station", "Tourist Information Center"]),
             build_pillar_list("shopping", "Shopping", ["Traditional Artisan Bazaar", "Bustling Street Market", "Luxury Shopping Galleria"]),
-            build_pillar_list("adventures", "Adventures", ["Outdoor Nature Reserve", "Riverfront Kayaking & Trails", "Scenic Ridge Trek"]),
+            build_pillar_list("adventures", "Adventures", [
+                "Reserve Forest & Nature Trail", "Riverfront Kayaking & Paddle Boating",
+                "City Park Cycling Track", "Golf Club 18-Hole Green Course",
+                "Theme Park Zip Line & Rope Course", "Riverfront Speedboat Cruise",
+                "Extreme Water Park Slides", "Open-Air Photography Walk",
+                "Bird Sanctuary Wildlife Trail", "Glider Aviation & Flying Club",
+                "Nature Walk & Trekking Circuit", "City Cycling Expedition",
+                "Resort Paintball & Shooting Arena", "Wave Pool Thrills & Water Sports",
+                "Eco Tour & Wilderness Reserve", "Historical Heritage Trail Walk",
+                "Outdoor Exercise & Sports Zone", "Deer Park Safari Trail",
+                "Open Green Jogging Track", "Riverfront Night Stargazing Point",
+                "Archery Club & Shooting Range", "Riverfront Rowing & Boating Deck",
+                "Boating Deck & Water Recreation", "Wilderness Zoo Walk", "Adventure Obstacle Course"
+            ]),
             build_pillar_list("theme_parks", "Theme Parks", ["Grand Water Kingdom", "Thrill Amusement World", "Family Adventure Resort"]),
             build_pillar_list("sacred_temples", "Sacred Temples & Heritage Shrines", ["Ancient Heritage Temple", "Sacred Spiritual Shrine", "Historic Royal Mosque"]),
         )
