@@ -621,6 +621,26 @@ def generate_maps_link(place_name: str, destination: str) -> str:
     return f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(query)}"
 
 
+def get_event_specific_keywords(title: str) -> str:
+    low = (title or "").lower()
+    if "car" in low or "rally" in low or "vintage" in low:
+        return "vintage car automobile show rally classic"
+    elif "jazz" in low or "blues" in low:
+        return "jazz band saxophone concert live stage"
+    elif "classical" in low or "baithak" in low or "sitar" in low or "music" in low:
+        return "classical music concert instrument sitar performance"
+    elif "heritage" in low or "walk" in low or "tour" in low:
+        return "night walk heritage street illuminated architecture"
+    elif "food" in low or "festival" in low or "mela" in low:
+        return "food festival night market fair stalls lights"
+    elif "art" in low or "exhibition" in low or "gallery" in low:
+        return "art gallery exhibition painting display"
+    elif "theater" in low or "play" in low or "drama" in low:
+        return "theater stage drama performance actors"
+    elif "dance" in low or "ballet" in low or "kathak" in low:
+        return "dance performance stage artist spotlight"
+    return "event performance concert crowd stage lights"
+
 def get_activity_specific_keywords(item_title: str) -> str:
     title = item_title.lower()
     if "cruise" in title or "boat" in title or "ferry" in title:
@@ -668,14 +688,14 @@ def get_category_search_suffix(category: str) -> str:
 
 async def get_async_place_photo(client: httpx.AsyncClient, place_name: str, destination: str, category: str = "") -> str:
     clean_name = clean_venue_title(place_name, destination)
+    event_suffix = get_event_specific_keywords(clean_name) if "event" in (category or "").lower() else get_category_search_suffix(category)
     activity_suffix = get_activity_specific_keywords(clean_name)
-    suffix = get_category_search_suffix(category)
     
-    # Target exact activity name + destination
-    query = f"{clean_name} {destination} {activity_suffix} {suffix}".strip()
+    # Target exact activity/event name + destination
+    query = f"{clean_name} {destination} {event_suffix} {activity_suffix}".strip()
     encoded = urllib.parse.quote(query)
 
-    # 1. Unsplash API (Unique photo per activity title)
+    # 1. Unsplash API (Unique photo per activity/event title)
     if UNSPLASH_ACCESS_KEY:
         try:
             url = f"https://api.unsplash.com/search/photos?page=1&query={encoded}&orientation=landscape&client_id={UNSPLASH_ACCESS_KEY}&per_page=1"
@@ -700,19 +720,27 @@ async def get_async_place_photo(client: httpx.AsyncClient, place_name: str, dest
         except Exception:
             pass
 
-    # Dynamic fallback based on title keywords (prevents duplicate images)
-    name_low = clean_name.lower()
-    if "cycle" in name_low or "bike" in name_low or "cycling" in name_low:
+    # 3. Dynamic Keyword Fallbacks (NEVER return identical confetti images)
+    low_title = clean_name.lower()
+    if "car" in low_title or "rally" in low_title or "vintage" in low_title:
+        return "https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=900&auto=format&fit=crop&q=80"
+    elif "jazz" in low_title or "saxophone" in low_title or "blues" in low_title:
+        return "https://images.unsplash.com/photo-1511192336575-5a79af67a629?w=900&auto=format&fit=crop&q=80"
+    elif "classical" in low_title or "music" in low_title or "baithak" in low_title or "sitar" in low_title:
+        return "https://images.unsplash.com/photo-1465847899084-d164df4dedc6?w=900&auto=format&fit=crop&q=80"
+    elif "walk" in low_title or "heritage" in low_title or "tour" in low_title:
+        return "https://images.unsplash.com/photo-1519501025264-65ba15a82390?w=900&auto=format&fit=crop&q=80"
+    elif "cycle" in low_title or "bike" in low_title or "cycling" in low_title:
         return "https://images.unsplash.com/photo-1541625602330-2277a4c46182?w=900&auto=format&fit=crop&q=80"
-    elif "cruise" in name_low or "boat" in name_low or "ferry" in name_low or "rowing" in name_low:
+    elif "cruise" in low_title or "boat" in low_title or "ferry" in low_title or "rowing" in low_title:
         return "https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=900&auto=format&fit=crop&q=80"
-    elif "kayak" in name_low or "rafting" in name_low or "paddle" in name_low:
+    elif "kayak" in low_title or "rafting" in low_title or "paddle" in low_title:
         return "https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=900&auto=format&fit=crop&q=80"
-    elif "golf" in name_low:
+    elif "golf" in low_title:
         return "https://images.unsplash.com/photo-1535131749006-b7f58c99034b?w=900&auto=format&fit=crop&q=80"
-    elif "safari" in name_low or "wildlife" in name_low or "forest" in name_low or "bird" in name_low or "zoo" in name_low:
+    elif "safari" in low_title or "wildlife" in low_title or "forest" in low_title or "bird" in low_title or "zoo" in low_title:
         return "https://images.unsplash.com/photo-1516426122078-c23e76319801?w=900&auto=format&fit=crop&q=80"
-    elif "zip" in name_low or "rope" in name_low or "climb" in name_low:
+    elif "zip" in low_title or "rope" in low_title or "climb" in low_title:
         return "https://images.unsplash.com/photo-1502680390469-be75c86b636f?w=900&auto=format&fit=crop&q=80"
 
     cat_fallbacks = {
@@ -728,7 +756,12 @@ async def get_async_place_photo(client: httpx.AsyncClient, place_name: str, dest
         "essentials": "https://images.unsplash.com/photo-1517649763962-0c623266010b?w=900&auto=format&fit=crop&q=80"
     }
 
-    return cat_fallbacks.get(category, "https://images.unsplash.com/photo-1502680390469-be75c86b636f?w=900&auto=format&fit=crop&q=80")
+    cat_key = (category or "").lower()
+    for k, img_url in cat_fallbacks.items():
+        if k in cat_key:
+            return img_url
+
+    return PEXELS_FALLBACK
 
 
 # ─────────────────────────────────────────────
