@@ -619,14 +619,29 @@ def generate_maps_link(place_name: str, destination: str) -> str:
     return f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(query)}"
 
 
-async def get_async_place_photo(client: httpx.AsyncClient, place_name: str, destination: str) -> str:
+def get_category_search_suffix(category: str) -> str:
+    cat = (category or "").lower()
+    if "theme" in cat or "water" in cat or "park" in cat or "adventure" in cat:
+        return "water park theme park pool slides"
+    elif "culinary" in cat or "food" in cat or "restaurant" in cat:
+        return "restaurant food dining dish"
+    elif "bar" in cat or "pub" in cat or "nightlife" in cat:
+        return "lounge bar pub interior"
+    elif "temple" in cat or "sacred" in cat or "shrine" in cat:
+        return "temple shrine spiritual landmark"
+    elif "shopping" in cat or "mall" in cat or "market" in cat:
+        return "shopping mall street market bazaar"
+    return "landmark building architecture"
+
+async def get_async_place_photo(client: httpx.AsyncClient, place_name: str, destination: str, category: str = "") -> str:
     clean_name = clean_venue_title(place_name, destination)
+    suffix = get_category_search_suffix(category)
     
-    # Clean image search query without syntax-breaking minus operators
-    query = f"{clean_name} {destination} landmark building architecture".strip()
+    # Target clean venue name + category intent
+    query = f"{clean_name} {destination} {suffix}".strip()
     encoded = urllib.parse.quote(query)
 
-    # Tier 1: Unsplash API with landscape orientation filter
+    # 1. Unsplash Search (Landscape Only)
     if UNSPLASH_ACCESS_KEY:
         try:
             url = f"https://api.unsplash.com/search/photos?page=1&query={encoded}&orientation=landscape&client_id={UNSPLASH_ACCESS_KEY}&per_page=1"
@@ -638,7 +653,7 @@ async def get_async_place_photo(client: httpx.AsyncClient, place_name: str, dest
         except Exception:
             pass
 
-    # Tier 2: Pexels Search API
+    # 2. Pexels Search (Landscape Only)
     if PEXELS_API_KEY:
         try:
             url = f"https://api.pexels.com/v1/search?query={encoded}&orientation=landscape&per_page=1"
@@ -647,28 +662,19 @@ async def get_async_place_photo(client: httpx.AsyncClient, place_name: str, dest
             if res.status_code == 200:
                 data = res.json()
                 if data.get("photos") and len(data["photos"]) > 0:
-                    return data["photos"][0]["src"]["medium"]
+                    return data["photos"][0]["src"]["large"]
         except Exception:
             pass
 
-    # Tier 3: Wikimedia Commons with filtered search query
-    try:
-        wiki_query = urllib.parse.quote(f"{clean_name} {destination} building")
-        wiki_url = f"https://commons.wikimedia.org/w/api.php?action=query&generator=search&prop=pageimages&piprop=original&gsrsearch={wiki_query}&format=json"
-        res = await client.get(wiki_url, headers={"User-Agent": "VoyantaTravel/1.0"}, timeout=2.5)
-        if res.status_code == 200:
-            pages = res.json().get("query", {}).get("pages", {})
-            for _, page_data in pages.items():
-                if "original" in page_data and "source" in page_data["original"]:
-                    img_src = page_data["original"]["source"]
-                    # Ensure image URL does not point to user avatar or non-building asset
-                    if not any(bad in img_src.lower() for bad in ["portrait", "user", "author", "face", "selfie"]):
-                        return img_src
-    except Exception:
-        pass
-
-    # Tier 4: High-Res High-Quality Travel Wallpaper Fallback
-    return "https://images.unsplash.com/photo-1541963463532-d68292c34b19?w=900&auto=format&fit=crop&q=80"
+    # 3. Category-Specific High-Res Fallbacks (No Imambara for Water Parks)
+    cat_fallbacks = {
+        "theme_parks": "https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?w=900&auto=format&fit=crop&q=80",
+        "adventures": "https://images.unsplash.com/photo-1502680390469-be75c86b636f?w=900&auto=format&fit=crop&q=80",
+        "sacred_temples": "https://images.unsplash.com/photo-1561361513-2d000a50f0dc?w=900&auto=format&fit=crop&q=80",
+        "shopping": "https://images.unsplash.com/photo-1555529669-e69e7aa0ba9a?w=900&auto=format&fit=crop&q=80",
+        "culinary": "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=900&auto=format&fit=crop&q=80"
+    }
+    return cat_fallbacks.get(category, "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=900&auto=format&fit=crop&q=80")
 
 
 # ─────────────────────────────────────────────
@@ -887,7 +893,7 @@ async def generate_trip_with_groq(
     async def map_pillar_items_async(items: list, cat_label: str) -> List[PillarItem]:
         async def create_item(i: int, item: Any) -> PillarItem:
             title = clean_stop_title(getattr(item, 'title', ''), destination)
-            image_url = await get_async_place_photo(client, title, destination)
+            image_url = await get_async_place_photo(client, title, destination, cat_label)
             return PillarItem(
                 id=f"{cat_label.lower().replace(' ', '-')}-{i+1}",
                 title=title,
@@ -2090,7 +2096,7 @@ async def build_fallback_trip_plan(
             res = []
             for i, default_pat in enumerate(defaults):
                 v_title = get_fallback_venue(cat_key, i, default_pat)
-                img = await get_async_place_photo(client, v_title, destination) if client else PEXELS_FALLBACK
+                img = await get_async_place_photo(client, v_title, destination, cat_key) if client else PEXELS_FALLBACK
                 res.append(
                     PillarItem(
                         id=f"{cat_key}-{i+1}",
