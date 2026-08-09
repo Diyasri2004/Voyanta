@@ -2063,45 +2063,138 @@ CITY_REAL_VENUES = {
 }
 
 
-DEFAULT_CULINARY_FALLBACKS = [
-    ("Specialty Eatery & Grill", "Iconic local eatery famous for regional spices and classic grilling.", "Local Signature Dish", "City Center"),
-    ("Heritage Bakery & Patisserie", "Historic bakery serving legendary traditional pastries and fresh breads.", "Artisanal Pastries", "Old Town"),
-    ("Famous Street Food Haven", "Bustling street stall celebrated for authentic local street bites.", "Street Food Delicacies", "Market Square"),
-    ("Seafood & Waterfront Pavilion", "Fresh local catches prepared with regional herbs and coastal flavor.", "Fresh Local Seafood", "Waterfront District"),
-    ("Traditional Tea & Dessert House", "Renowned tea house serving heritage brews and traditional sweets.", "Handcrafted Sweets & Tea", "Heritage District"),
-    ("Chef's Table Regional Bistro", "Acclaimed bistro celebrating farm-to-table local ingredients.", "Chef's Tasting Specialties", "Downtown"),
-    ("Wood-Fired Pizzeria & Osteria", "Authentic wood-fired recipes using house-made cheeses and herbs.", "Neapolitan Style Wood-Fired Pizza", "Cultural Quarter"),
-    ("Noodle & Dumpling House", "Hand-pulled noodles and steaming handmade dumplings.", "Artisanal Dumplings & Broth", "Chinatown District"),
+PILLAR_KEYS = [
+    "attractions", "events", "culinary", "bars_pubs", "wellness",
+    "secret_spots", "essentials", "shopping", "adventures", "theme_parks", "sacred_temples"
 ]
 
-def get_fallback_culinary_highlights(destination: str, matched_venues: Optional[dict] = None) -> List[CulinaryHighlight]:
-    res = []
-    venues = matched_venues.get("culinary", []) if matched_venues else []
-    count = max(8, min(12, len(venues)))
-    for i in range(count):
-        if i < len(venues):
-            v_title = venues[i]
-            famous_for = f"Specialty {v_title.split()[0]} Dish"
-            desc = f"Verified iconic culinary destination in {destination} known for authentic local flavors."
-            loc = destination
-        else:
-            default_item = DEFAULT_CULINARY_FALLBACKS[i % len(DEFAULT_CULINARY_FALLBACKS)]
-            v_title = f"{destination} {default_item[0]}"
-            desc = f"{default_item[1]} A must-try experience in {destination}."
-            famous_for = default_item[2]
-            loc = f"{destination} {default_item[3]}"
-
-        res.append(
-            CulinaryHighlight(
-                title=v_title,
-                description=desc,
-                famous_for=famous_for,
-                location=loc,
-                price_tier="",
-                cost_approx="",
-            )
+async def call_groq_prompt(prompt: str) -> str:
+    if not GROQ_API_KEY:
+        raise ValueError("GROQ_API_KEY not configured")
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            GROQ_BASE,
+            headers={
+                "Authorization": f"Bearer {GROQ_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": GROQ_MODEL,
+                "messages": [
+                    {"role": "user", "content": prompt},
+                ],
+                "temperature": 0.3,
+                "max_tokens": 4000,
+            },
+            timeout=15.0,
         )
-    return res
+        response.raise_for_status()
+        content = response.json()["choices"][0]["message"]["content"].strip()
+        import re
+        content = re.sub(r"^```(?:json)?\s*", "", content, flags=re.IGNORECASE)
+        content = re.sub(r"\s*```$", "", content).strip()
+        return content
+
+async def fetch_dynamic_destination_data(destination: str) -> dict:
+    clean_dest = destination.split(",")[0].strip().title()
+    
+    prompt = f"""
+    You are an expert global travel concierge. For the destination '{clean_dest}', return a JSON object with keys: {json.dumps(PILLAR_KEYS)}.
+    For EACH key, provide an array of at least 25 real, existing, verified venues/activities in {clean_dest}.
+    
+    Each item MUST have:
+    - "id": string
+    - "name": Exact real place name in {clean_dest} (e.g., "Wat Phra Kaew", "Chatuchak Market", "Maggie Choo's Bar").
+    - "location": Locality/Neighborhood in {clean_dest}.
+    - "description": 1 sentence description.
+    
+    CRITICAL RULES:
+    - NEVER use generic titles or repeat the city name as the venue name (do NOT return "{clean_dest}" as name).
+    - Every item MUST be a real, distinct location that exists on Google Maps.
+    """
+
+    try:
+        raw_response = await call_groq_prompt(prompt)
+        parsed_data = json.loads(raw_response)
+        
+        async with httpx.AsyncClient() as client:
+            for pillar in PILLAR_KEYS:
+                raw_items = parsed_data.get(pillar, [])
+                items = []
+                for idx, item in enumerate(raw_items):
+                    v_name = item.get("name", "") if isinstance(item, dict) else str(item)
+                    v_name = clean_venue_title(v_name, clean_dest)
+                    if not v_name or v_name.lower() == clean_dest.lower():
+                        v_name = f"{clean_dest} Local Point {idx+1}"
+                    
+                    v_loc = item.get("location", clean_dest) if isinstance(item, dict) else clean_dest
+                    v_desc = item.get("description", f"Verified {pillar.replace('_', ' ')} venue in {clean_dest}.") if isinstance(item, dict) else f"Verified venue in {clean_dest}."
+                    query_str = f"{v_name}, {v_loc}, {clean_dest}".strip()
+                    
+                    nav_url = f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(query_str)}"
+                    img_url = await get_async_place_photo(client, v_name, clean_dest, category=pillar)
+                    
+                    items.append({
+                        "id": f"{pillar}_{idx+1}",
+                        "title": v_name,
+                        "name": v_name,
+                        "category": pillar.replace("_", " ").title(),
+                        "description": v_desc,
+                        "address": v_loc,
+                        "location": v_loc,
+                        "maps_url": nav_url,
+                        "navigation_url": nav_url,
+                        "image_url": img_url,
+                    })
+                parsed_data[pillar] = items
+                
+        return parsed_data
+
+    except Exception as e:
+        logger.error(f"Free dynamic generation fallback triggered for {clean_dest}: {e}")
+        return generate_structural_dynamic_fallback(clean_dest)
+
+def generate_structural_dynamic_fallback(destination: str) -> dict:
+    """Guaranteed free fallback generator—never repeats raw city name."""
+    clean_dest = destination.split(",")[0].strip().title()
+    fallback = {}
+    
+    pillar_descriptors = {
+        "attractions": ["Central Monument", "Royal Heritage Site", "Historic Square", "National Museum", "Riverfront Promenade"],
+        "events": ["Cultural Heritage Fair", "Night Street Market", "Live Music Session", "Artisan Expo"],
+        "culinary": ["Traditional Noodle House", "Heritage Eatery", "Local Street Food Hub", "Famous Sweet Corner"],
+        "bars_pubs": ["Rooftop Sunset Lounge", "Speakeasy Cocktail Bar", "Craft Taproom", "Live Jazz Pub"],
+        "wellness": ["Traditional Herbal Spa", "Zen Yoga Sanctuary", "Healing Retreat Center"],
+        "secret_spots": ["Hidden Courtyard Cafe", "Old Town Viewpoint", "Secluded Alleyway Market"],
+        "essentials": ["Central Railway Terminal", "Main Tourist Info Center", "Central Pharmacy"],
+        "shopping": ["Central Grand Bazaar", "Crafts & Silk Market", "Luxury Shopping Galleria"],
+        "adventures": ["River Kayaking Deck", "Heritage Bicycle Trail", "Forest Reserve Nature Walk"],
+        "theme_parks": ["Ocean World Aquarium", "Extreme Water Slide Park", "Digital Gaming Zone"],
+        "sacred_temples": ["Grand Cathedral", "Historic Sacred Temple", "Central Peace Pagoda"]
+    }
+    
+    for pillar in PILLAR_KEYS:
+        items = []
+        templates = pillar_descriptors.get(pillar, ["Landmark Spot"])
+        for idx in range(25):
+            base_desc = templates[idx % len(templates)]
+            venue_title = f"{clean_dest} {base_desc} {idx+1}"
+            nav_url = f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(venue_title + ' ' + clean_dest)}"
+            items.append({
+                "id": f"{pillar}_{idx+1}",
+                "title": venue_title,
+                "name": venue_title,
+                "category": pillar.replace("_", " ").title(),
+                "address": f"{clean_dest} Zone {idx%5 + 1}",
+                "location": f"{clean_dest} Zone {idx%5 + 1}",
+                "description": f"Popular {pillar.replace('_', ' ')} location situated in {clean_dest}.",
+                "maps_url": nav_url,
+                "navigation_url": nav_url,
+                "image_url": "https://images.unsplash.com/photo-1502680390469-be75c86b636f?w=900&auto=format&fit=crop&q=80"
+            })
+        fallback[pillar] = items
+        
+    return fallback
 
 
 async def build_fallback_trip_plan(
@@ -2111,236 +2204,115 @@ async def build_fallback_trip_plan(
     client: Optional[httpx.AsyncClient] = None
 ) -> TripPlanResponse:
     destination = (location or "Lucknow").strip().title()
-    dest_key = destination.lower().strip()
     start_day = start_day or date.today()
     coordinates = fallback_coordinates_for(destination)
     destination_image = await get_async_place_photo(client, f"{destination} landmark", destination) if client else PEXELS_FALLBACK
 
-    matched_venues = None
-    for k, v in CITY_REAL_VENUES.items():
-        if k in dest_key or dest_key in k:
-            matched_venues = v
-            break
+    dynamic_data = await fetch_dynamic_destination_data(destination)
 
-    def get_fallback_venue(cat_key: str, index: int, default_pattern: str) -> str:
-        if matched_venues and cat_key in matched_venues and index < len(matched_venues[cat_key]):
-            return matched_venues[cat_key][index]
-        return f"{destination} {default_pattern}"
+    def convert_items(pillar_key: str, default_category: str) -> List[PillarItem]:
+        raw_list = dynamic_data.get(pillar_key, [])
+        res = []
+        for idx, item in enumerate(raw_list):
+            if isinstance(item, dict):
+                v_title = item.get("name") or item.get("title") or f"{destination} Point {idx+1}"
+                v_loc = item.get("location") or item.get("address") or destination
+                v_desc = item.get("description") or f"Verified {default_category} spot in {destination}."
+                nav_url = item.get("navigation_url") or item.get("maps_url") or generate_google_maps_url(v_title, v_loc, destination)
+                img_url = item.get("image_url") or PEXELS_FALLBACK
+            else:
+                v_title = str(item)
+                v_loc = destination
+                v_desc = f"Verified {default_category} spot in {destination}."
+                nav_url = generate_google_maps_url(v_title, v_loc, destination)
+                img_url = PEXELS_FALLBACK
+
+            res.append(
+                PillarItem(
+                    id=f"{pillar_key}-{idx+1}",
+                    title=v_title,
+                    category=default_category,
+                    description=v_desc,
+                    address=v_loc,
+                    maps_url=nav_url,
+                    image_url=img_url,
+                    lat=coordinates.lat,
+                    lng=coordinates.lng,
+                    price_range=""
+                )
+            )
+        return res
+
+    attractions = convert_items("attractions", "Tourist Attractions")
+    events = convert_items("events", "Events")
+    culinary = convert_items("culinary", "Culinary")
+    bars_pubs = convert_items("bars_pubs", "Bars & Pubs")
+    wellness = convert_items("wellness", "Wellness & Meditation")
+    secret_spots = convert_items("secret_spots", "Secret Spots")
+    essentials = convert_items("essentials", "Travel Essentials")
+    shopping = convert_items("shopping", "Shopping")
+    adventures = convert_items("adventures", "Adventures")
+    theme_parks = convert_items("theme_parks", "Theme Parks")
+    sacred_temples = convert_items("sacred_temples", "Temples & Shrines")
+
+    itinerary: List[TripStop] = []
+    routes: List[TripDayRoute] = []
+
+    attr_names = [a.title for a in attractions] or [f"{destination} Central Landmark"]
+    for day_index in range(days):
+        day_number = day_index + 1
+        trip_date = start_day.fromordinal(start_day.toordinal() + day_index)
+        day_coordinates: List[List[float]] = []
+
+        for stop_index in range(3):
+            stop_lat = coordinates.lat + (stop_index * 0.005) + (day_index * 0.01)
+            stop_lng = coordinates.lng + (stop_index * 0.005) + (day_index * 0.01)
+            
+            v_idx = ((day_index * 3) + stop_index) % len(attr_names)
+            venue_title = attr_names[v_idx]
+            stop_image = await get_async_place_photo(client, venue_title, destination) if client else PEXELS_FALLBACK
+
+            itinerary.append(
+                TripStop(
+                    id=f"fallback-{day_number}-{stop_index + 1}",
+                    day=day_number,
+                    date=trip_date.strftime("%b %d"),
+                    time=build_time_label(stop_index),
+                    title=venue_title,
+                    location=destination,
+                    type="ATTRACTION",
+                    creators=f"Starts at {build_time_label(stop_index)}",
+                    distance=f"{round((stop_index + 1) * 1.8, 1)}km",
+                    elevation="N/A",
+                    duration="90m",
+                    image=stop_image,
+                    map_image_url=build_tomtom_static_map_url(stop_lat, stop_lng) if TOMTOM_API_KEY else build_image_url(f"map {stop_lat}"),
+                    lat=stop_lat,
+                    lng=stop_lng,
+                    cost_range="$15 - $30 / person",
+                )
+            )
+            day_coordinates.append([stop_lng, stop_lat])
+
+        route = build_day_route_from_coordinates(day_number, day_coordinates)
+        route.total_distance_meters = 5400 + (day_index * 900)
+        route.total_travel_time_seconds = 1800 + (day_index * 300)
+        if route.geojson:
+            route.geojson["properties"] = {"fallback": True}
+        routes.append(route)
+
+    culinary_highlights = [
+        CulinaryHighlight(
+            title=c.title,
+            description=c.description,
+            famous_for=f"Specialty Dish at {c.title}",
+            location=c.address,
+            price_tier="",
+            cost_approx=""
+        ) for c in culinary[:8]
+    ]
 
     try:
-        itinerary: List[TripStop] = []
-        routes: List[TripDayRoute] = []
-
-        for day_index in range(days):
-            day_number = day_index + 1
-            trip_date = start_day.fromordinal(start_day.toordinal() + day_index)
-            day_coordinates: List[List[float]] = []
-
-            for stop_index in range(3):
-                stop_lat = coordinates.lat + (stop_index * 0.005) + (day_index * 0.01)
-                stop_lng = coordinates.lng + (stop_index * 0.005) + (day_index * 0.01)
-                
-                venue_title = get_fallback_venue("attractions", (day_index * 3) + stop_index, f"Heritage Spot {stop_index + 1}")
-                stop_image = await get_async_place_photo(client, venue_title, destination) if client else PEXELS_FALLBACK
-
-                itinerary.append(
-                    TripStop(
-                        id=f"fallback-{day_number}-{stop_index + 1}",
-                        day=day_number,
-                        date=trip_date.strftime("%b %d"),
-                        time=build_time_label(stop_index),
-                        title=venue_title,
-                        location=destination,
-                        type="ATTRACTION",
-                        creators=f"Starts at {build_time_label(stop_index)}",
-                        distance=f"{round((stop_index + 1) * 1.8, 1)}km",
-                        elevation="N/A",
-                        duration="90m",
-                        image=stop_image,
-                        map_image_url=build_tomtom_static_map_url(stop_lat, stop_lng) if TOMTOM_API_KEY else build_image_url(f"map {stop_lat}"),
-                        lat=stop_lat,
-                        lng=stop_lng,
-                        cost_range="$15 - $30 / person",
-                    )
-                )
-                day_coordinates.append([stop_lng, stop_lat])
-
-            route = build_day_route_from_coordinates(day_number, day_coordinates)
-            route.total_distance_meters = 5400 + (day_index * 900)
-            route.total_travel_time_seconds = 1800 + (day_index * 300)
-            if route.geojson:
-                route.geojson["properties"] = {"fallback": True}
-            routes.append(route)
-
-        async def build_pillar_list(cat_key: str, cat_label: str, defaults: List[str]) -> List[PillarItem]:
-            res = []
-            venues_list = matched_venues.get(cat_key, []) if matched_venues else []
-            count = max(len(defaults), len(venues_list))
-            for i in range(count):
-                default_pat = defaults[i % len(defaults)]
-                v_title = get_fallback_venue(cat_key, i, default_pat)
-                img = await get_async_place_photo(client, v_title, destination, cat_key) if client else PEXELS_FALLBACK
-                specialty = ""
-                if cat_key == "culinary":
-                    v_lower = v_title.lower()
-                    if "kabab" in v_lower or "tunday" in v_lower:
-                        specialty = "Galawati Kabab"
-                    elif "biryani" in v_lower:
-                        specialty = "Lucknowi Biryani"
-                    elif "kulfi" in v_lower:
-                        specialty = "Falooda Kulfi"
-                    elif "tea" in v_lower or "chai" in v_lower:
-                        specialty = "Masala Chai & Bun Maska"
-                    elif "chaat" in v_lower or "basket" in v_lower:
-                        specialty = "Tokri Chaat"
-                    elif "kachori" in v_lower:
-                        specialty = "Kachori Jalebi"
-                    elif "thandai" in v_lower:
-                        specialty = "Special Thandai"
-                    elif "lassi" in v_lower:
-                        specialty = "Rabri Lassi"
-                    elif "sweets" in v_lower or "mithai" in v_lower:
-                        specialty = "Malaiyyo & Sweets"
-                    else:
-                        specialty = "Local Signature Specialty"
-
-                res.append(
-                    PillarItem(
-                        id=f"{cat_key}-{i+1}",
-                        title=v_title,
-                        category=cat_label,
-                        specialty=specialty,
-                        description=f"Verified landmark dining experience in {destination}.",
-                        address=destination,
-                        maps_url=generate_maps_link(v_title, destination),
-                        image_url=img,
-                        lat=coordinates.lat,
-                        lng=coordinates.lng,
-                        price_range=""
-                    )
-                )
-            return res
-
-        (
-            attractions, events, culinary, bars_pubs, wellness,
-            secret_spots, essentials, shopping, adventures, theme_parks, sacred_temples
-        ) = await asyncio.gather(
-            build_pillar_list("attractions", "Tourist Attractions", [
-                "Historic Landmark & Monument", "Cultural Heritage Center", "City Promenade & Plaza",
-                "Royal Monument Complex", "National Heritage Museum", "Scenic Riverfront & Gardens",
-                "Architectural Masterpiece Pavilion", "Grand Palace & Courtyard", "Historic Walled Fort",
-                "Art Gallery & Culture House", "City Skyline Viewpoint", "Memorial Gardens & Park",
-                "Old Town Heritage Square", "Ancient Observatory & Tower", "Signature Promenade Walk",
-                "Cathedral & Heritage Plaza", "Iconic Bridge Overlook", "Sculpture Park & Gardens",
-                "Botanical Heritage Conservatory", "Preservation Cultural Zone", "Historic Clocktower Square",
-                "Riverside Heritage Promenade", "Maritime History Pier", "Civic Heritage Center", "Panorama Overlook Tower"
-            ]),
-            build_pillar_list("events", "Events", [
-                "Cultural Evening Gala", "Live Music Session", "Heritage Art Showcase",
-                "Open-Air Symphony Concert", "Seasonal Food & Wine Fair", "Film & Performing Arts Festival",
-                "Night Market & Cultural Fair", "Traditional Folk Dance Night", "Craft Artisans Exhibition",
-                "Jazz & Blues Lounge Session", "Street Performance Spectacle", "Historical Light & Sound Show",
-                "Local Heritage Carnival", "Literary & Book Fair Showcase", "Sunset Acoustics on Riverbank",
-                "Contemporary Art Triennial", "Culinary Masterclass & Tasting", "Theater & Drama Evening",
-                "Fireworks & Light Extravaganza", "World Music & Drum Circle", "Artisanal Craft Market Fest",
-                "Seasonal Flower & Garden Show", "Comedy & Improv Club Night", "Midsummer Heritage Promenade", "Indie Music & Arts Gathering"
-            ]),
-            build_pillar_list("culinary", "Culinary", [
-                "Legendary Specialty Eatery", "Street Food Haven", "Rooftop Dining Lounge",
-                "Heritage Spice Bistro", "Authentic Seafood Grill", "Traditional Tea & Coffee House",
-                "Artisanal Bakery & Cafe", "Chef's Table Fine Dining", "Riverside Waterfront Restaurant",
-                "Classic Brasserie & Grill", "Historic Courtyard Cafe", "Gourmet Noodle & Dumpling House",
-                "Local Dessert & Sweetshop", "Wood-Fired Pizza & Trattoria", "Organic Farm-to-Table Bistro",
-                "Craft Burger & Taproom", "Vintage Irani & Heritage Diner", "Dim Sum & Tea Pavilion",
-                "Michelin-Inspired Tasting Lounge", "Sunset Panorama Lounge & Grill", "Tapas & Small Plates Bar",
-                "Authentic Curry & Kebab House", "Gourmet Delicatessen & Market", "Speakeasy Supper Club", "All-Day Artisanal Brunch Spot"
-            ]),
-            build_pillar_list("bars_pubs", "Bars & Pubs", [
-                "Skyline Lounge & Bar", "Craft Cocktail Taproom", "Vibrant Social Club",
-                "Speakeasy Underground Lounge", "Rooftop Sunset Cocktail Bar", "Historic English Pub",
-                "Jazz & Blues Cocktail Den", "Wine & Cheese Cellar", "Sports Bar & Grill Arena",
-                "Boutique Microbrewery & Garden", "Tiki Cocktail & Beach Bar", "Retro Arcade Bar & Lounge",
-                "Chic Gin & Tonic Parlor", "Whisky Tasting Lounge", "Waterfront Lounge Bar",
-                "Mixology Lab & Lounge", "Craft Beer Taphouse", "Underground Nightclub & Bar",
-                "Gastro-Pub & Kitchen", "Sunset Terrace Bar", "Velvet Cocktail Saloon",
-                "Bohemian Tapas & Bar", "Irish Taphouse & Tavern", "High-Altitude Rooftop Bar", "Hidden Door Speakeasy"
-            ]),
-            build_pillar_list("wellness", "Wellness & Meditation", [
-                "Serene Herbal Spa", "Sunrise Meditation Park", "Luxury Wellness Pavilion",
-                "Traditional Thermal Baths", "Aromatherapy & Massage Haven", "Holistic Mind-Body Center",
-                "Riverside Yoga Sanctuary", "Deep Tissue & Bodywork Studio", "Zen Botanical Garden",
-                "Organic Skincare & Facial Clinic", "Vipassana Meditation Retreat", "Salt Therapy & Sauna Lounge",
-                "Hydrotherapy & Floatation Spa", "Pilates & Core Conditioning Studio", "Ayurvedic Healing Clinic",
-                "Hot Stone & Sauna Sanctuary", "Sound Bath & Healing Lounge", "Forest Bathing Nature Trail",
-                "Mineral Hot Spring Resort", "Reflexology & Acupressure Spa", "Mindful Morning Run Circuit",
-                "Serenity Tea & Meditation House", "Vitality Health & Fitness Club", "Wellness Day Spa & Hammam", "Sunrise Stretch & Yoga Deck"
-            ]),
-            build_pillar_list("secret_spots", "Secret Spots", [
-                "Hidden Courtyard Cafe", "Scenic Sunset Point", "Historic Alleyway Walk",
-                "Secret Rooftop Viewpoint", "Hidden Botanical Passage", "Underground Heritage Tunnel",
-                "Quiet Waterside Overlook", "Vintage Bookshop Lane", "Forgotten Cloister Garden",
-                "Architectural Arch Alley", "Artist Studio Alleyway", "Hidden Fountain Square",
-                "Old Cobblestone Backstreet", "Secluded Observation Deck", "Panoramic Skyline Nook",
-                "Quiet Riverside Bench Row", "Historic Step-Well Courtyard", "Hidden Fresco Gallery",
-                "Abandoned Railway Greenwalk", "Private Tea Garden Nook", "Secret Rooftop Greenhouse",
-                "Hidden Mosaic Passage", "Old Town Belltower Stairway", "Charming Shaded Terrace", "Quiet Whispering Archway"
-            ]),
-            build_pillar_list("essentials", "Travel Essentials", [
-                "Medical & Emergency Desk", "Central Transit Station", "Tourist Information Center",
-                "General Hospital & ER", "24-Hour Central Pharmacy", "Foreign Currency Exchange Hub",
-                "Central Post Office & Shipping", "Luggage Storage & Locker Facility", "SIM Card & Mobile Network Desk",
-                "City Taxi & Ride-Share Hub", "Tourist Police Control Desk", "Metro & Light Rail Terminal",
-                "24-Hour International ATM", "Consular & Diplomatic Advice", "Airport Express Shuttle Stop",
-                "24-Hour Convenience Hub", "Urgent Care Medical Clinic", "Lost & Found Central Desk",
-                "Bicycle & Scooter Rental Hub", "Electric Vehicle Charge Hub", "Digital Tourist Kiosk",
-                "Public Safety & Assistance Station", "International Wire & Western Union", "Traveler Health & First Aid Desk", "General Transport Information Hub"
-            ]),
-            build_pillar_list("shopping", "Shopping", [
-                "Traditional Artisan Bazaar", "Bustling Street Market", "Luxury Shopping Galleria",
-                "Handicraft & Souvenir Arcade", "Vintage & Antique Market", "Designer Boutique Strip",
-                "High-End Department Store", "Local Spice & Food Market", "Artisanal Leatherwork Bazaar",
-                "Textile & Fabric Street Market", "Modern Lifestyle Mall", "Booktown & Antiquarian Shops",
-                "Jewelry & Gemstone Arcade", "Flea Market & Vintage Finds", "Gourmet Food & Provisions Hall",
-                "Ceramics & Pottery Bazaar", "Handmade Craft Workshop Street", "Outlet Shopping Village",
-                "Night Bazaar & Craft Stalls", "Flower & Garden Market", "High-Fashion Promenade",
-                "Local Farmers & Produce Market", "Custom Tailors & Garment Lane", "Electronics & Gadgets Market", "Artisan Glassware & Woodcraft Studio"
-            ]),
-            build_pillar_list("adventures", "Adventures", [
-                "Reserve Forest & Nature Trail", "Riverfront Kayaking & Paddle Boating",
-                "City Park Cycling Track", "Golf Club 18-Hole Green Course",
-                "Theme Park Zip Line & Rope Course", "Riverfront Speedboat Cruise",
-                "Extreme Water Park Slides", "Open-Air Photography Walk",
-                "Bird Sanctuary Wildlife Trail", "Glider Aviation & Flying Club",
-                "Nature Walk & Trekking Circuit", "City Cycling Expedition",
-                "Resort Paintball & Shooting Arena", "Wave Pool Thrills & Water Sports",
-                "Eco Tour & Wilderness Reserve", "Historical Heritage Trail Walk",
-                "Outdoor Exercise & Sports Zone", "Deer Park Safari Trail",
-                "Open Green Jogging Track", "Riverfront Night Stargazing Point",
-                "Archery Club & Shooting Range", "Riverfront Rowing & Boating Deck",
-                "Boating Deck & Water Recreation", "Wilderness Zoo Walk", "Adventure Obstacle Course"
-            ]),
-            build_pillar_list("theme_parks", "Theme Parks", [
-                "Grand Water Kingdom", "Thrill Amusement World", "Family Adventure Resort",
-                "Extreme Water Slide Park", "VR & Digital Gaming World", "Indoor Trampoline & Jump Zone",
-                "Wilderness Petting & Safari Park", "Laser Tag & Paintball Arena", "Go-Kart Racing Circuit",
-                "Kidz & Junior Play World", "Historical Theme Village", "Science & Discovery Interactive Center",
-                "Aquarium & Marine Life Park", "Roller Coaster & Thrill Park", "Indoor Snow & Ice Experience",
-                "Multi-Level Arcade & Fun Station", "Ninja Obstacle Course Park", "Bouldering & Climbing Fun Center",
-                "Wave Pool & Surf Lagoon", "Fantasy World & Mini Train", "Outdoor Ropes & Canopy Adventure",
-                "VR Escape Room Arena", "Fairground & Carnival Pier", "Sky Karting & Speed Track", "Interactive Flight Simulator World"
-            ]),
-            build_pillar_list("sacred_temples", "Sacred Temples & Heritage Shrines", [
-                "Ancient Heritage Temple", "Sacred Spiritual Shrine", "Historic Royal Mosque",
-                "Grand Cathedral & Sanctuary", "Peaceful Buddhist Monastery", "Historic Gurudwara & Prayer Hall",
-                "Sacred Hilltop Shrine", "Venerable Convent & Abbey", "Ancient Stepwell Temple Complex",
-                "Spiritual Heritage Sanctuary", "Synagogue & Cultural Shrine", "Sufi Shrine & Dargah",
-                "Sacred Bathing Ghats & Mandir", "Traditional Zen Meditation Hall", "Monumental Basilique & Chancel",
-                "Artisanal Carved Stone Temple", "Sacred Forest Grove Sanctuary", "Old Town Heritage Chapel",
-                "Peace & Inter-faith Sanctuary", "Riverside Spiritual Ashram", "Golden Temple & Water Tank",
-                "Mountain Pilgrimage Sanctuary", "Historic Orthodox Cathedral", "Sacred Belltower & Shrine", "Eternal Flame Heritage Temple"
-            ]),
-        )
-
         return TripPlanResponse(
             destination=destination,
             destination_image=destination_image,
@@ -2352,7 +2324,7 @@ async def build_fallback_trip_plan(
             coordinates=coordinates,
             itinerary=itinerary,
             routes=routes,
-            culinary_highlights=get_fallback_culinary_highlights(destination, matched_venues),
+            culinary_highlights=culinary_highlights,
             attractions=attractions,
             events=events,
             culinary=culinary,
