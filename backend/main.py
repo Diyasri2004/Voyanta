@@ -180,8 +180,8 @@ class CulinaryHighlight(BaseModel):
     description: str
     famous_for: str
     location: str
-    price_tier: str
-    cost_approx: str
+    price_tier: Optional[str] = ""
+    cost_approx: Optional[str] = ""
 
 class PillarItem(BaseModel):
     id: str = Field(default_factory=lambda: "item-" + str(int(asyncio.get_event_loop().time() * 1000)))
@@ -251,8 +251,8 @@ class GroqCulinaryHighlight(BaseModel):
     description: Optional[str] = "Authentic local culinary experience."
     famous_for: Optional[str] = "Local Specialties"
     location: Optional[str] = "City Center"
-    price_tier: Optional[str] = "$$"
-    cost_approx: Optional[str] = "$15 - $25 / person"
+    price_tier: Optional[str] = ""
+    cost_approx: Optional[str] = ""
 
 class GroqTripContent(BaseModel):
     destination: Optional[str] = None
@@ -770,15 +770,15 @@ async def generate_trip_with_groq(
         "CRITICAL REQUIREMENTS:\n"
         "- ABSOLUTELY NO REPEATING ACTIVITIES: Every single day MUST contain completely unique, non-repeating activities. Do not reuse any location, attraction, or restaurant across the entire trip.\n"
         "- DISTINCT SCHEDULES: Provide distinct morning, afternoon, and evening activities with realistic time spacing.\n"
-        "- Include a dedicated 'culinary_highlights' array containing 3 to 5 'Must-Try' iconic local food suggestions and legendary eateries famous for local dishes.\n"
-        "- PRICING: Provide precise cost estimates in USD ($). For stops, use 'cost_range' (e.g. '$10 - $30 / person'). For culinary, use 'price_tier' (e.g. '$$$') and 'cost_approx' (e.g. '$15 - $25 / person').\n"
+        "- Include a dedicated 'culinary_highlights' array containing 6 to 12 'Must-Try' iconic local food suggestions and legendary eateries famous for local dishes.\n"
+        "- PRICING: Provide precise cost estimates in USD ($). For stops, use 'cost_range' (e.g. '$10 - $30 / person').\n"
         "Return ONLY a valid JSON object (no markdown, no extra text) with this exact structure:\n"
         '{"destination":"<city name>","summary":"<one sentence>","days":['
         '{"day":1,"theme":"<theme>","stops":['
         '{"title":"<famous place name>","location":"<address>","category":"<category string>","duration_minutes":<int>,"best_time":"<HH:MM AM/PM>","cost_range":"<str>"},'
         f"...{stops_per_day} stops per day]}}],"
         '"culinary_highlights":['
-        '{"title":"<eatery or dish>","description":"<desc>","famous_for":"<specialty>","location":"<address>","price_tier":"$$","cost_approx":"<str>"}],'
+        '{"title":"<eatery or dish>","description":"<desc>","famous_for":"<specialty>","location":"<address>"}],'
         '"attractions":[{"title":"<real landmark>","description":"<highlights>","address":"<area>","price_range":"$10 - $20"}],'
         '"events":[{"title":"<real live event/venue>","description":"<details>","address":"<area>","event_time":"7:00 PM - 10:00 PM","price_range":"$15 - $30"}],'
         '"culinary":[{"title":"<real restaurant>","description":"<famous dishes>","address":"<area>","serving_style":"A la carte / Buffet / Street Food","price_range":"$$"}],'
@@ -996,14 +996,14 @@ async def generate_trip_with_groq(
         routes=routes,
         culinary_highlights=[
             CulinaryHighlight(
-                title=h.title,
-                description=h.description,
-                famous_for=h.famous_for,
-                location=h.location,
-                price_tier=getattr(h, 'price_tier', '$$'),
-                cost_approx=getattr(h, 'cost_approx', '$15 - $25 / person'),
-            ) for h in ai_trip.culinary_highlights
-        ] if hasattr(ai_trip, "culinary_highlights") else [],
+                title=getattr(h, 'title', '') or 'Local Eatery',
+                description=getattr(h, 'description', '') or 'Authentic local culinary experience.',
+                famous_for=getattr(h, 'famous_for', '') or 'Local Specialty',
+                location=getattr(h, 'location', '') or destination,
+                price_tier="",
+                cost_approx="",
+            ) for h in (getattr(ai_trip, "culinary_highlights", []) or [])
+        ] or get_fallback_culinary_highlights(destination, None),
         attractions=attractions,
         events=events,
         culinary=culinary,
@@ -2077,6 +2077,47 @@ CITY_REAL_VENUES = {
 }
 
 
+DEFAULT_CULINARY_FALLBACKS = [
+    ("Specialty Eatery & Grill", "Iconic local eatery famous for regional spices and classic grilling.", "Local Signature Dish", "City Center"),
+    ("Heritage Bakery & Patisserie", "Historic bakery serving legendary traditional pastries and fresh breads.", "Artisanal Pastries", "Old Town"),
+    ("Famous Street Food Haven", "Bustling street stall celebrated for authentic local street bites.", "Street Food Delicacies", "Market Square"),
+    ("Seafood & Waterfront Pavilion", "Fresh local catches prepared with regional herbs and coastal flavor.", "Fresh Local Seafood", "Waterfront District"),
+    ("Traditional Tea & Dessert House", "Renowned tea house serving heritage brews and traditional sweets.", "Handcrafted Sweets & Tea", "Heritage District"),
+    ("Chef's Table Regional Bistro", "Acclaimed bistro celebrating farm-to-table local ingredients.", "Chef's Tasting Specialties", "Downtown"),
+    ("Wood-Fired Pizzeria & Osteria", "Authentic wood-fired recipes using house-made cheeses and herbs.", "Neapolitan Style Wood-Fired Pizza", "Cultural Quarter"),
+    ("Noodle & Dumpling House", "Hand-pulled noodles and steaming handmade dumplings.", "Artisanal Dumplings & Broth", "Chinatown District"),
+]
+
+def get_fallback_culinary_highlights(destination: str, matched_venues: Optional[dict] = None) -> List[CulinaryHighlight]:
+    res = []
+    venues = matched_venues.get("culinary", []) if matched_venues else []
+    count = max(8, min(12, len(venues)))
+    for i in range(count):
+        if i < len(venues):
+            v_title = venues[i]
+            famous_for = f"Specialty {v_title.split()[0]} Dish"
+            desc = f"Verified iconic culinary destination in {destination} known for authentic local flavors."
+            loc = destination
+        else:
+            default_item = DEFAULT_CULINARY_FALLBACKS[i % len(DEFAULT_CULINARY_FALLBACKS)]
+            v_title = f"{destination} {default_item[0]}"
+            desc = f"{default_item[1]} A must-try experience in {destination}."
+            famous_for = default_item[2]
+            loc = f"{destination} {default_item[3]}"
+
+        res.append(
+            CulinaryHighlight(
+                title=v_title,
+                description=desc,
+                famous_for=famous_for,
+                location=loc,
+                price_tier="",
+                cost_approx="",
+            )
+        )
+    return res
+
+
 async def build_fallback_trip_plan(
     location: str,
     days: int = 3,
@@ -2300,7 +2341,7 @@ async def build_fallback_trip_plan(
             coordinates=coordinates,
             itinerary=itinerary,
             routes=routes,
-            culinary_highlights=[],
+            culinary_highlights=get_fallback_culinary_highlights(destination, matched_venues),
             attractions=attractions,
             events=events,
             culinary=culinary,

@@ -199,49 +199,35 @@ function StopCard({ stop, destination }: { stop: TripStop; destination: string }
 }
 
 function CulinaryCard({ highlight, destination }: { highlight: any; destination: string }) {
-  const { formatStringRange } = useCurrency();
-  const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(highlight.title + ' ' + destination)}`;
+  const title = highlight.title || highlight.name || "Specialty Eatery";
+  const specialty = highlight.famous_for || highlight.specialty || "LOCAL SPECIALTY";
+  const description = highlight.description || "Authentic local culinary experience.";
+  const locationName = highlight.location || destination;
+  const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${title} ${destination}`)}`;
 
   return (
-    <article className="flex flex-col gap-4 rounded-3xl border border-[#ff007f]/20 bg-[#03050a]/90 backdrop-blur-md p-6 hover:bg-white/5 transition-colors shadow-[0_0_15px_rgba(255,0,127,0.1)] group">
-      <div>
-        <div className="flex justify-between items-start">
-          <h3 className="font-syne text-lg font-bold text-white group-hover:text-[#ff007f] transition-colors">{highlight.title}</h3>
-          {highlight.price_tier && (
-            <span className="bg-[#ff007f]/20 text-[#ff007f] text-xs font-bold px-2 py-1 rounded-md ml-2 shrink-0 border border-[#ff007f]/30">
-              {highlight.price_tier}
-            </span>
-          )}
-        </div>
-        <p className="mt-1 text-[0.8rem] font-bold text-[#39ff14] uppercase tracking-wider">{highlight.famous_for}</p>
+    <div className="relative flex flex-col justify-between p-6 rounded-2xl bg-zinc-900/80 border border-zinc-800 hover:border-pink-500/30 transition-all duration-300 min-h-[220px]">
+      <div className="space-y-2">
+        <h3 className="text-xl font-bold text-white tracking-wide">{title}</h3>
+        <p className="text-xs font-semibold tracking-wider text-emerald-400 uppercase">{specialty}</p>
+        <p className="text-sm text-zinc-400 leading-relaxed pt-1 line-clamp-2">{description}</p>
       </div>
-      
-      <p className="text-[0.85rem] leading-relaxed text-[#94A3B8] flex-1">
-        {highlight.description}
-      </p>
 
-      {highlight.cost_approx && (
-        <div className="flex items-center gap-1 bg-white/5 border border-white/10 w-fit px-2 py-1 rounded-md cursor-help" title="≈ Prices are approximate and subject to seasonal changes.">
-          <span className="text-[10px] text-white/80">🍱 Approx:</span>
-          <span className="text-[10px] font-bold text-[#00f0ff]">{formatStringRange(highlight.cost_approx)}</span>
+      <div className="pt-4 mt-4 border-t border-zinc-800/80 flex items-center justify-between">
+        <div className="flex items-center gap-1.5 text-xs text-zinc-400">
+          <MapPin className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+          <span className="truncate max-w-[180px]">{locationName}</span>
         </div>
-      )}
-
-      <div className="mt-2 flex items-center justify-between border-t border-white/10 pt-4">
-        <span className="text-[0.75rem] text-[#64748B] flex items-center gap-1.5 line-clamp-1 max-w-[60%]">
-          <MapPin className="h-3 w-3 shrink-0" />
-          {highlight.location}
-        </span>
         <a
           href={mapUrl}
           target="_blank"
           rel="noreferrer"
-          className="flex items-center gap-1.5 rounded-full bg-[#00f0ff]/10 px-3 py-1.5 text-[11px] font-bold text-[#00f0ff] transition-colors hover:bg-[#00f0ff]/20 border border-[#00f0ff]/30"
+          className="px-4 py-1.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-medium hover:bg-cyan-500/20 transition-all"
         >
           Navigate
         </a>
       </div>
-    </article>
+    </div>
   );
 }
 
