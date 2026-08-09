@@ -788,8 +788,9 @@ async def generate_trip_with_groq(
         '"essentials":[{"title":"<practical advice/emergency item>","description":"<numbers, hospital, transit, scam tips>","address":"<citywide>"}],'
         '"shopping":[{"title":"<real bazaar or mall>","description":"<handicrafts or brands>","address":"<area>","price_range":"$$"}],'
         '"adventures":[{"title":"<real outdoor thrill/trek>","description":"<activity details>","address":"<area>","price_range":"$$$"}],'
-        '"theme_parks":[{"title":"<real amusement or water park>","description":"<attractions>","address":"<area>","price_range":"$$"}]}\n'
-        f"Generate exactly {days} days with {stops_per_day} stops each, plus 3 to 5 real items for each of the 10 pillars (attractions, events, culinary, bars_pubs, wellness, secret_spots, essentials, shopping, adventures, theme_parks)."
+        '"theme_parks":[{"title":"<real amusement or water park>","description":"<attractions>","address":"<area>","price_range":"$$"}],'
+        '"sacred_temples":[{"title":"<real temple, shrine, or sacred site>","description":"<spiritual heritage>","address":"<area>","price_range":"Free / Donation"}]}\n'
+        "For EVERY destination requested, generate AT LEAST 25 distinct, real-world venues per pillar (275+ items total). Do NOT limit or truncate response arrays."
     )
 
     traveler_context_str = ""
@@ -2172,14 +2173,86 @@ async def build_fallback_trip_plan(
             attractions, events, culinary, bars_pubs, wellness,
             secret_spots, essentials, shopping, adventures, theme_parks, sacred_temples
         ) = await asyncio.gather(
-            build_pillar_list("attractions", "Tourist Attractions", ["Historic Landmark", "Cultural Center", "City Promenade", "Royal Monument"]),
-            build_pillar_list("events", "Events", ["Cultural Evening Gala", "Live Music Session", "Heritage Art Showcase"]),
-            build_pillar_list("culinary", "Culinary", ["Legendary Specialty Eatery", "Street Food Haven", "Rooftop Dining Lounge"]),
-            build_pillar_list("bars_pubs", "Bars & Pubs", ["Skyline Lounge & Bar", "Craft Cocktail Taproom", "Vibrant Social Club"]),
-            build_pillar_list("wellness", "Wellness & Meditation", ["Serene Herbal Spa", "Sunrise Meditation Park", "Luxury Wellness Pavilion"]),
-            build_pillar_list("secret_spots", "Secret Spots", ["Hidden Courtyard Cafe", "Scenic Sunset Point", "Historic Alleyway Walk"]),
-            build_pillar_list("essentials", "Travel Essentials", ["Medical & Emergency Desk", "Central Transit Station", "Tourist Information Center"]),
-            build_pillar_list("shopping", "Shopping", ["Traditional Artisan Bazaar", "Bustling Street Market", "Luxury Shopping Galleria"]),
+            build_pillar_list("attractions", "Tourist Attractions", [
+                "Historic Landmark & Monument", "Cultural Heritage Center", "City Promenade & Plaza",
+                "Royal Monument Complex", "National Heritage Museum", "Scenic Riverfront & Gardens",
+                "Architectural Masterpiece Pavilion", "Grand Palace & Courtyard", "Historic Walled Fort",
+                "Art Gallery & Culture House", "City Skyline Viewpoint", "Memorial Gardens & Park",
+                "Old Town Heritage Square", "Ancient Observatory & Tower", "Signature Promenade Walk",
+                "Cathedral & Heritage Plaza", "Iconic Bridge Overlook", "Sculpture Park & Gardens",
+                "Botanical Heritage Conservatory", "Preservation Cultural Zone", "Historic Clocktower Square",
+                "Riverside Heritage Promenade", "Maritime History Pier", "Civic Heritage Center", "Panorama Overlook Tower"
+            ]),
+            build_pillar_list("events", "Events", [
+                "Cultural Evening Gala", "Live Music Session", "Heritage Art Showcase",
+                "Open-Air Symphony Concert", "Seasonal Food & Wine Fair", "Film & Performing Arts Festival",
+                "Night Market & Cultural Fair", "Traditional Folk Dance Night", "Craft Artisans Exhibition",
+                "Jazz & Blues Lounge Session", "Street Performance Spectacle", "Historical Light & Sound Show",
+                "Local Heritage Carnival", "Literary & Book Fair Showcase", "Sunset Acoustics on Riverbank",
+                "Contemporary Art Triennial", "Culinary Masterclass & Tasting", "Theater & Drama Evening",
+                "Fireworks & Light Extravaganza", "World Music & Drum Circle", "Artisanal Craft Market Fest",
+                "Seasonal Flower & Garden Show", "Comedy & Improv Club Night", "Midsummer Heritage Promenade", "Indie Music & Arts Gathering"
+            ]),
+            build_pillar_list("culinary", "Culinary", [
+                "Legendary Specialty Eatery", "Street Food Haven", "Rooftop Dining Lounge",
+                "Heritage Spice Bistro", "Authentic Seafood Grill", "Traditional Tea & Coffee House",
+                "Artisanal Bakery & Cafe", "Chef's Table Fine Dining", "Riverside Waterfront Restaurant",
+                "Classic Brasserie & Grill", "Historic Courtyard Cafe", "Gourmet Noodle & Dumpling House",
+                "Local Dessert & Sweetshop", "Wood-Fired Pizza & Trattoria", "Organic Farm-to-Table Bistro",
+                "Craft Burger & Taproom", "Vintage Irani & Heritage Diner", "Dim Sum & Tea Pavilion",
+                "Michelin-Inspired Tasting Lounge", "Sunset Panorama Lounge & Grill", "Tapas & Small Plates Bar",
+                "Authentic Curry & Kebab House", "Gourmet Delicatessen & Market", "Speakeasy Supper Club", "All-Day Artisanal Brunch Spot"
+            ]),
+            build_pillar_list("bars_pubs", "Bars & Pubs", [
+                "Skyline Lounge & Bar", "Craft Cocktail Taproom", "Vibrant Social Club",
+                "Speakeasy Underground Lounge", "Rooftop Sunset Cocktail Bar", "Historic English Pub",
+                "Jazz & Blues Cocktail Den", "Wine & Cheese Cellar", "Sports Bar & Grill Arena",
+                "Boutique Microbrewery & Garden", "Tiki Cocktail & Beach Bar", "Retro Arcade Bar & Lounge",
+                "Chic Gin & Tonic Parlor", "Whisky Tasting Lounge", "Waterfront Lounge Bar",
+                "Mixology Lab & Lounge", "Craft Beer Taphouse", "Underground Nightclub & Bar",
+                "Gastro-Pub & Kitchen", "Sunset Terrace Bar", "Velvet Cocktail Saloon",
+                "Bohemian Tapas & Bar", "Irish Taphouse & Tavern", "High-Altitude Rooftop Bar", "Hidden Door Speakeasy"
+            ]),
+            build_pillar_list("wellness", "Wellness & Meditation", [
+                "Serene Herbal Spa", "Sunrise Meditation Park", "Luxury Wellness Pavilion",
+                "Traditional Thermal Baths", "Aromatherapy & Massage Haven", "Holistic Mind-Body Center",
+                "Riverside Yoga Sanctuary", "Deep Tissue & Bodywork Studio", "Zen Botanical Garden",
+                "Organic Skincare & Facial Clinic", "Vipassana Meditation Retreat", "Salt Therapy & Sauna Lounge",
+                "Hydrotherapy & Floatation Spa", "Pilates & Core Conditioning Studio", "Ayurvedic Healing Clinic",
+                "Hot Stone & Sauna Sanctuary", "Sound Bath & Healing Lounge", "Forest Bathing Nature Trail",
+                "Mineral Hot Spring Resort", "Reflexology & Acupressure Spa", "Mindful Morning Run Circuit",
+                "Serenity Tea & Meditation House", "Vitality Health & Fitness Club", "Wellness Day Spa & Hammam", "Sunrise Stretch & Yoga Deck"
+            ]),
+            build_pillar_list("secret_spots", "Secret Spots", [
+                "Hidden Courtyard Cafe", "Scenic Sunset Point", "Historic Alleyway Walk",
+                "Secret Rooftop Viewpoint", "Hidden Botanical Passage", "Underground Heritage Tunnel",
+                "Quiet Waterside Overlook", "Vintage Bookshop Lane", "Forgotten Cloister Garden",
+                "Architectural Arch Alley", "Artist Studio Alleyway", "Hidden Fountain Square",
+                "Old Cobblestone Backstreet", "Secluded Observation Deck", "Panoramic Skyline Nook",
+                "Quiet Riverside Bench Row", "Historic Step-Well Courtyard", "Hidden Fresco Gallery",
+                "Abandoned Railway Greenwalk", "Private Tea Garden Nook", "Secret Rooftop Greenhouse",
+                "Hidden Mosaic Passage", "Old Town Belltower Stairway", "Charming Shaded Terrace", "Quiet Whispering Archway"
+            ]),
+            build_pillar_list("essentials", "Travel Essentials", [
+                "Medical & Emergency Desk", "Central Transit Station", "Tourist Information Center",
+                "General Hospital & ER", "24-Hour Central Pharmacy", "Foreign Currency Exchange Hub",
+                "Central Post Office & Shipping", "Luggage Storage & Locker Facility", "SIM Card & Mobile Network Desk",
+                "City Taxi & Ride-Share Hub", "Tourist Police Control Desk", "Metro & Light Rail Terminal",
+                "24-Hour International ATM", "Consular & Diplomatic Advice", "Airport Express Shuttle Stop",
+                "24-Hour Convenience Hub", "Urgent Care Medical Clinic", "Lost & Found Central Desk",
+                "Bicycle & Scooter Rental Hub", "Electric Vehicle Charge Hub", "Digital Tourist Kiosk",
+                "Public Safety & Assistance Station", "International Wire & Western Union", "Traveler Health & First Aid Desk", "General Transport Information Hub"
+            ]),
+            build_pillar_list("shopping", "Shopping", [
+                "Traditional Artisan Bazaar", "Bustling Street Market", "Luxury Shopping Galleria",
+                "Handicraft & Souvenir Arcade", "Vintage & Antique Market", "Designer Boutique Strip",
+                "High-End Department Store", "Local Spice & Food Market", "Artisanal Leatherwork Bazaar",
+                "Textile & Fabric Street Market", "Modern Lifestyle Mall", "Booktown & Antiquarian Shops",
+                "Jewelry & Gemstone Arcade", "Flea Market & Vintage Finds", "Gourmet Food & Provisions Hall",
+                "Ceramics & Pottery Bazaar", "Handmade Craft Workshop Street", "Outlet Shopping Village",
+                "Night Bazaar & Craft Stalls", "Flower & Garden Market", "High-Fashion Promenade",
+                "Local Farmers & Produce Market", "Custom Tailors & Garment Lane", "Electronics & Gadgets Market", "Artisan Glassware & Woodcraft Studio"
+            ]),
             build_pillar_list("adventures", "Adventures", [
                 "Reserve Forest & Nature Trail", "Riverfront Kayaking & Paddle Boating",
                 "City Park Cycling Track", "Golf Club 18-Hole Green Course",
@@ -2194,8 +2267,26 @@ async def build_fallback_trip_plan(
                 "Archery Club & Shooting Range", "Riverfront Rowing & Boating Deck",
                 "Boating Deck & Water Recreation", "Wilderness Zoo Walk", "Adventure Obstacle Course"
             ]),
-            build_pillar_list("theme_parks", "Theme Parks", ["Grand Water Kingdom", "Thrill Amusement World", "Family Adventure Resort"]),
-            build_pillar_list("sacred_temples", "Sacred Temples & Heritage Shrines", ["Ancient Heritage Temple", "Sacred Spiritual Shrine", "Historic Royal Mosque"]),
+            build_pillar_list("theme_parks", "Theme Parks", [
+                "Grand Water Kingdom", "Thrill Amusement World", "Family Adventure Resort",
+                "Extreme Water Slide Park", "VR & Digital Gaming World", "Indoor Trampoline & Jump Zone",
+                "Wilderness Petting & Safari Park", "Laser Tag & Paintball Arena", "Go-Kart Racing Circuit",
+                "Kidz & Junior Play World", "Historical Theme Village", "Science & Discovery Interactive Center",
+                "Aquarium & Marine Life Park", "Roller Coaster & Thrill Park", "Indoor Snow & Ice Experience",
+                "Multi-Level Arcade & Fun Station", "Ninja Obstacle Course Park", "Bouldering & Climbing Fun Center",
+                "Wave Pool & Surf Lagoon", "Fantasy World & Mini Train", "Outdoor Ropes & Canopy Adventure",
+                "VR Escape Room Arena", "Fairground & Carnival Pier", "Sky Karting & Speed Track", "Interactive Flight Simulator World"
+            ]),
+            build_pillar_list("sacred_temples", "Sacred Temples & Heritage Shrines", [
+                "Ancient Heritage Temple", "Sacred Spiritual Shrine", "Historic Royal Mosque",
+                "Grand Cathedral & Sanctuary", "Peaceful Buddhist Monastery", "Historic Gurudwara & Prayer Hall",
+                "Sacred Hilltop Shrine", "Venerable Convent & Abbey", "Ancient Stepwell Temple Complex",
+                "Spiritual Heritage Sanctuary", "Synagogue & Cultural Shrine", "Sufi Shrine & Dargah",
+                "Sacred Bathing Ghats & Mandir", "Traditional Zen Meditation Hall", "Monumental Basilique & Chancel",
+                "Artisanal Carved Stone Temple", "Sacred Forest Grove Sanctuary", "Old Town Heritage Chapel",
+                "Peace & Inter-faith Sanctuary", "Riverside Spiritual Ashram", "Golden Temple & Water Tank",
+                "Mountain Pilgrimage Sanctuary", "Historic Orthodox Cathedral", "Sacred Belltower & Shrine", "Eternal Flame Heritage Temple"
+            ]),
         )
 
         return TripPlanResponse(
@@ -2274,6 +2365,7 @@ async def build_fallback_trip_plan(
             shopping=[],
             adventures=[],
             theme_parks=[],
+            sacred_temples=[],
         )
 
 

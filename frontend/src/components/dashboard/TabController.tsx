@@ -20,6 +20,20 @@ import {
 } from "lucide-react";
 import { getTranslation, LanguageName } from "@/lib/i18n";
 
+export const PILLARS = [
+  { id: "attractions", label: "Tourist Attractions" },
+  { id: "events", label: "Events" },
+  { id: "culinary", label: "Culinary" },
+  { id: "bars_pubs", label: "Bars & Pubs" },
+  { id: "wellness", label: "Wellness & Meditation" },
+  { id: "secret_spots", label: "Secret Spots" },
+  { id: "essentials", label: "Travel Essentials" },
+  { id: "shopping", label: "Shopping" },
+  { id: "adventures", label: "Adventures" },
+  { id: "theme_parks", label: "Theme Parks" },
+  { id: "sacred_temples", label: "Temples & Shrines" }
+];
+
 export default function TabController({
   trip,
   setTrip,
