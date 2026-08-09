@@ -625,46 +625,44 @@ def generate_maps_link(place_name: str, destination: str) -> str:
     return generate_google_maps_url(place_name, "", destination)
 
 
-CATEGORY_FALLBACK_POOL = {
-    "theme_parks": [
-        "https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?w=900&auto=format&fit=crop&q=80",
-        "https://images.unsplash.com/photo-1572715655204-47e297d3b6dd?w=900&auto=format&fit=crop&q=80",
-        "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=900&auto=format&fit=crop&q=80"
+CATEGORY_PHOTO_POOLS = {
+    "attractions": [
+        "https://images.unsplash.com/photo-1599661046289-e31897846e41?w=900&auto=format&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1524492412937-b28074a5d7da?w=900&auto=format&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1548013146-72479768bada?w=900&auto=format&fit=crop&q=80"
     ],
-    "adventures": [
-        "https://images.unsplash.com/photo-1502680390469-be75c86b636f?w=900&auto=format&fit=crop&q=80",
-        "https://images.unsplash.com/photo-1541625602330-2277a4c46182?w=900&auto=format&fit=crop&q=80",
-        "https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=900&auto=format&fit=crop&q=80"
-    ],
-    "sacred_temples": [
-        "https://images.unsplash.com/photo-1561361513-2d000a50f0dc?w=900&auto=format&fit=crop&q=80",
-        "https://images.unsplash.com/photo-1548013146-72479768bada?w=900&auto=format&fit=crop&q=80",
-        "https://images.unsplash.com/photo-1609949279531-cf48d64bed89?w=900&auto=format&fit=crop&q=80"
-    ],
-    "shopping": [
-        "https://images.unsplash.com/photo-1555529669-e69e7aa0ba9a?w=900&auto=format&fit=crop&q=80",
-        "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=900&auto=format&fit=crop&q=80"
+    "secret_spots": [
+        "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=900&auto=format&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=900&auto=format&fit=crop&q=80"
     ],
     "culinary": [
-        "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=900&auto=format&fit=crop&q=80",
-        "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=900&auto=format&fit=crop&q=80"
+        "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=900&auto=format&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=900&auto=format&fit=crop&q=80"
     ],
     "bars_pubs": [
-        "https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=900&auto=format&fit=crop&q=80",
-        "https://images.unsplash.com/photo-1572116469696-31de0f17cc34?w=900&auto=format&fit=crop&q=80"
+        "https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=900&auto=format&fit=crop&q=80"
     ],
     "wellness": [
         "https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=900&auto=format&fit=crop&q=80",
         "https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=900&auto=format&fit=crop&q=80"
     ],
-    "secret_spots": [
-        "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=900&auto=format&fit=crop&q=80",
-        "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=900&auto=format&fit=crop&q=80"
+    "sacred_temples": [
+        "https://images.unsplash.com/photo-1561361513-2d000a50f0dc?w=900&auto=format&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1548013146-72479768bada?w=900&auto=format&fit=crop&q=80"
+    ],
+    "shopping": [
+        "https://images.unsplash.com/photo-1555529669-e69e7aa0ba9a?w=900&auto=format&fit=crop&q=80"
     ],
     "events": [
         "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=900&auto=format&fit=crop&q=80",
-        "https://images.unsplash.com/photo-1511192336575-5a79af67a629?w=900&auto=format&fit=crop&q=80",
-        "https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=900&auto=format&fit=crop&q=80"
+        "https://images.unsplash.com/photo-1511192336575-5a79af67a629?w=900&auto=format&fit=crop&q=80"
+    ],
+    "adventures": [
+        "https://images.unsplash.com/photo-1541625602330-2277a4c46182?w=900&auto=format&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=900&auto=format&fit=crop&q=80"
+    ],
+    "theme_parks": [
+        "https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?w=900&auto=format&fit=crop&q=80"
     ],
     "essentials": [
         "https://images.unsplash.com/photo-1517649763962-0c623266010b?w=900&auto=format&fit=crop&q=80"
@@ -672,10 +670,16 @@ CATEGORY_FALLBACK_POOL = {
 }
 
 DEFAULT_FALLBACKS = [
-    "https://images.unsplash.com/photo-1502680390469-be75c86b636f?w=900&auto=format&fit=crop&q=80",
+    "https://images.unsplash.com/photo-1599661046289-e31897846e41?w=900&auto=format&fit=crop&q=80",
     "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=900&auto=format&fit=crop&q=80",
-    "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=900&auto=format&fit=crop&q=80"
+    "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=900&auto=format&fit=crop&q=80"
 ]
+
+def get_category_fallback_photo(category: str, place_name: str) -> str:
+    cat = (category or "").lower()
+    pool = CATEGORY_PHOTO_POOLS.get(cat, CATEGORY_PHOTO_POOLS["attractions"])
+    idx = abs(hash(place_name)) % len(pool)
+    return pool[idx]
 
 async def get_async_place_photo(client: httpx.AsyncClient, place_name: str, destination: str, category: str = "") -> str:
     clean_name = clean_venue_title(place_name, destination)
@@ -707,11 +711,8 @@ async def get_async_place_photo(client: httpx.AsyncClient, place_name: str, dest
         except Exception:
             pass
 
-    # Step 2: Fallback to category + item title keyword hash to ensure unique fallback images
-    cat_clean = (category or "").lower()
-    pool = CATEGORY_FALLBACK_POOL.get(cat_clean, DEFAULT_FALLBACKS)
-    fallback_seed = abs(hash(clean_name)) % len(pool)
-    return pool[fallback_seed]
+    # Step 2: Fallback to category + item title keyword hash
+    return get_category_fallback_photo(category, clean_name)
 
 
 # ─────────────────────────────────────────────
@@ -2068,9 +2069,20 @@ PILLAR_KEYS = [
     "secret_spots", "essentials", "shopping", "adventures", "theme_parks", "sacred_temples"
 ]
 
-async def call_groq_prompt(prompt: str) -> str:
+async def call_groq_api(prompt: str, response_format: Optional[dict] = None) -> str:
     if not GROQ_API_KEY:
         raise ValueError("GROQ_API_KEY not configured")
+    payload = {
+        "model": GROQ_MODEL,
+        "messages": [
+            {"role": "user", "content": prompt},
+        ],
+        "temperature": 0.3,
+        "max_tokens": 4000,
+    }
+    if response_format:
+        payload["response_format"] = response_format
+
     async with httpx.AsyncClient() as client:
         response = await client.post(
             GROQ_BASE,
@@ -2078,14 +2090,7 @@ async def call_groq_prompt(prompt: str) -> str:
                 "Authorization": f"Bearer {GROQ_API_KEY}",
                 "Content-Type": "application/json",
             },
-            json={
-                "model": GROQ_MODEL,
-                "messages": [
-                    {"role": "user", "content": prompt},
-                ],
-                "temperature": 0.3,
-                "max_tokens": 4000,
-            },
+            json=payload,
             timeout=15.0,
         )
         response.raise_for_status()
@@ -2095,67 +2100,70 @@ async def call_groq_prompt(prompt: str) -> str:
         content = re.sub(r"\s*```$", "", content).strip()
         return content
 
+async def call_groq_prompt(prompt: str, response_format: Optional[dict] = None) -> str:
+    return await call_groq_api(prompt, response_format=response_format)
+
 async def fetch_dynamic_destination_data(destination: str) -> dict:
     clean_dest = destination.split(",")[0].strip().title()
     
     prompt = f"""
-    You are an expert global travel concierge. For the destination '{clean_dest}', return a JSON object with keys: {json.dumps(PILLAR_KEYS)}.
-    For EACH key, provide an array of at least 25 real, existing, verified venues/activities in {clean_dest}.
-    
-    Each item MUST have:
-    - "id": string
-    - "name": Exact real place name in {clean_dest} (e.g., "Wat Phra Kaew", "Chatuchak Market", "Maggie Choo's Bar").
-    - "location": Locality/Neighborhood in {clean_dest}.
-    - "description": 1 sentence description.
-    
+    You are an expert travel concierge engine.
+    For destination '{clean_dest}', generate valid JSON containing keys: {json.dumps(PILLAR_KEYS)}.
+    For EACH pillar, provide an array of at least 25 real, existing, named places in {clean_dest}.
+
     CRITICAL RULES:
-    - NEVER use generic titles or repeat the city name as the venue name (do NOT return "{clean_dest}" as name).
-    - Every item MUST be a real, distinct location that exists on Google Maps.
+    1. "name" MUST be the actual specific name of a real location (e.g. "Amer Fort", "Mehrangarh Fort", "Hawa Mahal", "Jalmahal", "Chokhi Dhani").
+    2. NEVER return generic titles like "{clean_dest} Spot 1" or "{clean_dest} Historic Square 2".
+    3. Return ONLY valid JSON.
     """
 
-    try:
-        raw_response = await call_groq_prompt(prompt)
-        parsed_data = json.loads(raw_response)
-        
-        async with httpx.AsyncClient() as client:
-            for pillar in PILLAR_KEYS:
-                raw_items = parsed_data.get(pillar, [])
-                items = []
-                for idx, item in enumerate(raw_items):
-                    v_name = item.get("name", "") if isinstance(item, dict) else str(item)
-                    v_name = clean_venue_title(v_name, clean_dest)
-                    if not v_name or v_name.lower() == clean_dest.lower():
-                        v_name = f"{clean_dest} Local Point {idx+1}"
-                    
-                    v_loc = item.get("location", clean_dest) if isinstance(item, dict) else clean_dest
-                    v_desc = item.get("description", f"Verified {pillar.replace('_', ' ')} venue in {clean_dest}.") if isinstance(item, dict) else f"Verified venue in {clean_dest}."
-                    query_str = f"{v_name}, {v_loc}, {clean_dest}".strip()
-                    
-                    nav_url = f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(query_str)}"
-                    img_url = await get_async_place_photo(client, v_name, clean_dest, category=pillar)
-                    
-                    items.append({
-                        "id": f"{pillar}_{idx+1}",
-                        "title": v_name,
-                        "name": v_name,
-                        "category": pillar.replace("_", " ").title(),
-                        "description": v_desc,
-                        "address": v_loc,
-                        "location": v_loc,
-                        "maps_url": nav_url,
-                        "navigation_url": nav_url,
-                        "image_url": img_url,
-                    })
-                parsed_data[pillar] = items
-                
-        return parsed_data
+    for attempt in range(2):
+        try:
+            raw_response = await call_groq_api(prompt, response_format={"type": "json_object"})
+            parsed_data = json.loads(raw_response)
+            if parsed_data and len(parsed_data.get("attractions", [])) > 0:
+                async with httpx.AsyncClient() as client:
+                    for pillar in PILLAR_KEYS:
+                        raw_items = parsed_data.get(pillar, [])
+                        items = []
+                        for idx, item in enumerate(raw_items):
+                            v_name = item.get("name", "").strip() if isinstance(item, dict) else str(item)
+                            v_name = clean_venue_title(v_name, clean_dest)
+                            if not v_name or v_name.lower() == clean_dest.lower():
+                                v_name = f"{clean_dest} Local Point {idx+1}"
+                            
+                            v_loc = item.get("location", clean_dest) if isinstance(item, dict) else clean_dest
+                            v_desc = item.get("description", f"Verified {pillar.replace('_', ' ')} venue in {clean_dest}.") if isinstance(item, dict) else f"Verified venue in {clean_dest}."
+                            query_str = f"{v_name}, {v_loc}, {clean_dest}".strip()
+                            
+                            nav_url = f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(query_str)}"
+                            
+                            photo_url = await get_async_place_photo(client, v_name, clean_dest, category=pillar)
+                            if "photo-1502680390469" in photo_url or "surfing" in photo_url.lower():
+                                photo_url = get_category_fallback_photo(pillar, v_name)
+                                
+                            items.append({
+                                "id": f"{pillar}_{idx+1}",
+                                "title": v_name,
+                                "name": v_name,
+                                "category": pillar.replace("_", " ").title(),
+                                "description": v_desc,
+                                "address": v_loc,
+                                "location": v_loc,
+                                "maps_url": nav_url,
+                                "navigation_url": nav_url,
+                                "image_url": photo_url,
+                            })
+                        parsed_data[pillar] = items
+                return parsed_data
+        except Exception as e:
+            logger.warning(f"Groq generation attempt {attempt+1} failed for {clean_dest}: {e}")
 
-    except Exception as e:
-        logger.error(f"Free dynamic generation fallback triggered for {clean_dest}: {e}")
-        return generate_structural_dynamic_fallback(clean_dest)
+    # Fall back safely without surfer images
+    return generate_structural_dynamic_fallback(clean_dest)
 
 def generate_structural_dynamic_fallback(destination: str) -> dict:
-    """Guaranteed free fallback generator—never repeats raw city name."""
+    """Guaranteed free fallback generator—never repeats raw city name or surfer images."""
     clean_dest = destination.split(",")[0].strip().title()
     fallback = {}
     
@@ -2190,7 +2198,7 @@ def generate_structural_dynamic_fallback(destination: str) -> dict:
                 "description": f"Popular {pillar.replace('_', ' ')} location situated in {clean_dest}.",
                 "maps_url": nav_url,
                 "navigation_url": nav_url,
-                "image_url": "https://images.unsplash.com/photo-1502680390469-be75c86b636f?w=900&auto=format&fit=crop&q=80"
+                "image_url": get_category_fallback_photo(pillar, venue_title)
             })
         fallback[pillar] = items
         
