@@ -815,38 +815,9 @@ async def generate_trip_with_groq(
         f"{traveler_context_str}\n"
     )
 
+    full_prompt = f"{system_prompt}\n\nUSER REQUEST: {prompt}"
     try:
-        response = await client.post(
-            GROQ_BASE,
-            headers={
-                "Authorization": f"Bearer {GROQ_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": GROQ_MODEL,
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": system_prompt,
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                "temperature": 0.3,
-                "max_tokens": 3000,
-            },
-            timeout=15.0,
-        )
-        if response.status_code != 200:
-            logger.error("Groq API error response (%s): %s", response.status_code, response.text)
-            return None
-        response.raise_for_status()
-        content = response.json()["choices"][0]["message"]["content"].strip()
-
-        import re
-        content = re.sub(r"^```(?:json)?\s*", "", content, flags=re.IGNORECASE)
-        content = re.sub(r"\s*```$", "", content)
-        content = content.strip()
-
+        content = await call_ai_with_rate_limit_fallback(full_prompt, response_format={"type": "json_object"})
         ai_trip = GroqTripContent.model_validate_json(content)
         
         # Guardrail: Strip out banned generic terms
@@ -2069,39 +2040,75 @@ PILLAR_KEYS = [
     "secret_spots", "essentials", "shopping", "adventures", "theme_parks", "sacred_temples"
 ]
 
-async def call_groq_api(prompt: str, response_format: Optional[dict] = None) -> str:
-    if not GROQ_API_KEY:
-        raise ValueError("GROQ_API_KEY not configured")
-    payload = {
-        "model": GROQ_MODEL,
-        "messages": [
-            {"role": "user", "content": prompt},
-        ],
-        "temperature": 0.3,
-        "max_tokens": 4000,
+async def call_ai_with_rate_limit_fallback(prompt: str, response_format: Optional[dict] = None) -> str:
+    """Tries Primary Groq Model -> Secondary Lightweight Groq Model -> Gemini API."""
+    models_to_try = [
+        "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant",
+        "mixtral-8x7b-32768"
+    ]
+    
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json"
     }
-    if response_format:
-        payload["response_format"] = response_format
 
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            GROQ_BASE,
-            headers={
-                "Authorization": f"Bearer {GROQ_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json=payload,
-            timeout=15.0,
-        )
-        response.raise_for_status()
-        content = response.json()["choices"][0]["message"]["content"].strip()
-        import re
-        content = re.sub(r"^```(?:json)?\s*", "", content, flags=re.IGNORECASE)
-        content = re.sub(r"\s*```$", "", content).strip()
-        return content
+    if GROQ_API_KEY:
+        for model in models_to_try:
+            try:
+                payload = {
+                    "model": model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.4
+                }
+                if response_format:
+                    payload["response_format"] = response_format
+
+                async with httpx.AsyncClient() as client:
+                    res = await client.post("https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers, timeout=12.0)
+                    if res.status_code == 200:
+                        data = res.json()
+                        raw_text = data["choices"][0]["message"]["content"].strip()
+                        import re
+                        clean_json = re.sub(r"^```(?:json)?\s*", "", raw_text, flags=re.IGNORECASE)
+                        clean_json = re.sub(r"\s*```$", "", clean_json).strip()
+                        return clean_json
+                    elif res.status_code == 429:
+                        logger.warning(f"Groq Model {model} rate limited (429). Trying next fallback model...")
+                        continue
+                    else:
+                        logger.warning(f"Groq Model {model} returned status {res.status_code}: {res.text}")
+            except Exception as e:
+                logger.warning(f"Failed call for {model}: {e}")
+                continue
+
+    if GEMINI_API_KEY:
+        try:
+            gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+            gemini_payload = {
+                "contents": [{"parts": [{"text": prompt + "\nReturn strictly JSON format."}]}]
+            }
+            async with httpx.AsyncClient() as client:
+                res = await client.post(gemini_url, json=gemini_payload, timeout=12.0)
+                if res.status_code == 200:
+                    data = res.json()
+                    raw_text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+                    import re
+                    clean_json = re.sub(r"^```(?:json)?\s*", "", raw_text, flags=re.IGNORECASE)
+                    clean_json = re.sub(r"\s*```$", "", clean_json).strip()
+                    return clean_json
+                else:
+                    logger.warning(f"Gemini API returned status {res.status_code}: {res.text}")
+        except Exception as e:
+            logger.error(f"Gemini fallback failed: {e}")
+
+    raise Exception("All AI generation models rate limited or unavailable.")
+
+async def call_groq_api(prompt: str, response_format: Optional[dict] = None) -> str:
+    return await call_ai_with_rate_limit_fallback(prompt, response_format=response_format)
 
 async def call_groq_prompt(prompt: str, response_format: Optional[dict] = None) -> str:
-    return await call_groq_api(prompt, response_format=response_format)
+    return await call_ai_with_rate_limit_fallback(prompt, response_format=response_format)
 
 async def fetch_dynamic_destination_data(destination: str) -> dict:
     clean_dest = destination.split(",")[0].strip().title()
@@ -2119,7 +2126,7 @@ async def fetch_dynamic_destination_data(destination: str) -> dict:
 
     for attempt in range(2):
         try:
-            raw_response = await call_groq_api(prompt, response_format={"type": "json_object"})
+            raw_response = await call_ai_with_rate_limit_fallback(prompt, response_format={"type": "json_object"})
             parsed_data = json.loads(raw_response)
             if parsed_data and len(parsed_data.get("attractions", [])) > 0:
                 async with httpx.AsyncClient() as client:
