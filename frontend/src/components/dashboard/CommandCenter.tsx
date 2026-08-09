@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import CulinaryPillarTab from "./CulinaryPillarTab";
 import PillarTab, { PillarItemData } from "./PillarTab";
 import PlanBuilderDrawer, { SavedPlanItem } from "./PlanBuilderDrawer";
 import {
@@ -103,6 +104,40 @@ export default function CommandCenter({
 
   const planItems = savedPlanItems;
 
+  const combinedCulinaryItems = (() => {
+    const rawCulinary = trip?.culinary || [];
+    const highlights = trip?.culinary_highlights || [];
+    
+    const highlightAsItems = highlights.map((h: any, idx: number) => ({
+      id: `highlight-${idx}`,
+      name: h.title || h.name || "Specialty Eatery",
+      title: h.title || h.name || "Specialty Eatery",
+      specialty: h.famous_for || h.specialty || "LOCAL SPECIALTY",
+      category: "Culinary Highlight",
+      description: h.description || "Authentic local culinary experience.",
+      address: h.location || destination,
+      location: h.location || destination,
+      maps_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${h.title || h.name} ${destination}`)}`
+    }));
+
+    const existingTitles = new Set(highlightAsItems.map((i: any) => i.title.toLowerCase().trim()));
+    const filteredPillarItems = rawCulinary
+      .filter((item: any) => !existingTitles.has((item.title || "").toLowerCase().trim()))
+      .map((item: any, idx: number) => ({
+        id: item.id || `culinary-item-${idx}`,
+        name: item.title || item.name || "Dining Spot",
+        title: item.title || item.name || "Dining Spot",
+        specialty: item.specialty || (item.category !== "Culinary" ? item.category : "") || "LOCAL FAVORITE",
+        category: item.category || "Culinary",
+        description: item.description || `Verified authentic dining spot in ${destination}.`,
+        address: item.address || destination,
+        location: item.address || destination,
+        maps_url: item.maps_url || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${item.title} ${destination}`)}`
+      }));
+
+    return [...highlightAsItems, ...filteredPillarItems];
+  })();
+
   return (
     <div className="flex flex-col h-full relative">
       <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 shrink-0">
@@ -170,10 +205,9 @@ export default function CommandCenter({
           />
         )}
         {currentTab === "culinary" && (
-          <PillarTab
-            items={trip?.culinary || []}
+          <CulinaryPillarTab
+            items={combinedCulinaryItems}
             destination={destination}
-            selectedLanguage={selectedLanguage}
             onAddToPlan={handleAddToPlan}
           />
         )}

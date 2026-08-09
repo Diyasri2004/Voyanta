@@ -187,6 +187,7 @@ class PillarItem(BaseModel):
     id: str = Field(default_factory=lambda: "item-" + str(int(asyncio.get_event_loop().time() * 1000)))
     title: str = "Famous Venue"
     category: str = "Explorer Spot"
+    specialty: str = ""
     description: str = ""
     address: str = ""
     maps_url: str = ""
@@ -200,11 +201,12 @@ class PillarItem(BaseModel):
 
 class GroqPillarItem(BaseModel):
     title: str
+    specialty: Optional[str] = ""
     description: Optional[str] = ""
     address: Optional[str] = "City Center"
     serving_style: Optional[str] = None
     event_time: Optional[str] = None
-    price_range: Optional[str] = "$$"
+    price_range: Optional[str] = ""
 
 
 class TripPlanResponse(BaseModel):
@@ -957,9 +959,10 @@ async def generate_trip_with_groq(
                 image_url=image_url,
                 lat=coordinates.lat,
                 lng=coordinates.lng,
+                specialty=getattr(item, 'specialty', '') or '',
                 serving_style=getattr(item, 'serving_style', '') or '',
                 event_time=getattr(item, 'event_time', '') or '',
-                price_range=getattr(item, 'price_range', '$$') or '$$',
+                price_range="",
             )
 
         tasks = [create_item(i, item) for i, item in enumerate(items)]
@@ -2194,18 +2197,43 @@ async def build_fallback_trip_plan(
                 default_pat = defaults[i % len(defaults)]
                 v_title = get_fallback_venue(cat_key, i, default_pat)
                 img = await get_async_place_photo(client, v_title, destination, cat_key) if client else PEXELS_FALLBACK
+                specialty = ""
+                if cat_key == "culinary":
+                    v_lower = v_title.lower()
+                    if "kabab" in v_lower or "tunday" in v_lower:
+                        specialty = "Galawati Kabab"
+                    elif "biryani" in v_lower:
+                        specialty = "Lucknowi Biryani"
+                    elif "kulfi" in v_lower:
+                        specialty = "Falooda Kulfi"
+                    elif "tea" in v_lower or "chai" in v_lower:
+                        specialty = "Masala Chai & Bun Maska"
+                    elif "chaat" in v_lower or "basket" in v_lower:
+                        specialty = "Tokri Chaat"
+                    elif "kachori" in v_lower:
+                        specialty = "Kachori Jalebi"
+                    elif "thandai" in v_lower:
+                        specialty = "Special Thandai"
+                    elif "lassi" in v_lower:
+                        specialty = "Rabri Lassi"
+                    elif "sweets" in v_lower or "mithai" in v_lower:
+                        specialty = "Malaiyyo & Sweets"
+                    else:
+                        specialty = "Local Signature Specialty"
+
                 res.append(
                     PillarItem(
                         id=f"{cat_key}-{i+1}",
                         title=v_title,
                         category=cat_label,
-                        description=f"Verified landmark experience in {destination}.",
+                        specialty=specialty,
+                        description=f"Verified landmark dining experience in {destination}.",
                         address=destination,
                         maps_url=generate_maps_link(v_title, destination),
                         image_url=img,
                         lat=coordinates.lat,
                         lng=coordinates.lng,
-                        price_range="$$"
+                        price_range=""
                     )
                 )
             return res
