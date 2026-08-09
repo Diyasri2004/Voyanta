@@ -2751,16 +2751,10 @@ WMO_CODE_MAP = {
     95: ("Thunderstorm", "⛈️"), 96: ("Thunderstorm + Hail", "⛈️"), 99: ("Severe Thunderstorm", "⛈️"),
 }
 
-@app.get("/api/weather", tags=["Weather"])
-async def get_destination_weather(
-    destination: str = "Lucknow",
-    start_date: str = "",
-    end_date: str = "",
-):
-    coords = fallback_coordinates_for(destination)
-    
-    # Primary: Open-Meteo Free API (Zero Config, 200 OK Guaranteed)
+@app.get("/api/weather")
+async def get_destination_weather(destination: str = "Lucknow", start_date: str = "", end_date: str = ""):
     try:
+        coords = fallback_coordinates_for(destination)
         url = f"https://api.open-meteo.com/v1/forecast?latitude={coords.lat}&longitude={coords.lng}&current_weather=true"
         async with httpx.AsyncClient() as client:
             res = await client.get(url, timeout=3.0)
@@ -2771,15 +2765,12 @@ async def get_destination_weather(
                     "temp_c": temp,
                     "condition": "Partly Cloudy" if temp > 20 else "Clear",
                     "description": "Pleasant Weather",
-                    "icon": "02d",
-                    "emoji": "🌤️",
-                    "daily": []
+                    "icon": "02d"
                 }
     except Exception as e:
-        logger.warning(f"Open-Meteo lookup failed: {e}")
+        logger.warning(f"Weather lookup failed: {e}")
 
-    # Fallback response guarantee
-    return {"temp_c": 28, "condition": "Sunny", "description": "Clear Sky", "icon": "01d", "emoji": "☀️", "daily": []}
+    return {"temp_c": 28, "condition": "Sunny", "description": "Clear Sky", "icon": "01d"}
 
 
 # ─────────────────────────────────────────────
