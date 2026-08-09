@@ -620,28 +620,43 @@ def generate_maps_link(place_name: str, destination: str) -> str:
 
 
 def get_category_search_suffix(category: str) -> str:
+    """Returns category-specific search intent keywords across all 11 Explorer Pillars."""
     cat = (category or "").lower()
-    if "theme" in cat or "water" in cat or "park" in cat or "adventure" in cat:
-        return "water park theme park pool slides"
-    elif "culinary" in cat or "food" in cat or "restaurant" in cat:
-        return "restaurant food dining dish"
-    elif "bar" in cat or "pub" in cat or "nightlife" in cat:
-        return "lounge bar pub interior"
-    elif "temple" in cat or "sacred" in cat or "shrine" in cat:
-        return "temple shrine spiritual landmark"
-    elif "shopping" in cat or "mall" in cat or "market" in cat:
-        return "shopping mall street market bazaar"
-    return "landmark building architecture"
+    
+    if "theme" in cat or "water" in cat or "park" in cat:
+        return "theme park water slide pool resort"
+    elif "adventure" in cat or "outdoor" in cat:
+        return "adventure sports nature park hiking trail"
+    elif "culinary" in cat or "food" in cat or "restaurant" in cat or "eatery" in cat:
+        return "restaurant dining food dish cuisine"
+    elif "bar" in cat or "pub" in cat or "nightlife" in cat or "lounge" in cat:
+        return "lounge bar pub cocktail interior"
+    elif "temple" in cat or "sacred" in cat or "shrine" in cat or "spiritual" in cat:
+        return "temple shrine spiritual heritage sanctuary"
+    elif "shopping" in cat or "mall" in cat or "market" in cat or "bazaar" in cat:
+        return "shopping mall street market store bazaar"
+    elif "wellness" in cat or "spa" in cat or "meditation" in cat:
+        return "wellness spa yoga retreat relaxation"
+    elif "secret" in cat or "hidden" in cat:
+        return "scenic viewpoint hidden gem landscape street"
+    elif "essential" in cat or "transit" in cat or "info" in cat:
+        return "transit hub landmark city station"
+    elif "event" in cat or "venue" in cat or "stadium" in cat:
+        return "event venue amphitheatre stadium center"
+    elif "attraction" in cat or "sight" in cat or "monument" in cat:
+        return "landmark architecture historical site monument"
+        
+    return "landmark building architecture exterior"
 
 async def get_async_place_photo(client: httpx.AsyncClient, place_name: str, destination: str, category: str = "") -> str:
     clean_name = clean_venue_title(place_name, destination)
     suffix = get_category_search_suffix(category)
     
-    # Target clean venue name + category intent
+    # Target clean venue name + destination + category intent
     query = f"{clean_name} {destination} {suffix}".strip()
     encoded = urllib.parse.quote(query)
 
-    # 1. Unsplash Search (Landscape Only)
+    # 1. Unsplash API (Landscape Only)
     if UNSPLASH_ACCESS_KEY:
         try:
             url = f"https://api.unsplash.com/search/photos?page=1&query={encoded}&orientation=landscape&client_id={UNSPLASH_ACCESS_KEY}&per_page=1"
@@ -653,7 +668,7 @@ async def get_async_place_photo(client: httpx.AsyncClient, place_name: str, dest
         except Exception:
             pass
 
-    # 2. Pexels Search (Landscape Only)
+    # 2. Pexels API (Landscape Only)
     if PEXELS_API_KEY:
         try:
             url = f"https://api.pexels.com/v1/search?query={encoded}&orientation=landscape&per_page=1"
@@ -666,13 +681,18 @@ async def get_async_place_photo(client: httpx.AsyncClient, place_name: str, dest
         except Exception:
             pass
 
-    # 3. Category-Specific High-Res Fallbacks (No Imambara for Water Parks)
+    # 3. Universal High-Res Category Fallbacks (Guaranteed relevant imagery)
     cat_fallbacks = {
         "theme_parks": "https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?w=900&auto=format&fit=crop&q=80",
         "adventures": "https://images.unsplash.com/photo-1502680390469-be75c86b636f?w=900&auto=format&fit=crop&q=80",
         "sacred_temples": "https://images.unsplash.com/photo-1561361513-2d000a50f0dc?w=900&auto=format&fit=crop&q=80",
         "shopping": "https://images.unsplash.com/photo-1555529669-e69e7aa0ba9a?w=900&auto=format&fit=crop&q=80",
-        "culinary": "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=900&auto=format&fit=crop&q=80"
+        "culinary": "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=900&auto=format&fit=crop&q=80",
+        "bars_pubs": "https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=900&auto=format&fit=crop&q=80",
+        "wellness": "https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=900&auto=format&fit=crop&q=80",
+        "secret_spots": "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=900&auto=format&fit=crop&q=80",
+        "events": "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=900&auto=format&fit=crop&q=80",
+        "essentials": "https://images.unsplash.com/photo-1517649763962-0c623266010b?w=900&auto=format&fit=crop&q=80"
     }
     return cat_fallbacks.get(category, "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=900&auto=format&fit=crop&q=80")
 
