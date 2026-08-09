@@ -43,12 +43,16 @@ export function DestinationGrid({
           )}`;
         const imageUrl = item.image_url || item.image || UNSPLASH_FALLBACK;
 
+        const locationText = (item as any).location || item.address || destination;
+
         return (
           <DestinationCard
             key={itemId}
             title={item.title}
             category={item.category}
             imageUrl={imageUrl}
+            location={locationText}
+            destination={destination}
             mapsUrl={mapsUrl}
             isLiked={!!likedIds[itemId]}
             onLike={onToggleLike ? () => onToggleLike(itemId) : undefined}
