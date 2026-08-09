@@ -688,11 +688,10 @@ def get_category_search_suffix(category: str) -> str:
 
 async def get_async_place_photo(client: httpx.AsyncClient, place_name: str, destination: str, category: str = "") -> str:
     clean_name = clean_venue_title(place_name, destination)
-    event_suffix = get_event_specific_keywords(clean_name) if "event" in (category or "").lower() else get_category_search_suffix(category)
-    activity_suffix = get_activity_specific_keywords(clean_name)
     
-    # Target exact activity/event name + destination
-    query = f"{clean_name} {destination} {event_suffix} {activity_suffix}".strip()
+    # Generate item-specific query
+    event_suffix = get_event_specific_keywords(clean_name) if "event" in (category or "").lower() else get_category_search_suffix(category)
+    query = f"{clean_name} {destination} {event_suffix}".strip()
     encoded = urllib.parse.quote(query)
 
     # 1. Unsplash API (Unique photo per activity/event title)
