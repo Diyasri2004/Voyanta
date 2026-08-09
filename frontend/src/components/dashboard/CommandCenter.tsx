@@ -202,9 +202,10 @@ export default function CommandCenter({
           />
         )}
         {currentTab === "culinary" && (
-          <CulinaryPillarTab
+          <PillarTab
             items={combinedCulinaryItems}
             destination={destination}
+            selectedLanguage={selectedLanguage}
             onAddToPlan={handleAddToPlan}
           />
         )}

@@ -1060,63 +1060,56 @@ async def fetch_dynamic_destination_data(destination: str) -> dict:
     clean_dest = destination.split(",")[0].strip().title()
     
     prompt = f"""
-    You are an expert travel concierge engine.
-    For destination '{clean_dest}', generate valid JSON containing keys: {json.dumps(PILLAR_KEYS)}.
-    For EACH pillar, provide an array of at least 25 real, existing, named places in {clean_dest}.
-
-    CRITICAL RULES:
-    1. "name" MUST be the actual specific name of a real location (e.g. "Amer Fort", "Mehrangarh Fort", "Hawa Mahal", "Jalmahal", "Chokhi Dhani").
-    2. NEVER return generic titles like "{clean_dest} Spot 1" or "{clean_dest} Historic Square 2".
-    3. Return ONLY valid JSON.
+    You are an expert global travel concierge engine.
+    For destination '{clean_dest}', generate a JSON object with keys: {json.dumps(PILLAR_KEYS)}.
+    For EACH key, generate an array of AT LEAST 25 distinct, real-world, verified venues or activities in {clean_dest}.
+    
+    Format per venue:
+    {{"id": "string", "name": "Exact real venue name in {clean_dest}", "location": "Locality in {clean_dest}", "description": "1 sentence description"}}
     """
 
-    for attempt in range(2):
-        try:
-            raw_response = await call_ai_with_rate_limit_fallback(prompt, response_format={"type": "json_object"})
-            parsed_data = json.loads(raw_response)
-            if parsed_data and len(parsed_data.get("attractions", [])) > 0:
-                async with httpx.AsyncClient() as client:
-                    for pillar in PILLAR_KEYS:
-                        raw_items = parsed_data.get(pillar, [])
-                        items = []
-                        for idx, item in enumerate(raw_items):
-                            v_name = item.get("name", "").strip() if isinstance(item, dict) else str(item)
-                            v_name = clean_venue_title(v_name, clean_dest)
-                            if not v_name or v_name.lower() == clean_dest.lower():
-                                v_name = f"{clean_dest} Local Point {idx+1}"
-                            
-                            v_loc = item.get("location", clean_dest) if isinstance(item, dict) else clean_dest
-                            v_desc = item.get("description", f"Verified {pillar.replace('_', ' ')} venue in {clean_dest}.") if isinstance(item, dict) else f"Verified venue in {clean_dest}."
-                            query_str = f"{v_name}, {v_loc}, {clean_dest}".strip()
-                            
-                            nav_url = f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(query_str)}"
-                            
-                            photo_url = await get_async_place_photo(client, v_name, clean_dest, category=pillar)
-                            if "photo-1502680390469" in photo_url or "surfing" in photo_url.lower():
-                                photo_url = get_category_fallback_photo(pillar, v_name)
-                                
-                            items.append({
-                                "id": f"{pillar}_{idx+1}",
-                                "title": v_name,
-                                "name": v_name,
-                                "category": pillar.replace("_", " ").title(),
-                                "description": v_desc,
-                                "address": v_loc,
-                                "location": v_loc,
-                                "maps_url": nav_url,
-                                "navigation_url": nav_url,
-                                "image_url": photo_url,
-                            })
-                        parsed_data[pillar] = items
-                return parsed_data
-        except Exception as e:
-            logger.warning(f"Groq generation attempt {attempt+1} failed for {clean_dest}: {e}")
+    try:
+        raw_response = await call_ai_with_rate_limit_fallback(prompt, response_format={"type": "json_object"})
+        parsed_data = json.loads(raw_response)
+        
+        for pillar in PILLAR_KEYS:
+            raw_items = parsed_data.get(pillar, [])
+            items = []
+            fallback_img = CATEGORY_SAFE_FALLBACKS.get(pillar, CATEGORY_SAFE_FALLBACKS["attractions"])
+            for idx, item in enumerate(raw_items):
+                v_name = item.get("name", "").strip() if isinstance(item, dict) else str(item)
+                v_name = clean_venue_title(v_name, clean_dest)
+                if not v_name or v_name.lower() == clean_dest.lower():
+                    v_name = f"{clean_dest} Spot {idx+1}"
+                
+                v_loc = item.get("location", clean_dest) if isinstance(item, dict) else clean_dest
+                v_desc = item.get("description", f"Verified {pillar.replace('_', ' ')} venue in {clean_dest}.") if isinstance(item, dict) else f"Verified venue in {clean_dest}."
+                query_str = f"{v_name}, {v_loc}, {clean_dest}".strip()
+                
+                nav_url = f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(query_str)}"
+                
+                items.append({
+                    "id": f"{pillar}_{idx+1}",
+                    "title": v_name,
+                    "name": v_name,
+                    "category": pillar.replace("_", " ").title(),
+                    "description": v_desc,
+                    "address": v_loc,
+                    "location": v_loc,
+                    "maps_url": nav_url,
+                    "navigation_url": nav_url,
+                    "image_url": fallback_img,
+                    "image": fallback_img,
+                })
+            parsed_data[pillar] = items
+        return parsed_data
 
-    # Fall back safely without surfer images
-    return generate_structural_dynamic_fallback(clean_dest)
+    except Exception as e:
+        logger.error(f"AI generation exception for {clean_dest}: {e}")
+        return generate_structural_dynamic_fallback(clean_dest)
 
 def generate_structural_dynamic_fallback(destination: str) -> dict:
-    """Guaranteed free fallback generator—never repeats raw city name or surfer images."""
+    """Guaranteed free fallback generator—never repeats raw city name or hangs."""
     clean_dest = destination.split(",")[0].strip().title()
     fallback = {}
     
@@ -1137,6 +1130,7 @@ def generate_structural_dynamic_fallback(destination: str) -> dict:
     for pillar in PILLAR_KEYS:
         items = []
         templates = pillar_descriptors.get(pillar, ["Landmark Spot"])
+        fallback_img = CATEGORY_SAFE_FALLBACKS.get(pillar, CATEGORY_SAFE_FALLBACKS["attractions"])
         for idx in range(25):
             base_desc = templates[idx % len(templates)]
             venue_title = f"{clean_dest} {base_desc} {idx+1}"
@@ -1151,7 +1145,8 @@ def generate_structural_dynamic_fallback(destination: str) -> dict:
                 "description": f"Popular {pillar.replace('_', ' ')} location situated in {clean_dest}.",
                 "maps_url": nav_url,
                 "navigation_url": nav_url,
-                "image_url": get_category_fallback_photo(pillar, venue_title)
+                "image_url": fallback_img,
+                "image": fallback_img
             })
         fallback[pillar] = items
         
