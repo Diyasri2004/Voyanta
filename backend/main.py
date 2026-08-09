@@ -615,90 +615,79 @@ def clean_venue_title(title: str, destination: str = "") -> str:
 def clean_stop_title(title: str, destination: str = "") -> str:
     return clean_venue_title(title, destination)
 
+def generate_google_maps_url(place_name: str, location_address: str = "", destination: str = "") -> str:
+    parts = [p.strip() for p in [place_name, location_address, destination] if p and p.strip()]
+    full_query = ", ".join(parts)
+    encoded_query = urllib.parse.quote(full_query)
+    return f"https://www.google.com/maps/search/?api=1&query={encoded_query}"
+
 def generate_maps_link(place_name: str, destination: str) -> str:
-    clean_name = clean_stop_title(place_name, destination)
-    query = f"{clean_name}, {destination.strip()}"
-    return f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(query)}"
+    return generate_google_maps_url(place_name, "", destination)
 
 
-def get_event_specific_keywords(title: str) -> str:
-    low = (title or "").lower()
-    if "car" in low or "rally" in low or "vintage" in low:
-        return "vintage car automobile show rally classic"
-    elif "jazz" in low or "blues" in low:
-        return "jazz band saxophone concert live stage"
-    elif "classical" in low or "baithak" in low or "sitar" in low or "music" in low:
-        return "classical music concert instrument sitar performance"
-    elif "heritage" in low or "walk" in low or "tour" in low:
-        return "night walk heritage street illuminated architecture"
-    elif "food" in low or "festival" in low or "mela" in low:
-        return "food festival night market fair stalls lights"
-    elif "art" in low or "exhibition" in low or "gallery" in low:
-        return "art gallery exhibition painting display"
-    elif "theater" in low or "play" in low or "drama" in low:
-        return "theater stage drama performance actors"
-    elif "dance" in low or "ballet" in low or "kathak" in low:
-        return "dance performance stage artist spotlight"
-    return "event performance concert crowd stage lights"
+CATEGORY_FALLBACK_POOL = {
+    "theme_parks": [
+        "https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?w=900&auto=format&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1572715655204-47e297d3b6dd?w=900&auto=format&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=900&auto=format&fit=crop&q=80"
+    ],
+    "adventures": [
+        "https://images.unsplash.com/photo-1502680390469-be75c86b636f?w=900&auto=format&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1541625602330-2277a4c46182?w=900&auto=format&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=900&auto=format&fit=crop&q=80"
+    ],
+    "sacred_temples": [
+        "https://images.unsplash.com/photo-1561361513-2d000a50f0dc?w=900&auto=format&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1548013146-72479768bada?w=900&auto=format&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1609949279531-cf48d64bed89?w=900&auto=format&fit=crop&q=80"
+    ],
+    "shopping": [
+        "https://images.unsplash.com/photo-1555529669-e69e7aa0ba9a?w=900&auto=format&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=900&auto=format&fit=crop&q=80"
+    ],
+    "culinary": [
+        "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=900&auto=format&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=900&auto=format&fit=crop&q=80"
+    ],
+    "bars_pubs": [
+        "https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=900&auto=format&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1572116469696-31de0f17cc34?w=900&auto=format&fit=crop&q=80"
+    ],
+    "wellness": [
+        "https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=900&auto=format&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=900&auto=format&fit=crop&q=80"
+    ],
+    "secret_spots": [
+        "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=900&auto=format&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=900&auto=format&fit=crop&q=80"
+    ],
+    "events": [
+        "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=900&auto=format&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1511192336575-5a79af67a629?w=900&auto=format&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=900&auto=format&fit=crop&q=80"
+    ],
+    "essentials": [
+        "https://images.unsplash.com/photo-1517649763962-0c623266010b?w=900&auto=format&fit=crop&q=80"
+    ]
+}
 
-def get_activity_specific_keywords(item_title: str) -> str:
-    title = item_title.lower()
-    if "cruise" in title or "boat" in title or "ferry" in title:
-        return "river cruise boat ride riverfront"
-    elif "cycle" in title or "bike" in title or "cycling" in title:
-        return "cycling tour bicycle road trail"
-    elif "kayak" in title or "rafting" in title:
-        return "kayaking water sports canoeing"
-    elif "safari" in title or "wildlife" in title or "forest" in title:
-        return "wildlife safari forest reserve nature"
-    elif "golf" in title:
-        return "golf course fairway green"
-    elif "zip" in title or "rope" in title or "climbing" in title:
-        return "zipline adventure park climbing wall"
-    return "outdoor adventure activity sports"
-
-def get_category_search_suffix(category: str) -> str:
-    """Returns category-specific search intent keywords across all 11 Explorer Pillars."""
-    cat = (category or "").lower()
-    
-    if "theme" in cat or "water" in cat or "park" in cat:
-        return "theme park water slide pool resort"
-    elif "adventure" in cat or "outdoor" in cat:
-        return "adventure sports nature park hiking trail"
-    elif "culinary" in cat or "food" in cat or "restaurant" in cat or "eatery" in cat:
-        return "restaurant dining food dish cuisine"
-    elif "bar" in cat or "pub" in cat or "nightlife" in cat or "lounge" in cat:
-        return "lounge bar pub cocktail interior"
-    elif "temple" in cat or "sacred" in cat or "shrine" in cat or "spiritual" in cat:
-        return "temple shrine spiritual heritage sanctuary"
-    elif "shopping" in cat or "mall" in cat or "market" in cat or "bazaar" in cat:
-        return "shopping mall street market store bazaar"
-    elif "wellness" in cat or "spa" in cat or "meditation" in cat:
-        return "wellness spa yoga retreat relaxation"
-    elif "secret" in cat or "hidden" in cat:
-        return "scenic viewpoint hidden gem landscape street"
-    elif "essential" in cat or "transit" in cat or "info" in cat:
-        return "transit hub landmark city station"
-    elif "event" in cat or "venue" in cat or "stadium" in cat:
-        return "event venue amphitheatre stadium center"
-    elif "attraction" in cat or "sight" in cat or "monument" in cat:
-        return "landmark architecture historical site monument"
-        
-    return "landmark building architecture exterior"
+DEFAULT_FALLBACKS = [
+    "https://images.unsplash.com/photo-1502680390469-be75c86b636f?w=900&auto=format&fit=crop&q=80",
+    "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=900&auto=format&fit=crop&q=80",
+    "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=900&auto=format&fit=crop&q=80"
+]
 
 async def get_async_place_photo(client: httpx.AsyncClient, place_name: str, destination: str, category: str = "") -> str:
     clean_name = clean_venue_title(place_name, destination)
     
-    # Generate item-specific query
-    event_suffix = get_event_specific_keywords(clean_name) if "event" in (category or "").lower() else get_category_search_suffix(category)
-    query = f"{clean_name} {destination} {event_suffix}".strip()
-    encoded = urllib.parse.quote(query)
+    # Step 1: Query exact venue title first to avoid generic category duplication
+    exact_query = f"{clean_name} {destination}".strip()
+    encoded_exact = urllib.parse.quote(exact_query)
 
-    # 1. Unsplash API (Unique photo per activity/event title)
     if UNSPLASH_ACCESS_KEY:
         try:
-            url = f"https://api.unsplash.com/search/photos?page=1&query={encoded}&orientation=landscape&client_id={UNSPLASH_ACCESS_KEY}&per_page=1"
-            res = await client.get(url, timeout=2.5)
+            url = f"https://api.unsplash.com/search/photos?page=1&query={encoded_exact}&orientation=landscape&client_id={UNSPLASH_ACCESS_KEY}&per_page=1"
+            res = await client.get(url, timeout=2.0)
             if res.status_code == 200:
                 data = res.json()
                 if data.get("results") and len(data["results"]) > 0:
@@ -706,12 +695,11 @@ async def get_async_place_photo(client: httpx.AsyncClient, place_name: str, dest
         except Exception:
             pass
 
-    # 2. Pexels API
     if PEXELS_API_KEY:
         try:
-            url = f"https://api.pexels.com/v1/search?query={encoded}&orientation=landscape&per_page=1"
+            url = f"https://api.pexels.com/v1/search?query={encoded_exact}&orientation=landscape&per_page=1"
             headers = {"Authorization": PEXELS_API_KEY}
-            res = await client.get(url, headers=headers, timeout=2.5)
+            res = await client.get(url, headers=headers, timeout=2.0)
             if res.status_code == 200:
                 data = res.json()
                 if data.get("photos") and len(data["photos"]) > 0:
@@ -719,48 +707,11 @@ async def get_async_place_photo(client: httpx.AsyncClient, place_name: str, dest
         except Exception:
             pass
 
-    # 3. Dynamic Keyword Fallbacks (NEVER return identical confetti images)
-    low_title = clean_name.lower()
-    if "car" in low_title or "rally" in low_title or "vintage" in low_title:
-        return "https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=900&auto=format&fit=crop&q=80"
-    elif "jazz" in low_title or "saxophone" in low_title or "blues" in low_title:
-        return "https://images.unsplash.com/photo-1511192336575-5a79af67a629?w=900&auto=format&fit=crop&q=80"
-    elif "classical" in low_title or "music" in low_title or "baithak" in low_title or "sitar" in low_title:
-        return "https://images.unsplash.com/photo-1465847899084-d164df4dedc6?w=900&auto=format&fit=crop&q=80"
-    elif "walk" in low_title or "heritage" in low_title or "tour" in low_title:
-        return "https://images.unsplash.com/photo-1519501025264-65ba15a82390?w=900&auto=format&fit=crop&q=80"
-    elif "cycle" in low_title or "bike" in low_title or "cycling" in low_title:
-        return "https://images.unsplash.com/photo-1541625602330-2277a4c46182?w=900&auto=format&fit=crop&q=80"
-    elif "cruise" in low_title or "boat" in low_title or "ferry" in low_title or "rowing" in low_title:
-        return "https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=900&auto=format&fit=crop&q=80"
-    elif "kayak" in low_title or "rafting" in low_title or "paddle" in low_title:
-        return "https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=900&auto=format&fit=crop&q=80"
-    elif "golf" in low_title:
-        return "https://images.unsplash.com/photo-1535131749006-b7f58c99034b?w=900&auto=format&fit=crop&q=80"
-    elif "safari" in low_title or "wildlife" in low_title or "forest" in low_title or "bird" in low_title or "zoo" in low_title:
-        return "https://images.unsplash.com/photo-1516426122078-c23e76319801?w=900&auto=format&fit=crop&q=80"
-    elif "zip" in low_title or "rope" in low_title or "climb" in low_title:
-        return "https://images.unsplash.com/photo-1502680390469-be75c86b636f?w=900&auto=format&fit=crop&q=80"
-
-    cat_fallbacks = {
-        "theme_parks": "https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?w=900&auto=format&fit=crop&q=80",
-        "adventures": "https://images.unsplash.com/photo-1502680390469-be75c86b636f?w=900&auto=format&fit=crop&q=80",
-        "sacred_temples": "https://images.unsplash.com/photo-1561361513-2d000a50f0dc?w=900&auto=format&fit=crop&q=80",
-        "shopping": "https://images.unsplash.com/photo-1555529669-e69e7aa0ba9a?w=900&auto=format&fit=crop&q=80",
-        "culinary": "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=900&auto=format&fit=crop&q=80",
-        "bars_pubs": "https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=900&auto=format&fit=crop&q=80",
-        "wellness": "https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=900&auto=format&fit=crop&q=80",
-        "secret_spots": "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=900&auto=format&fit=crop&q=80",
-        "events": "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=900&auto=format&fit=crop&q=80",
-        "essentials": "https://images.unsplash.com/photo-1517649763962-0c623266010b?w=900&auto=format&fit=crop&q=80"
-    }
-
-    cat_key = (category or "").lower()
-    for k, img_url in cat_fallbacks.items():
-        if k in cat_key:
-            return img_url
-
-    return PEXELS_FALLBACK
+    # Step 2: Fallback to category + item title keyword hash to ensure unique fallback images
+    cat_clean = (category or "").lower()
+    pool = CATEGORY_FALLBACK_POOL.get(cat_clean, DEFAULT_FALLBACKS)
+    fallback_seed = abs(hash(clean_name)) % len(pool)
+    return pool[fallback_seed]
 
 
 # ─────────────────────────────────────────────

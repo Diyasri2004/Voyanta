@@ -35,10 +35,11 @@ export function DestinationGrid({
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 p-4">
       {items.map((item, idx) => {
         const itemId = item.id || `grid-card-${idx}`;
+        const address = item.address || "";
         const mapsUrl =
           item.maps_url ||
           `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-            `${item.title}, ${destination}`
+            [item.title, address, destination].filter(Boolean).join(", ")
           )}`;
         const imageUrl = item.image_url || item.image || UNSPLASH_FALLBACK;
 
