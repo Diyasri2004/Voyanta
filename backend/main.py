@@ -620,15 +620,17 @@ def generate_maps_link(place_name: str, destination: str) -> str:
 
 
 async def get_async_place_photo(client: httpx.AsyncClient, place_name: str, destination: str) -> str:
-    clean_name = clean_stop_title(place_name, destination)
-    query = f"{clean_name} {destination}".strip()
+    clean_name = clean_venue_title(place_name, destination)
+    
+    # Strictly target building, architecture, venue landscape; avoid people/portraits
+    query = f"{clean_name} {destination} architecture building landmark -people -person -selfie -portrait".strip()
     encoded = urllib.parse.quote(query)
 
-    # Tier 1: Unsplash Search API
+    # Tier 1: Unsplash API with landscape orientation filter
     if UNSPLASH_ACCESS_KEY:
         try:
-            url = f"https://api.unsplash.com/search/photos?page=1&query={encoded}&client_id={UNSPLASH_ACCESS_KEY}&per_page=1"
-            res = await client.get(url, timeout=2.0)
+            url = f"https://api.unsplash.com/search/photos?page=1&query={encoded}&orientation=landscape&client_id={UNSPLASH_ACCESS_KEY}&per_page=1"
+            res = await client.get(url, timeout=2.5)
             if res.status_code == 200:
                 data = res.json()
                 if data.get("results") and len(data["results"]) > 0:
@@ -639,9 +641,9 @@ async def get_async_place_photo(client: httpx.AsyncClient, place_name: str, dest
     # Tier 2: Pexels Search API
     if PEXELS_API_KEY:
         try:
-            url = f"https://api.pexels.com/v1/search?query={encoded}&per_page=1"
+            url = f"https://api.pexels.com/v1/search?query={encoded}&orientation=landscape&per_page=1"
             headers = {"Authorization": PEXELS_API_KEY}
-            res = await client.get(url, headers=headers, timeout=2.0)
+            res = await client.get(url, headers=headers, timeout=2.5)
             if res.status_code == 200:
                 data = res.json()
                 if data.get("photos") and len(data["photos"]) > 0:
@@ -649,20 +651,24 @@ async def get_async_place_photo(client: httpx.AsyncClient, place_name: str, dest
         except Exception:
             pass
 
-    # Tier 3: Wikimedia Commons Search API (Free, high-res landmark search)
+    # Tier 3: Wikimedia Commons with filtered search query
     try:
-        wiki_url = f"https://commons.wikimedia.org/w/api.php?action=query&generator=search&prop=pageimages&piprop=original&gsrsearch={encoded}&format=json"
-        res = await client.get(wiki_url, headers={"User-Agent": "VoyantaTravel/1.0"}, timeout=2.0)
+        wiki_query = urllib.parse.quote(f"{clean_name} {destination} building")
+        wiki_url = f"https://commons.wikimedia.org/w/api.php?action=query&generator=search&prop=pageimages&piprop=original&gsrsearch={wiki_query}&format=json"
+        res = await client.get(wiki_url, headers={"User-Agent": "VoyantaTravel/1.0"}, timeout=2.5)
         if res.status_code == 200:
             pages = res.json().get("query", {}).get("pages", {})
             for _, page_data in pages.items():
                 if "original" in page_data and "source" in page_data["original"]:
-                    return page_data["original"]["source"]
+                    img_src = page_data["original"]["source"]
+                    # Ensure image URL does not point to user avatar or non-building asset
+                    if not any(bad in img_src.lower() for bad in ["portrait", "user", "author", "face", "selfie"]):
+                        return img_src
     except Exception:
         pass
 
-    # Tier 4: Reliable Unsplash Direct Keyword Fallback
-    return "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=900&auto=format&fit=crop&q=80"
+    # Tier 4: High-Res High-Quality Travel Wallpaper Fallback
+    return "https://images.unsplash.com/photo-1541963463532-d68292c34b19?w=900&auto=format&fit=crop&q=80"
 
 
 # ─────────────────────────────────────────────
