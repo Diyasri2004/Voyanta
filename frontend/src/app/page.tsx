@@ -282,6 +282,31 @@ export default function Page() {
   };
 
   const [isAutocompleteOpen, setIsAutocompleteOpen] = useState(false);
+  const [autocompleteSuggestions, setAutocompleteSuggestions] = useState<Array<{ label: string; value: string }>>([]);
+
+  useEffect(() => {
+    const query = locationInput.trim();
+    if (!query) {
+      setAutocompleteSuggestions([]);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      fetch(`/api/autocomplete?q=${encodeURIComponent(query)}`, { signal: controller.signal })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data && Array.isArray(data.suggestions)) {
+            setAutocompleteSuggestions(data.suggestions);
+          }
+        })
+        .catch(() => {});
+    }, 150);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [locationInput]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -595,24 +620,22 @@ export default function Page() {
                     />
                     
                     {/* Autocomplete Dropdown */}
-                    {isAutocompleteOpen && locationInput.trim().length > 0 && (
+                    {isAutocompleteOpen && locationInput.trim().length > 0 && autocompleteSuggestions.length > 0 && (
                       <div className="absolute top-full mt-2 w-full bg-[#03050a]/95 backdrop-blur-xl border border-[#00f0ff]/40 rounded-2xl overflow-hidden z-50 shadow-[0_10px_30px_rgba(0,240,255,0.2)] transition-all max-h-60 overflow-y-auto">
-                        {['Kyoto, Japan', 'Tokyo, Japan', 'Paris, France', 'Lucknow, India', 'Dubai, UAE', 'New York, USA', 'Delhi, India', 'London, UK', 'Reykjavik, Iceland', 'Rome, Italy', 'Barcelona, Spain', 'Singapore', 'Bangkok, Thailand', 'Sydney, Australia', 'Mumbai, India']
-                          .filter(city => city.toLowerCase().includes(locationInput.toLowerCase()))
-                          .map((city, idx) => (
-                            <button
-                              key={idx}
-                              type="button"
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={() => {
-                                setLocationInput(city);
-                                setIsAutocompleteOpen(false);
-                              }}
-                              className="w-full text-left px-5 py-3.5 hover:bg-[#00f0ff]/15 text-white text-sm border-b border-white/5 last:border-0 transition-colors flex items-center gap-2 font-medium"
-                            >
-                              <MapPin className="h-4 w-4 text-[#00f0ff] shrink-0" />
-                              {city}
-                            </button>
+                        {autocompleteSuggestions.map((item, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              setLocationInput(item.label);
+                              setIsAutocompleteOpen(false);
+                            }}
+                            className="w-full text-left px-5 py-3.5 hover:bg-[#00f0ff]/15 text-white text-sm border-b border-white/5 last:border-0 transition-colors flex items-center gap-2 font-medium"
+                          >
+                            <MapPin className="h-4 w-4 text-[#00f0ff] shrink-0" />
+                            {item.label}
+                          </button>
                         ))}
                       </div>
                     )}

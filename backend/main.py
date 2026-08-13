@@ -1403,6 +1403,68 @@ async def geocode(
 
 
 # ─────────────────────────────────────────────
+#  STRICT DYNAMIC AUTOCOMPLETE
+# ─────────────────────────────────────────────
+
+@app.get("/api/autocomplete")
+async def autocomplete_destinations(q: str = ""):
+    query = q.strip().lower()
+    if not query:
+        return {"suggestions": []}
+
+    suggestions = []
+    seen = set()
+
+    # 1. Query TomTom Search API dynamically
+    if TOMTOM_API_KEY:
+        try:
+            url = f"https://api.tomtom.com/search/2/search/{urllib.parse.quote(query)}.json?key={TOMTOM_API_KEY}&typehead=true&limit=20&idxSet=Geo,PAD,Addr"
+            async with httpx.AsyncClient() as client:
+                res = await client.get(url, timeout=2.5)
+                if res.status_code == 200:
+                    for result in res.json().get("results", []):
+                        address = result.get("address", {})
+                        city = address.get("municipality") or address.get("freeformAddress") or result.get("poi", {}).get("name")
+                        country = address.get("country")
+                        if city and country:
+                            clean_city = city.strip()
+                            # STRICT DYNAMIC PREFIX CHECK: Must start with typed query
+                            if clean_city.lower().startswith(query):
+                                label = f"{clean_city}, {country.strip()}"
+                                if label.lower() not in seen:
+                                    suggestions.append({"label": label, "value": label})
+                                    seen.add(label.lower())
+        except Exception as e:
+            logger.warning(f"TomTom dynamic autocomplete failed: {e}")
+
+    # 2. Query OpenStreetMap Nominatim API dynamically if needed
+    if len(suggestions) < 6:
+        try:
+            url = f"https://nominatim.openstreetmap.org/search?q={urllib.parse.quote(query)}&format=json&addressdetails=1&limit=20"
+            headers = {"User-Agent": "VoyantaTravelEngine/1.0"}
+            async with httpx.AsyncClient() as client:
+                res = await client.get(url, headers=headers, timeout=2.5)
+                if res.status_code == 200:
+                    for item in res.json():
+                        display_name = item.get("display_name", "")
+                        parts = [p.strip() for p in display_name.split(",")]
+                        main_place = parts[0]
+                        
+                        # STRICT DYNAMIC PREFIX CHECK: Must start with typed query
+                        if main_place.lower().startswith(query):
+                            country = parts[-1] if len(parts) > 1 else ""
+                            label = f"{main_place}, {country}" if country else main_place
+                            if label.lower() not in seen:
+                                suggestions.append({"label": label, "value": label})
+                                seen.add(label.lower())
+        except Exception as e:
+            logger.error(f"Nominatim dynamic autocomplete failed: {e}")
+
+    return {"suggestions": suggestions[:6]}
+
+
+
+# ─────────────────────────────────────────────
 #  2. REVERSE GEOCODING — coordinates → address
 # ─────────────────────────────────────────────
 
