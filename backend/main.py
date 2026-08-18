@@ -12,10 +12,11 @@ import urllib.parse
 import asyncio
 from typing import List, Optional, Dict, Any
 
-from fastapi import FastAPI, HTTPException, Depends, Query
+from fastapi import FastAPI, HTTPException, Depends, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import asyncpg
+from cachetools import TTLCache
 from models import EventFestival
 from chat_agent import get_chat_agent_tools, execute_tool_call
 
@@ -23,6 +24,9 @@ load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# 24-hour in-memory cache for up to 1,000 dynamic destination queries
+dynamic_cache = TTLCache(maxsize=1000, ttl=86400)
 
 # ─────────────────────────────────────────────
 #  Environment variables
@@ -302,16 +306,20 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning("⚠️  DATABASE_URL not set — DB features disabled.")
 
-    # Shared async HTTP client
-    app.state.http_client = httpx.AsyncClient(timeout=10.0)
-    logger.info("✅ HTTP client initialized.")
+    # Shared async HTTP client connection pool
+    app.state.client = httpx.AsyncClient(
+        limits=httpx.Limits(max_keepalive_connections=50, max_connections=100),
+        timeout=httpx.Timeout(10.0, connect=3.0)
+    )
+    app.state.http_client = app.state.client
+    logger.info("✅ Persistent HTTP connection pool initialized.")
 
     try:
         yield
     finally:
         if app.state.db_pool:
             await app.state.db_pool.close()
-        await app.state.http_client.aclose()
+        await app.state.client.aclose()
 
 
 app = FastAPI(
@@ -338,8 +346,10 @@ app.add_middleware(
 #  Shared dependencies
 # ─────────────────────────────────────────────
 
-async def get_http_client() -> httpx.AsyncClient:
-    return app.state.http_client
+async def get_http_client(request: Request) -> httpx.AsyncClient:
+    if hasattr(request.app.state, "client") and request.app.state.client:
+        return request.app.state.client
+    return getattr(request.app.state, "http_client", None)
 
 async def get_db_pool():
     pool = getattr(app.state, "db_pool", None)
@@ -1157,15 +1167,24 @@ PILLAR_DESCRIPTIONS = {
     "sacred_temples": "historic temples, sacred shrines, ancient cathedrals, prominent mosques, and revered spiritual landmarks"
 }
 
+@app.get("/healthz", tags=["Health"])
+async def health_check():
+    return {"status": "ok", "service": "voyanta-ai-engine"}
+
 @app.get("/api/pillar")
-async def get_single_pillar_data(destination: str = Query(..., min_length=1), pillar: str = Query("attractions")):
+async def get_single_pillar_data(request: Request, destination: str = Query(..., min_length=1), pillar: str = Query("attractions")):
     clean_dest = destination.split(",")[0].strip().title()
     pillar_clean = pillar.strip().lower()
+    cache_key = f"{clean_dest}:{pillar_clean}"
+
+    # Return cached data immediately if available
+    if cache_key in dynamic_cache:
+        return {pillar_clean: dynamic_cache[cache_key]}
+
     desc = PILLAR_DESCRIPTIONS.get(pillar_clean, "real landmarks and notable venues")
-    
     prompt = f"""
     You are an expert travel concierge engine.
-    For the destination '{clean_dest}', generate an extensive, highly curated list of AT LEAST 25 distinct, famous, and real-world verified {desc}.
+    For the destination '{clean_dest}', generate an extensive list of AT LEAST 25 distinct, famous, and real-world verified {desc}.
     
     JSON Schema:
     {{
@@ -1173,7 +1192,7 @@ async def get_single_pillar_data(destination: str = Query(..., min_length=1), pi
         {{
           "id": "str",
           "name": "Exact Real-World Name",
-          "location": "Locality or Neighborhood in {clean_dest}",
+          "location": "Locality/Area in {clean_dest}",
           "description": "1 concise sentence explaining what makes this place special."
         }}
       ]
@@ -1181,72 +1200,29 @@ async def get_single_pillar_data(destination: str = Query(..., min_length=1), pi
     
     RULES:
     1. Output AT LEAST 25 items in the array.
-    2. NEVER return generic numbered names (no '{clean_dest} Spot 1' or 'Historic Square 2').
+    2. NEVER return generic numbered names (no '{clean_dest} Spot 1').
     3. Every place must exist in real life in {clean_dest}.
     """
     
+    client = getattr(request.app.state, "client", None) or getattr(request.app.state, "http_client", None)
     try:
-        raw = await call_ai_with_rate_limit_fallback(prompt)
+        raw = await call_ai_with_rate_limit_fallback(client, prompt)
         data = json.loads(raw)
         items = data.get(pillar_clean, [])
         
-        async with httpx.AsyncClient() as client:
-            tasks = [process_single_venue(client, item, clean_dest, pillar_clean, idx) for idx, item in enumerate(items) if isinstance(item, dict) and item.get("name")]
-            items = await asyncio.gather(*tasks)
-            
-        return {pillar_clean: items}
+        tasks = [process_single_venue(client, item, clean_dest, pillar_clean, idx) for idx, item in enumerate(items) if isinstance(item, dict) and item.get("name")]
+        resolved_items = await asyncio.gather(*tasks)
+        
+        dynamic_cache[cache_key] = resolved_items
+        return {pillar_clean: resolved_items}
     except Exception as e:
         logger.error(f"Pillar generation error for {clean_dest}/{pillar_clean}: {e}")
         return {pillar_clean: []}
 
-generate_pillar_group = generate_pillar_batch
-
-async def fetch_dynamic_destination_data(destination: str) -> dict:
-    clean_dest = destination.split(",")[0].strip().title()
-    
-    # Split into 2 parallel batches of 5-6 pillars each to prevent token limit crashes
-    batch_1 = PILLAR_KEYS[:6]
-    batch_2 = PILLAR_KEYS[6:]
-    
-    try:
-        data_1, data_2 = await asyncio.gather(
-            generate_pillar_batch(clean_dest, batch_1),
-            generate_pillar_batch(clean_dest, batch_2)
-        )
-        combined_data = {**data_1, **data_2}
-        
-        async with httpx.AsyncClient() as client:
-            for pillar in PILLAR_KEYS:
-                items = combined_data.get(pillar, [])
-                tasks = [
-                    process_single_venue(client, item, clean_dest, pillar, idx)
-                    for idx, item in enumerate(items)
-                    if isinstance(item, dict) and item.get("name")
-                ]
-                combined_data[pillar] = await asyncio.gather(*tasks)
-                
-        return combined_data
-
-    except Exception as e:
-        logger.error(f"Batch AI generation error for {clean_dest}: {e}")
-        try:
-            data_fallback = await generate_pillar_batch(clean_dest, PILLAR_KEYS[:4])
-            async with httpx.AsyncClient() as client:
-                for pillar in PILLAR_KEYS[:4]:
-                    items = data_fallback.get(pillar, [])
-                    tasks = [
-                        process_single_venue(client, item, clean_dest, pillar, idx)
-                        for idx, item in enumerate(items)
-                        if isinstance(item, dict) and item.get("name")
-                    ]
-                    data_fallback[pillar] = await asyncio.gather(*tasks)
-            return data_fallback
-        except Exception:
-            return {}
-
 @app.get("/api/destination")
-async def get_destination_data(destination: str = Query(..., min_length=1)):
-    return await fetch_dynamic_destination_data(destination)
+async def get_destination_data(request: Request, destination: str = Query(..., min_length=1)):
+    clean_dest = destination.split(",")[0].strip().title()
+    return await get_single_pillar_data(request=request, destination=clean_dest, pillar="attractions")
 
 
 async def build_fallback_trip_plan(
@@ -1503,17 +1479,18 @@ async def geocode(
 # ─────────────────────────────────────────────
 
 @app.get("/api/autocomplete")
-async def autocomplete_destinations(q: str = Query("", min_length=0)):
+async def autocomplete_destinations(request: Request, q: str = Query("", min_length=0)):
     query = q.strip().lower()
     if not query:
         return {"suggestions": []}
 
+    client = getattr(request.app.state, "client", None) or getattr(request.app.state, "http_client", None)
     suggestions = []
     seen = set()
 
     try:
         url = f"https://geocoding-api.open-meteo.com/v1/search?name={urllib.parse.quote(query)}&count=12"
-        async with httpx.AsyncClient() as client:
+        if client:
             res = await client.get(url, timeout=1.8)
             if res.status_code == 200:
                 for item in res.json().get("results", []):
@@ -1902,14 +1879,19 @@ WMO_CODE_MAP = {
 }
 
 @app.get("/api/weather")
-async def get_destination_weather(destination: str = Query("")):
+async def get_destination_weather(request: Request, destination: str = Query("")):
     clean_dest = destination.split(",")[0].strip()
     if not clean_dest:
         return {"temp": 24, "temp_c": 24, "condition": "Sunny", "icon": "01d"}
 
-    try:
-        geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={urllib.parse.quote(clean_dest)}&count=1"
-        async with httpx.AsyncClient() as client:
+    cache_key = f"weather:{clean_dest.lower()}"
+    if cache_key in dynamic_cache:
+        return dynamic_cache[cache_key]
+
+    client = getattr(request.app.state, "client", None) or getattr(request.app.state, "http_client", None)
+    if client:
+        try:
+            geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={urllib.parse.quote(clean_dest)}&count=1"
             geo_res = await client.get(geo_url, timeout=2.0)
             if geo_res.status_code == 200 and geo_res.json().get("results"):
                 loc = geo_res.json()["results"][0]
@@ -1932,25 +1914,11 @@ async def get_destination_weather(destination: str = Query("")):
                     elif wcode >= 95:
                         condition = "Thunderstorm"
 
-                    return {"temp": temp, "temp_c": temp, "condition": condition, "icon": "01d"}
-    except Exception as e:
-        logger.warning(f"Weather lookup error: {e}")
-
-    if OPENWEATHER_API_KEY and clean_dest:
-        try:
-            url = f"https://api.openweathermap.org/data/2.5/weather?q={urllib.parse.quote(clean_dest)}&appid={OPENWEATHER_API_KEY}&units=metric"
-            async with httpx.AsyncClient() as client:
-                res = await client.get(url, timeout=1.5)
-                if res.status_code == 200:
-                    data = res.json()
-                    return {
-                        "temp": round(data["main"]["temp"]),
-                        "temp_c": round(data["main"]["temp"]),
-                        "condition": data["weather"][0]["main"],
-                        "icon": data["weather"][0]["icon"]
-                    }
-        except Exception:
-            pass
+                    res_data = {"temp": temp, "temp_c": temp, "condition": condition, "icon": "01d"}
+                    dynamic_cache[cache_key] = res_data
+                    return res_data
+        except Exception as e:
+            logger.warning(f"Weather lookup error: {e}")
 
     return {"temp": 24, "temp_c": 24, "condition": "Sunny", "icon": "01d"}
 

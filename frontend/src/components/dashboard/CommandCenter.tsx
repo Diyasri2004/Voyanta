@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import CulinaryPillarTab from "./CulinaryPillarTab";
 import PillarTab, { PillarItemData } from "./PillarTab";
 import PlanBuilderDrawer, { SavedPlanItem } from "./PlanBuilderDrawer";
@@ -53,6 +53,12 @@ export default function CommandCenter({
   const [weather, setWeather] = useState<{ temp_c: number; condition: string } | null>(null);
   const [pillarCache, setPillarCache] = useState<Record<string, PillarItemData[]>>({});
   const [loadingPillars, setLoadingPillars] = useState<Record<string, boolean>>({});
+  const fetchedRef = useRef(new Set<string>());
+
+  const ALL_PILLARS = [
+    "attractions", "events", "culinary", "bars_pubs", "wellness",
+    "secret_spots", "essentials", "shopping", "adventures", "theme_parks", "sacred_temples"
+  ];
 
   const currentTab = setActiveTab ? activeTab : internalTab;
   const handleTabChange = (tabId: string) => {
@@ -88,28 +94,80 @@ export default function CommandCenter({
     }
   }, [destination]);
 
+  const fetchPillarData = async (pillarName: string) => {
+    if (!destination || destination === "Destination") return;
+    if (fetchedRef.current.has(pillarName)) return;
+    fetchedRef.current.add(pillarName);
+
+    setLoadingPillars((prev) => ({ ...prev, [pillarName]: true }));
+    try {
+      const res = await fetch(`/api/pillar?destination=${encodeURIComponent(destination)}&pillar=${encodeURIComponent(pillarName)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data[pillarName] && Array.isArray(data[pillarName])) {
+          setPillarCache((prev) => {
+            const updated = { ...prev, [pillarName]: data[pillarName] };
+            try {
+              sessionStorage.setItem(`voyanta_${destination}_${pillarName}`, JSON.stringify(data[pillarName]));
+            } catch (_) {}
+            return updated;
+          });
+        }
+      }
+    } catch (err) {
+      console.error(`Error fetching pillar ${pillarName}:`, err);
+      fetchedRef.current.delete(pillarName);
+    } finally {
+      setLoadingPillars((prev) => ({ ...prev, [pillarName]: false }));
+    }
+  };
+
+  // 1. Fetch active pillar & restore sessionStorage on mount or destination change
   useEffect(() => {
     if (!destination || destination === "Destination") return;
-    const key = currentTab;
-    if (pillarCache[key] && pillarCache[key].length > 0) return;
-    if (trip && trip[key] && Array.isArray(trip[key]) && trip[key].length > 0) {
-      setPillarCache((prev) => ({ ...prev, [key]: trip[key] }));
-      return;
-    }
+    fetchedRef.current.clear();
+    setPillarCache({});
 
-    setLoadingPillars((prev) => ({ ...prev, [key]: true }));
-    fetch(`/api/pillar?destination=${encodeURIComponent(destination)}&pillar=${encodeURIComponent(key)}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data && data[key] && Array.isArray(data[key])) {
-          setPillarCache((prev) => ({ ...prev, [key]: data[key] }));
+    ALL_PILLARS.forEach((p) => {
+      try {
+        const saved = sessionStorage.getItem(`voyanta_${destination}_${p}`);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setPillarCache((prev) => ({ ...prev, [p]: parsed }));
+            fetchedRef.current.add(p);
+          }
         }
-      })
-      .catch((err) => console.error(`Error fetching pillar ${key}:`, err))
-      .finally(() => {
-        setLoadingPillars((prev) => ({ ...prev, [key]: false }));
+      } catch (_) {}
+    });
+
+    fetchPillarData(currentTab);
+  }, [destination]);
+
+  // 2. Fetch active pillar on tab change if not already loaded
+  useEffect(() => {
+    if (!destination || destination === "Destination") return;
+    if (!pillarCache[currentTab] && !fetchedRef.current.has(currentTab)) {
+      fetchPillarData(currentTab);
+    }
+  }, [currentTab, destination]);
+
+  // 3. Background prefetch adjacent tabs
+  useEffect(() => {
+    if (!destination || destination === "Destination") return;
+    if (pillarCache[currentTab] && pillarCache[currentTab].length > 0) {
+      const currentIndex = ALL_PILLARS.indexOf(currentTab);
+      const nextPillars = [
+        ALL_PILLARS[(currentIndex + 1) % ALL_PILLARS.length],
+        ALL_PILLARS[(currentIndex + 2) % ALL_PILLARS.length]
+      ];
+      nextPillars.forEach((p) => {
+        if (!pillarCache[p] && !fetchedRef.current.has(p)) {
+          fetchPillarData(p);
+        }
       });
-  }, [destination, currentTab, trip]);
+    }
+  }, [currentTab, pillarCache, destination]);
 
   const getPillarItems = (key: string) => {
     if (pillarCache[key] && pillarCache[key].length > 0) {
