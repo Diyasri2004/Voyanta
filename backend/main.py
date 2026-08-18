@@ -1439,7 +1439,7 @@ async def geocode(
 # ─────────────────────────────────────────────
 
 @app.get("/api/autocomplete")
-async def autocomplete_destinations(q: str = ""):
+async def autocomplete_destinations(q: str = Query("", min_length=0)):
     query = q.strip().lower()
     if not query:
         return {"suggestions": []}
@@ -1447,7 +1447,25 @@ async def autocomplete_destinations(q: str = ""):
     suggestions = []
     seen = set()
 
-    if TOMTOM_API_KEY:
+    try:
+        url = f"https://geocoding-api.open-meteo.com/v1/search?name={urllib.parse.quote(query)}&count=12"
+        async with httpx.AsyncClient() as client:
+            res = await client.get(url, timeout=1.8)
+            if res.status_code == 200:
+                for item in res.json().get("results", []):
+                    name = item.get("name", "")
+                    country = item.get("country", "")
+                    admin = item.get("admin1", "")
+                    # STRICT PREFIX MATCH
+                    if name.lower().startswith(query):
+                        label = f"{name}, {admin}, {country}" if admin else f"{name}, {country}"
+                        if label.lower() not in seen:
+                            suggestions.append({"label": label, "value": f"{name}, {country}"})
+                            seen.add(label.lower())
+    except Exception as e:
+        logger.warning(f"Open-Meteo autocomplete error: {e}")
+
+    if len(suggestions) < 6 and TOMTOM_API_KEY:
         try:
             url = f"https://api.tomtom.com/search/2/search/{urllib.parse.quote(query)}.json?key={TOMTOM_API_KEY}&typehead=true&limit=15&idxSet=Geo,PAD,Addr"
             async with httpx.AsyncClient() as client:
