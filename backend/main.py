@@ -695,13 +695,20 @@ CATEGORY_SAFE_FALLBACKS = {
     "sacred_temples": "https://images.unsplash.com/photo-1548013146-72479768bada?w=900&auto=format&fit=crop&q=80"
 }
 
+def get_dynamic_fallback_image(place_name: str, destination: str, category: str) -> str:
+    query = urllib.parse.quote(f"{place_name} {destination} {category}".strip())
+    cat_key = (category or "").lower().strip()
+    if cat_key in CATEGORY_SAFE_FALLBACKS:
+        return CATEGORY_SAFE_FALLBACKS[cat_key]
+    return f"https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=900&auto=format&fit=crop&q=80" if "beach" in query.lower() else f"https://images.unsplash.com/photo-1499856871958-5b9627545d1a?w=900&auto=format&fit=crop&q=80"
+
 async def get_async_place_photo(client: httpx.AsyncClient, place_name: str, destination: str, category: str = "") -> str:
-    """Fetch photo via Pexels or fall back immediately to category-matched CDN images."""
+    """Fetch photo via Pexels or fall back immediately to dynamic contextual images."""
     if PEXELS_API_KEY:
         try:
             query = f"{place_name} {destination}".strip()
             url = f"https://api.pexels.com/v1/search?query={urllib.parse.quote(query)}&orientation=landscape&per_page=1"
-            res = await client.get(url, headers={"Authorization": PEXELS_API_KEY}, timeout=1.0)
+            res = await client.get(url, headers={"Authorization": PEXELS_API_KEY}, timeout=1.5)
             if res.status_code == 200:
                 data = res.json()
                 if data.get("photos") and len(data["photos"]) > 0:
@@ -709,8 +716,7 @@ async def get_async_place_photo(client: httpx.AsyncClient, place_name: str, dest
         except Exception:
             pass
 
-    fallback_key = category if category in CATEGORY_SAFE_FALLBACKS else "attractions"
-    return CATEGORY_SAFE_FALLBACKS[fallback_key]
+    return get_dynamic_fallback_image(place_name, destination, category)
 
 
 # ─────────────────────────────────────────────
@@ -1056,87 +1062,76 @@ async def process_single_venue(client: httpx.AsyncClient, item: dict, clean_dest
         "image": img_url,
     }
 
+async def generate_pillar_batch(destination: str, pillars: list) -> dict:
+    prompt = f"""
+    You are an expert global travel concierge engine.
+    For the real destination '{destination}', generate a JSON object with keys: {json.dumps(pillars)}.
+    For EACH key, generate an array of at least 15 real, authentic, verified landmarks, activities, or venues in {destination} (e.g. for Venice: St. Mark's Basilica, Rialto Bridge, Doge's Palace, Grand Canal, Murano Island, Cicchetti at Cantina Do Mori).
+    
+    Output JSON schema:
+    {{
+      "{pillars[0]}": [
+        {{"id": "str", "name": "Exact Real Place Name", "location": "Real Neighborhood or Area", "description": "1 concise sentence description."}}
+      ]
+    }}
+    
+    STRICT RULES:
+    1. NEVER generate placeholder names like '{destination} Monument 1' or generic numbered locations like 'Zone 1'.
+    2. Every venue must be an actual location in {destination}.
+    """
+    try:
+        raw_response = await call_ai_with_rate_limit_fallback(prompt)
+        return json.loads(raw_response)
+    except Exception as e:
+        logger.warning(f"Batch generation failed for {destination} pillars {pillars}: {e}")
+        return {}
+
 async def fetch_dynamic_destination_data(destination: str) -> dict:
     clean_dest = destination.split(",")[0].strip().title()
     
-    prompt = f"""
-    You are an expert global travel concierge engine.
-    For the destination '{clean_dest}', generate a JSON object with keys: {json.dumps(PILLAR_KEYS)}.
-    For EACH key, generate an array of AT LEAST 25 distinct, real-world, verified venues or activities located in {clean_dest}.
+    # Split into 2 parallel batches of 5-6 pillars each to prevent token limit crashes
+    batch_1 = PILLAR_KEYS[:6]
+    batch_2 = PILLAR_KEYS[6:]
     
-    Venue schema:
-    {{"id": "string", "name": "Real Landmark Name", "location": "Neighborhood/Locality", "description": "1 concise sentence description"}}
-    
-    Rules:
-    - Never prepend the raw country or repetitive geocode prefix to names.
-    - Never use generic placeholder names like '{clean_dest} Spot 1'.
-    """
-
     try:
-        raw_response = await call_ai_with_rate_limit_fallback(prompt)
-        parsed_data = json.loads(raw_response)
+        data_1, data_2 = await asyncio.gather(
+            generate_pillar_batch(clean_dest, batch_1),
+            generate_pillar_batch(clean_dest, batch_2)
+        )
+        combined_data = {**data_1, **data_2}
         
         async with httpx.AsyncClient() as client:
             for pillar in PILLAR_KEYS:
-                items = parsed_data.get(pillar, [])
-                tasks = [process_single_venue(client, item, clean_dest, pillar, idx) for idx, item in enumerate(items)]
-                parsed_data[pillar] = await asyncio.gather(*tasks)
+                items = combined_data.get(pillar, [])
+                tasks = [
+                    process_single_venue(client, item, clean_dest, pillar, idx)
+                    for idx, item in enumerate(items)
+                    if isinstance(item, dict) and item.get("name")
+                ]
+                combined_data[pillar] = await asyncio.gather(*tasks)
                 
-        return parsed_data
+        return combined_data
 
     except Exception as e:
-        logger.error(f"AI generation exception for {clean_dest}: {e}")
-        return generate_procedural_fallback(clean_dest)
+        logger.error(f"Batch AI generation error for {clean_dest}: {e}")
+        try:
+            data_fallback = await generate_pillar_batch(clean_dest, PILLAR_KEYS[:4])
+            async with httpx.AsyncClient() as client:
+                for pillar in PILLAR_KEYS[:4]:
+                    items = data_fallback.get(pillar, [])
+                    tasks = [
+                        process_single_venue(client, item, clean_dest, pillar, idx)
+                        for idx, item in enumerate(items)
+                        if isinstance(item, dict) and item.get("name")
+                    ]
+                    data_fallback[pillar] = await asyncio.gather(*tasks)
+            return data_fallback
+        except Exception:
+            return {}
 
 @app.get("/api/destination")
 async def get_destination_data(destination: str = Query(..., min_length=1)):
     return await fetch_dynamic_destination_data(destination)
-
-def generate_procedural_fallback(destination: str) -> dict:
-    """Guaranteed free fallback generator—never repeats raw city name or hangs."""
-    clean_dest = destination.split(",")[0].strip().title()
-    fallback = {}
-    
-    pillar_descriptors = {
-        "attractions": ["Central Monument", "Royal Heritage Site", "Historic Square", "National Museum", "Riverfront Promenade"],
-        "events": ["Cultural Heritage Fair", "Night Street Market", "Live Music Session", "Artisan Expo"],
-        "culinary": ["Traditional Noodle House", "Heritage Eatery", "Local Street Food Hub", "Famous Sweet Corner"],
-        "bars_pubs": ["Rooftop Sunset Lounge", "Speakeasy Cocktail Bar", "Craft Taproom", "Live Jazz Pub"],
-        "wellness": ["Traditional Herbal Spa", "Zen Yoga Sanctuary", "Healing Retreat Center"],
-        "secret_spots": ["Hidden Courtyard Cafe", "Old Town Viewpoint", "Secluded Alleyway Market"],
-        "essentials": ["Central Railway Terminal", "Main Tourist Info Center", "Central Pharmacy"],
-        "shopping": ["Central Grand Bazaar", "Crafts & Silk Market", "Luxury Shopping Galleria"],
-        "adventures": ["River Kayaking Deck", "Heritage Bicycle Trail", "Forest Reserve Nature Walk"],
-        "theme_parks": ["Ocean World Aquarium", "Extreme Water Slide Park", "Digital Gaming Zone"],
-        "sacred_temples": ["Grand Cathedral", "Historic Sacred Temple", "Central Peace Pagoda"]
-    }
-    
-    for pillar in PILLAR_KEYS:
-        items = []
-        templates = pillar_descriptors.get(pillar, ["Landmark Spot"])
-        fallback_img = CATEGORY_SAFE_FALLBACKS.get(pillar, CATEGORY_SAFE_FALLBACKS["attractions"])
-        for idx in range(25):
-            base_desc = templates[idx % len(templates)]
-            venue_title = f"{clean_dest} {base_desc} {idx+1}"
-            nav_url = f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(venue_title + ' ' + clean_dest)}"
-            items.append({
-                "id": f"{pillar}_{idx+1}",
-                "title": venue_title,
-                "name": venue_title,
-                "category": pillar.replace("_", " ").title(),
-                "address": f"{clean_dest} Zone {idx%5 + 1}",
-                "location": f"{clean_dest} Zone {idx%5 + 1}",
-                "description": f"Popular {pillar.replace('_', ' ')} location situated in {clean_dest}.",
-                "maps_url": nav_url,
-                "navigation_url": nav_url,
-                "image_url": fallback_img,
-                "image": fallback_img
-            })
-        fallback[pillar] = items
-        
-    return fallback
-
-generate_structural_dynamic_fallback = generate_procedural_fallback
 
 
 async def build_fallback_trip_plan(
@@ -1774,8 +1769,40 @@ WMO_CODE_MAP = {
 }
 
 @app.get("/api/weather")
-async def get_destination_weather(destination: str = ""):
+async def get_destination_weather(destination: str = Query("")):
     clean_dest = destination.split(",")[0].strip()
+    if not clean_dest:
+        return {"temp": 24, "temp_c": 24, "condition": "Sunny", "icon": "01d"}
+
+    try:
+        geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={urllib.parse.quote(clean_dest)}&count=1"
+        async with httpx.AsyncClient() as client:
+            geo_res = await client.get(geo_url, timeout=2.0)
+            if geo_res.status_code == 200 and geo_res.json().get("results"):
+                loc = geo_res.json()["results"][0]
+                lat, lon = loc["latitude"], loc["longitude"]
+                
+                weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true"
+                w_res = await client.get(weather_url, timeout=2.0)
+                if w_res.status_code == 200:
+                    cw = w_res.json().get("current_weather", {})
+                    temp = round(cw.get("temperature", 24))
+                    wcode = cw.get("weathercode", 0)
+                    
+                    condition = "Sunny"
+                    if wcode in [1, 2, 3]:
+                        condition = "Partly Cloudy"
+                    elif wcode in [45, 48]:
+                        condition = "Foggy"
+                    elif wcode in [51, 53, 55, 61, 63, 65, 80, 81, 82]:
+                        condition = "Rainy"
+                    elif wcode >= 95:
+                        condition = "Thunderstorm"
+
+                    return {"temp": temp, "temp_c": temp, "condition": condition, "icon": "01d"}
+    except Exception as e:
+        logger.warning(f"Weather lookup error: {e}")
+
     if OPENWEATHER_API_KEY and clean_dest:
         try:
             url = f"https://api.openweathermap.org/data/2.5/weather?q={urllib.parse.quote(clean_dest)}&appid={OPENWEATHER_API_KEY}&units=metric"
@@ -1789,11 +1816,10 @@ async def get_destination_weather(destination: str = ""):
                         "condition": data["weather"][0]["main"],
                         "icon": data["weather"][0]["icon"]
                     }
-        except Exception as e:
-            logger.warning(f"Weather lookup fallback triggered: {e}")
+        except Exception:
+            pass
 
-    # Non-blocking default
-    return {"temp": 26, "temp_c": 26, "condition": "Sunny", "icon": "01d"}
+    return {"temp": 24, "temp_c": 24, "condition": "Sunny", "icon": "01d"}
 
 
 # ─────────────────────────────────────────────
