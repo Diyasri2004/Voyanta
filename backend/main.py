@@ -1143,6 +1143,62 @@ async def generate_pillar_batch(destination: str, pillars: list) -> dict:
         logger.warning(f"Batch generation failed for {destination} pillars {pillars}: {e}")
         return {}
 
+PILLAR_DESCRIPTIONS = {
+    "attractions": "iconic tourist attractions, famous monuments, historic sites, architectural landmarks, and must-visit viewpoints",
+    "events": "annual festivals, local cultural gatherings, live music concerts, sports events, and major seasonal happenings",
+    "culinary": "legendary food streets, famous restaurants, iconic local food stalls, must-try regional delicacies, and heritage eateries",
+    "bars_pubs": "top-rated rooftop lounges, craft breweries, vibrant cocktail bars, speakeasies, and nightlife spots",
+    "wellness": "famous yoga retreats, meditation ashrams, luxury spas, scenic nature walking trails, and rejuvenating wellness centers",
+    "secret_spots": "hidden gems, secluded viewpoints, off-the-beaten-path locations, quiet courtyards, and local secret spots",
+    "essentials": "primary transit hubs, central metro stations, emergency medical centers, main tourist information bureaus, and key transport terminals",
+    "shopping": "famous traditional bazaars, bustling local markets, premier shopping malls, handicraft districts, and souvenir streets",
+    "adventures": "outdoor adventures, hiking routes, water sports, desert/jungle safaris, ziplining, and thrill activities",
+    "theme_parks": "water parks, amusement parks, adventure entertainment zones, and family recreational centers",
+    "sacred_temples": "historic temples, sacred shrines, ancient cathedrals, prominent mosques, and revered spiritual landmarks"
+}
+
+@app.get("/api/pillar")
+async def get_single_pillar_data(destination: str = Query(..., min_length=1), pillar: str = Query("attractions")):
+    clean_dest = destination.split(",")[0].strip().title()
+    pillar_clean = pillar.strip().lower()
+    desc = PILLAR_DESCRIPTIONS.get(pillar_clean, "real landmarks and notable venues")
+    
+    prompt = f"""
+    You are an expert travel concierge engine.
+    For the destination '{clean_dest}', generate an extensive, highly curated list of AT LEAST 25 distinct, famous, and real-world verified {desc}.
+    
+    JSON Schema:
+    {{
+      "{pillar_clean}": [
+        {{
+          "id": "str",
+          "name": "Exact Real-World Name",
+          "location": "Locality or Neighborhood in {clean_dest}",
+          "description": "1 concise sentence explaining what makes this place special."
+        }}
+      ]
+    }}
+    
+    RULES:
+    1. Output AT LEAST 25 items in the array.
+    2. NEVER return generic numbered names (no '{clean_dest} Spot 1' or 'Historic Square 2').
+    3. Every place must exist in real life in {clean_dest}.
+    """
+    
+    try:
+        raw = await call_ai_with_rate_limit_fallback(prompt)
+        data = json.loads(raw)
+        items = data.get(pillar_clean, [])
+        
+        async with httpx.AsyncClient() as client:
+            tasks = [process_single_venue(client, item, clean_dest, pillar_clean, idx) for idx, item in enumerate(items) if isinstance(item, dict) and item.get("name")]
+            items = await asyncio.gather(*tasks)
+            
+        return {pillar_clean: items}
+    except Exception as e:
+        logger.error(f"Pillar generation error for {clean_dest}/{pillar_clean}: {e}")
+        return {pillar_clean: []}
+
 generate_pillar_group = generate_pillar_batch
 
 async def fetch_dynamic_destination_data(destination: str) -> dict:

@@ -51,6 +51,8 @@ export default function CommandCenter({
   const [savedPlanItems, setSavedPlanItems] = useState<SavedPlanItem[]>([]);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [weather, setWeather] = useState<{ temp_c: number; condition: string } | null>(null);
+  const [pillarCache, setPillarCache] = useState<Record<string, PillarItemData[]>>({});
+  const [loadingPillars, setLoadingPillars] = useState<Record<string, boolean>>({});
 
   const currentTab = setActiveTab ? activeTab : internalTab;
   const handleTabChange = (tabId: string) => {
@@ -85,6 +87,39 @@ export default function CommandCenter({
         .catch(() => setWeather({ temp_c: 28, condition: "Sunny" }));
     }
   }, [destination]);
+
+  useEffect(() => {
+    if (!destination || destination === "Destination") return;
+    const key = currentTab;
+    if (pillarCache[key] && pillarCache[key].length > 0) return;
+    if (trip && trip[key] && Array.isArray(trip[key]) && trip[key].length > 0) {
+      setPillarCache((prev) => ({ ...prev, [key]: trip[key] }));
+      return;
+    }
+
+    setLoadingPillars((prev) => ({ ...prev, [key]: true }));
+    fetch(`/api/pillar?destination=${encodeURIComponent(destination)}&pillar=${encodeURIComponent(key)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data[key] && Array.isArray(data[key])) {
+          setPillarCache((prev) => ({ ...prev, [key]: data[key] }));
+        }
+      })
+      .catch((err) => console.error(`Error fetching pillar ${key}:`, err))
+      .finally(() => {
+        setLoadingPillars((prev) => ({ ...prev, [key]: false }));
+      });
+  }, [destination, currentTab, trip]);
+
+  const getPillarItems = (key: string) => {
+    if (pillarCache[key] && pillarCache[key].length > 0) {
+      return pillarCache[key];
+    }
+    if (trip && trip[key] && Array.isArray(trip[key])) {
+      return trip[key];
+    }
+    return [];
+  };
 
   const handleAddToPlan = (item: PillarItemData) => {
     setSavedPlanItems((prev) => {
@@ -185,94 +220,13 @@ export default function CommandCenter({
 
       {/* Tab Content */}
       <div className="flex-1 overflow-y-auto p-4 hide-scrollbar relative">
-        {currentTab === "attractions" && (
-          <PillarTab
-            items={trip?.attractions || []}
-            destination={destination}
-            selectedLanguage={selectedLanguage}
-            onAddToPlan={handleAddToPlan}
-          />
-        )}
-        {currentTab === "events" && (
-          <PillarTab
-            items={trip?.events || []}
-            destination={destination}
-            selectedLanguage={selectedLanguage}
-            onAddToPlan={handleAddToPlan}
-          />
-        )}
-        {currentTab === "culinary" && (
-          <PillarTab
-            items={combinedCulinaryItems}
-            destination={destination}
-            selectedLanguage={selectedLanguage}
-            onAddToPlan={handleAddToPlan}
-          />
-        )}
-        {currentTab === "bars_pubs" && (
-          <PillarTab
-            items={trip?.bars_pubs || []}
-            destination={destination}
-            selectedLanguage={selectedLanguage}
-            onAddToPlan={handleAddToPlan}
-          />
-        )}
-        {currentTab === "wellness" && (
-          <PillarTab
-            items={trip?.wellness || []}
-            destination={destination}
-            selectedLanguage={selectedLanguage}
-            onAddToPlan={handleAddToPlan}
-          />
-        )}
-        {currentTab === "secret_spots" && (
-          <PillarTab
-            items={trip?.secret_spots || []}
-            destination={destination}
-            selectedLanguage={selectedLanguage}
-            onAddToPlan={handleAddToPlan}
-          />
-        )}
-        {currentTab === "essentials" && (
-          <PillarTab
-            items={trip?.essentials || []}
-            destination={destination}
-            selectedLanguage={selectedLanguage}
-            onAddToPlan={handleAddToPlan}
-          />
-        )}
-        {currentTab === "shopping" && (
-          <PillarTab
-            items={trip?.shopping || []}
-            destination={destination}
-            selectedLanguage={selectedLanguage}
-            onAddToPlan={handleAddToPlan}
-          />
-        )}
-        {currentTab === "adventures" && (
-          <PillarTab
-            items={trip?.adventures || []}
-            destination={destination}
-            selectedLanguage={selectedLanguage}
-            onAddToPlan={handleAddToPlan}
-          />
-        )}
-        {currentTab === "theme_parks" && (
-          <PillarTab
-            items={trip?.theme_parks || []}
-            destination={destination}
-            selectedLanguage={selectedLanguage}
-            onAddToPlan={handleAddToPlan}
-          />
-        )}
-        {currentTab === "sacred_temples" && (
-          <PillarTab
-            items={trip?.sacred_temples || []}
-            destination={destination}
-            selectedLanguage={selectedLanguage}
-            onAddToPlan={handleAddToPlan}
-          />
-        )}
+        <PillarTab
+          items={getPillarItems(currentTab)}
+          destination={destination}
+          selectedLanguage={selectedLanguage}
+          onAddToPlan={handleAddToPlan}
+          isLoading={loadingPillars[currentTab] && (!getPillarItems(currentTab) || getPillarItems(currentTab).length === 0)}
+        />
       </div>
 
       {/* Plan Builder Drawer Slide-over */}
