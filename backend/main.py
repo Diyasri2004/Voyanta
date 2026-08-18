@@ -695,6 +695,52 @@ CATEGORY_SAFE_FALLBACKS = {
     "sacred_temples": "https://images.unsplash.com/photo-1548013146-72479768bada?w=900&auto=format&fit=crop&q=80"
 }
 
+CATEGORY_SAFE_POOLS = {
+    "attractions": [
+        "https://images.unsplash.com/photo-1524492412937-b28074a5d7da?w=900&auto=format&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1508807526345-15e9b5f4eaff?w=900&auto=format&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1570168007204-dfb528c6958f?w=900&auto=format&fit=crop&q=80"
+    ],
+    "culinary": [
+        "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=900&auto=format&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=900&auto=format&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=900&auto=format&fit=crop&q=80"
+    ],
+    "bars_pubs": [
+        "https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=900&auto=format&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1572116469696-31de0f17cc34?w=900&auto=format&fit=crop&q=80"
+    ],
+    "wellness": [
+        "https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=900&auto=format&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=900&auto=format&fit=crop&q=80"
+    ],
+    "secret_spots": [
+        "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=900&auto=format&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=900&auto=format&fit=crop&q=80"
+    ],
+    "essentials": [
+        "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=900&auto=format&fit=crop&q=80"
+    ],
+    "shopping": [
+        "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=900&auto=format&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=900&auto=format&fit=crop&q=80"
+    ],
+    "adventures": [
+        "https://images.unsplash.com/photo-1502680390469-be75c86b636f?w=900&auto=format&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1533240332313-0db49b459ad6?w=900&auto=format&fit=crop&q=80"
+    ],
+    "theme_parks": [
+        "https://images.unsplash.com/photo-1513889961551-628c1e5e2ee9?w=900&auto=format&fit=crop&q=80"
+    ],
+    "sacred_temples": [
+        "https://images.unsplash.com/photo-1548013146-72479768bada?w=900&auto=format&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1582510003544-4d00b7f74220?w=900&auto=format&fit=crop&q=80"
+    ],
+    "events": [
+        "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=900&auto=format&fit=crop&q=80"
+    ]
+}
+
 def get_dynamic_fallback_image(place_name: str, destination: str, category: str) -> str:
     query = urllib.parse.quote(f"{place_name} {destination} {category}".strip())
     cat_key = (category or "").lower().strip()
@@ -702,13 +748,13 @@ def get_dynamic_fallback_image(place_name: str, destination: str, category: str)
         return CATEGORY_SAFE_FALLBACKS[cat_key]
     return f"https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=900&auto=format&fit=crop&q=80" if "beach" in query.lower() else f"https://images.unsplash.com/photo-1499856871958-5b9627545d1a?w=900&auto=format&fit=crop&q=80"
 
-async def get_async_place_photo(client: httpx.AsyncClient, place_name: str, destination: str, category: str = "") -> str:
-    """Fetch photo via Pexels or fall back immediately to dynamic contextual images."""
+async def get_async_place_photo(client: httpx.AsyncClient, place_name: str, destination: str, category: str = "", idx: int = 0) -> str:
+    """Fetch photo via Pexels or fall back immediately to category-matched rotating pools."""
     if PEXELS_API_KEY:
         try:
             query = f"{place_name} {destination}".strip()
             url = f"https://api.pexels.com/v1/search?query={urllib.parse.quote(query)}&orientation=landscape&per_page=1"
-            res = await client.get(url, headers={"Authorization": PEXELS_API_KEY}, timeout=1.5)
+            res = await client.get(url, headers={"Authorization": PEXELS_API_KEY}, timeout=1.0)
             if res.status_code == 200:
                 data = res.json()
                 if data.get("photos") and len(data["photos"]) > 0:
@@ -716,6 +762,9 @@ async def get_async_place_photo(client: httpx.AsyncClient, place_name: str, dest
         except Exception:
             pass
 
+    pool = CATEGORY_SAFE_POOLS.get(category, CATEGORY_SAFE_POOLS.get("attractions", []))
+    if pool:
+        return pool[idx % len(pool)]
     return get_dynamic_fallback_image(place_name, destination, category)
 
 
@@ -1046,7 +1095,7 @@ async def process_single_venue(client: httpx.AsyncClient, item: dict, clean_dest
     query_str = f"{v_name}, {v_loc}, {clean_dest}".strip()
     
     nav_url = f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(query_str)}"
-    img_url = await get_async_place_photo(client, v_name, clean_dest, category=pillar)
+    img_url = await get_async_place_photo(client, v_name, clean_dest, category=pillar, idx=idx)
 
     return {
         "id": item.get("id") or f"{pillar}_{idx+1}",
@@ -1085,6 +1134,8 @@ async def generate_pillar_batch(destination: str, pillars: list) -> dict:
     except Exception as e:
         logger.warning(f"Batch generation failed for {destination} pillars {pillars}: {e}")
         return {}
+
+generate_pillar_group = generate_pillar_batch
 
 async def fetch_dynamic_destination_data(destination: str) -> dict:
     clean_dest = destination.split(",")[0].strip().title()
