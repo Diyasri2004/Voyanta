@@ -271,6 +271,28 @@ export default function Page() {
 
   const t = getTranslation(selectedLanguage);
 
+  const [trendingDestinations, setTrendingDestinations] = useState<Array<{ name: string; country?: string }>>([]);
+  const [loadingTrending, setLoadingTrending] = useState<boolean>(true);
+
+  useEffect(() => {
+    const fetchTrending = async () => {
+      try {
+        const res = await fetch("/api/trending");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.trending && Array.isArray(data.trending)) {
+            setTrendingDestinations(data.trending);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load dynamic trending destinations:", err);
+      } finally {
+        setLoadingTrending(false);
+      }
+    };
+    fetchTrending();
+  }, []);
+
   const getGroupTypeLabel = (type: string) => {
     switch (type) {
       case "Solo": return t.solo;
@@ -611,18 +633,28 @@ export default function Page() {
                   />
 
                   {/* Suggestion Chips */}
-                  <div className="flex flex-wrap gap-2 mt-1 mb-2">
-                    {['Kyoto', 'Lucknow', 'Dubai', 'Paris', 'New York', 'Tokyo', 'Delhi', 'London'].map(city => (
+                  <div className="flex flex-wrap items-center gap-2 mt-1 mb-2">
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mr-1">Trending:</span>
+
+                    {loadingTrending && (
+                      <div className="flex gap-2 animate-pulse">
+                        {[1, 2, 3, 4, 5].map((n) => (
+                          <div key={n} className="h-6 w-16 rounded-full bg-zinc-800/60 border border-zinc-700/40" />
+                        ))}
+                      </div>
+                    )}
+
+                    {!loadingTrending && trendingDestinations.map((dest, idx) => (
                       <button
-                        key={city}
+                        key={idx}
                         type="button"
                         onClick={() => {
-                          setLocationInput(city);
+                          setLocationInput(dest.name);
                           setIsAutocompleteOpen(false);
                         }}
-                        className="bg-[#00f0ff]/10 border border-[#00f0ff]/30 text-[#00f0ff] text-[10px] px-3 py-1 rounded-full font-bold tracking-widest hover:bg-[#00f0ff] hover:text-black transition-colors"
+                        className="bg-[#00f0ff]/10 border border-[#00f0ff]/30 text-[#00f0ff] text-[10px] px-3 py-1 rounded-full font-bold tracking-widest hover:bg-[#00f0ff] hover:text-black transition-colors cursor-pointer"
                       >
-                        {city}
+                        {dest.name}
                       </button>
                     ))}
                   </div>

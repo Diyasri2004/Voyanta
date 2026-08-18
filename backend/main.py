@@ -1216,6 +1216,39 @@ async def get_destination_data(request: Request, destination: str = Query(..., m
     clean_dest = destination.split(",")[0].strip().title()
     return await get_single_pillar_data(request=request, destination=clean_dest, pillar="attractions")
 
+@app.get("/api/trending")
+async def get_trending_destinations(request: Request):
+    cache_key = "dynamic_trending_destinations"
+    if cache_key in dynamic_cache:
+        return {"trending": dynamic_cache[cache_key]}
+
+    prompt = """
+    You are a real-time travel trend intelligence engine.
+    Generate a valid JSON object with key "trending" containing an array of 8 globally trending, high-buzz travel destinations for travelers right now.
+    
+    JSON Schema:
+    {
+      "trending": [
+        {"name": "City/Region Name", "country": "Country Name"}
+      ]
+    }
+    STRICT RULES:
+    1. Only return genuine, exciting global destinations.
+    2. Output strictly valid JSON.
+    """
+    try:
+        client = getattr(request.app.state, "client", None) or getattr(request.app.state, "http_client", None)
+        raw = await call_ai_with_rate_limit_fallback(client, prompt)
+        data = json.loads(raw)
+        trending_list = data.get("trending", [])
+        if trending_list:
+            dynamic_cache[cache_key] = trending_list
+            return {"trending": trending_list}
+    except Exception as e:
+        logger.error(f"Dynamic trending error: {e}")
+    
+    return {"trending": []}
+
 
 async def build_fallback_trip_plan(
     location: str,
