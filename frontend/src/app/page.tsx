@@ -7,6 +7,7 @@ import VoyAI from "@/components/ai/Voya";
 import CityHeroImage from "@/components/CityHeroImage";
 import { TravelerWaitIndicator } from "@/components/ui/traveler-wait-indicator";
 import { AnimatePresence, motion } from "framer-motion";
+import { DestinationInput } from "@/components/search/DestinationInput";
 import { useCurrency } from "@/context/CurrencyContext";
 import {
   Calendar,
@@ -603,43 +604,11 @@ export default function Page() {
                 <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-[10px]">
 
                   {/* ── Row 1 : Destination search ── */}
-                  <div className="relative">
-                    <Search className="pointer-events-none absolute left-[18px] top-1/2 h-[17px] w-[17px] -translate-y-1/2 text-[#475569]" />
-                    <input
-                      id="destination-input"
-                      value={locationInput}
-                      onChange={(e) => {
-                        setLocationInput(e.target.value);
-                        setIsAutocompleteOpen(true);
-                      }}
-                      onFocus={() => setIsAutocompleteOpen(true)}
-                      onBlur={() => setTimeout(() => setIsAutocompleteOpen(false), 200)}
-                      placeholder={t.searchPlaceholder}
-                      autoComplete="off"
-                      className="w-full rounded-full border border-white/[0.09] bg-[#111827]/60 py-[14px] pl-12 pr-5 text-[0.95rem] text-white placeholder-[#475569] outline-none transition-all focus:border-[#00f0ff]/50 focus:bg-[#111827]/90 focus:shadow-[0_0_15px_rgba(0,240,255,0.2)]"
-                    />
-                    
-                    {/* Autocomplete Dropdown */}
-                    {isAutocompleteOpen && locationInput.trim().length > 0 && autocompleteSuggestions.length > 0 && (
-                      <div className="absolute top-full mt-2 w-full bg-[#03050a]/95 backdrop-blur-xl border border-[#00f0ff]/40 rounded-2xl overflow-hidden z-50 shadow-[0_10px_30px_rgba(0,240,255,0.2)] transition-all max-h-60 overflow-y-auto">
-                        {autocompleteSuggestions.map((item, idx) => (
-                          <button
-                            key={idx}
-                            type="button"
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={() => {
-                              setLocationInput(item.label);
-                              setIsAutocompleteOpen(false);
-                            }}
-                            className="w-full text-left px-5 py-3.5 hover:bg-[#00f0ff]/15 text-white text-sm border-b border-white/5 last:border-0 transition-colors flex items-center gap-2 font-medium"
-                          >
-                            <MapPin className="h-4 w-4 text-[#00f0ff] shrink-0" />
-                            {item.label}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  <DestinationInput
+                    value={locationInput}
+                    onChange={setLocationInput}
+                    placeholder={t.searchPlaceholder}
+                  />
 
                   {/* Suggestion Chips */}
                   <div className="flex flex-wrap gap-2 mt-1 mb-2">
