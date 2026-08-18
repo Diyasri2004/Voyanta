@@ -50,12 +50,14 @@ export const DestinationCard = ({
   return (
     <div className="group relative bg-zinc-900/90 border border-zinc-800/80 hover:border-cyan-500/40 rounded-2xl overflow-hidden flex flex-col h-[380px] min-h-[380px] transition-all duration-300 hover:shadow-xl hover:shadow-cyan-500/10">
       {/* Background Image Container */}
-      <div className="relative h-48 w-full overflow-hidden">
+      <div className="relative h-48 w-full aspect-video shrink-0 overflow-hidden bg-zinc-950">
         <img
           src={imageUrl}
           alt={name}
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
           loading="lazy"
+          decoding="async"
+          {...({ fetchPriority: "low" } as any)}
+          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
           onError={(e) => {
             const target = e.target as HTMLImageElement;
             target.onerror = null;
