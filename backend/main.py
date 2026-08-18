@@ -1159,7 +1159,8 @@ PILLAR_DESCRIPTIONS = {
     "sacred_temples": "most revered spiritual landmarks, historic ancient temples, iconic cathedrals, and famous shrines"
 }
 
-@app.get("/healthz", tags=["Health"])
+# Multi-method route supports GET, HEAD, and OPTIONS to satisfy free-tier UptimeRobot pings
+@app.api_route("/healthz", methods=["GET", "HEAD", "OPTIONS"], tags=["Health"])
 async def health_check():
     return {"status": "ok", "service": "voyanta-ai-engine"}
 
