@@ -140,7 +140,7 @@ export default function CommandCenter({
 
   return (
     <div className="flex flex-col h-full relative">
-      <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 shrink-0">
+      <div className="flex flex-wrap items-center justify-between gap-3 p-4 w-full border-b border-white/10 shrink-0">
         <h2 className="font-syne font-bold text-lg text-white">{t.commandCenter}</h2>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold">
@@ -162,7 +162,7 @@ export default function CommandCenter({
       </div>
 
       {/* Tab Navigation */}
-      <div className="flex items-center gap-1 overflow-x-auto border-b border-white/10 p-2 hide-scrollbar shrink-0">
+      <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-2 w-full border-b border-white/10 p-2 shrink-0">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = currentTab === tab.id;

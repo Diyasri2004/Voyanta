@@ -696,14 +696,12 @@ CATEGORY_SAFE_FALLBACKS = {
 }
 
 async def get_async_place_photo(client: httpx.AsyncClient, place_name: str, destination: str, category: str = "") -> str:
-    """Fetch photo via Pexels or fallback safely without hanging on 403 Forbidden errors."""
-    clean_name = clean_venue_title(place_name, destination)
-    
+    """Fetch photo via Pexels or fall back immediately to category-matched CDN images."""
     if PEXELS_API_KEY:
         try:
-            query = f"{clean_name} {destination}".strip()
+            query = f"{place_name} {destination}".strip()
             url = f"https://api.pexels.com/v1/search?query={urllib.parse.quote(query)}&orientation=landscape&per_page=1"
-            res = await client.get(url, headers={"Authorization": PEXELS_API_KEY}, timeout=1.5)
+            res = await client.get(url, headers={"Authorization": PEXELS_API_KEY}, timeout=1.0)
             if res.status_code == 200:
                 data = res.json()
                 if data.get("photos") and len(data["photos"]) > 0:
@@ -711,9 +709,7 @@ async def get_async_place_photo(client: httpx.AsyncClient, place_name: str, dest
         except Exception:
             pass
 
-    fallback_key = (category or "").lower()
-    if fallback_key not in CATEGORY_SAFE_FALLBACKS:
-        fallback_key = "attractions"
+    fallback_key = category if category in CATEGORY_SAFE_FALLBACKS else "attractions"
     return CATEGORY_SAFE_FALLBACKS[fallback_key]
 
 
@@ -978,77 +974,48 @@ async def generate_trip_with_groq(
     )
 
 
-CITY_REAL_VENUES = {}
-
-
 PILLAR_KEYS = [
     "attractions", "events", "culinary", "bars_pubs", "wellness",
     "secret_spots", "essentials", "shopping", "adventures", "theme_parks", "sacred_temples"
 ]
 
 async def call_ai_with_rate_limit_fallback(prompt: str, response_format: Optional[dict] = None) -> str:
-    """Tries Primary Groq Model -> Secondary Lightweight Groq Model -> Gemini API."""
-    models_to_try = [
-        "llama-3.3-70b-versatile",
-        "llama-3.1-8b-instant",
-        "mixtral-8x7b-32768"
-    ]
+    groq_models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
     
-    headers = {
-        "Authorization": f"Bearer {GROQ_API_KEY}",
-        "Content-Type": "application/json"
-    }
-
     if GROQ_API_KEY:
-        for model in models_to_try:
+        headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
+        for model in groq_models:
             try:
                 payload = {
                     "model": model,
                     "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0.4
+                    "temperature": 0.2,
+                    "response_format": response_format or {"type": "json_object"}
                 }
-                if response_format:
-                    payload["response_format"] = response_format
-
                 async with httpx.AsyncClient() as client:
-                    res = await client.post("https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers, timeout=12.0)
+                    res = await client.post("https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers, timeout=6.0)
                     if res.status_code == 200:
-                        data = res.json()
-                        raw_text = data["choices"][0]["message"]["content"].strip()
-                        import re
-                        clean_json = re.sub(r"^```(?:json)?\s*", "", raw_text, flags=re.IGNORECASE)
-                        clean_json = re.sub(r"\s*```$", "", clean_json).strip()
-                        return clean_json
+                        return res.json()["choices"][0]["message"]["content"]
                     elif res.status_code == 429:
-                        logger.warning(f"Groq Model {model} rate limited (429). Trying next fallback model...")
+                        logger.warning(f"Groq {model} hit 429 rate limit. Escalating...")
                         continue
-                    else:
-                        logger.warning(f"Groq Model {model} returned status {res.status_code}: {res.text}")
             except Exception as e:
-                logger.warning(f"Failed call for {model}: {e}")
+                logger.warning(f"Groq {model} call failed: {e}")
                 continue
 
     if GEMINI_API_KEY:
         try:
             gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
-            gemini_payload = {
-                "contents": [{"parts": [{"text": prompt + "\nReturn strictly JSON format."}]}]
-            }
+            gemini_payload = {"contents": [{"parts": [{"text": prompt + "\nReturn strictly a valid JSON object only."}]}]}
             async with httpx.AsyncClient() as client:
-                res = await client.post(gemini_url, json=gemini_payload, timeout=12.0)
+                res = await client.post(gemini_url, json=gemini_payload, timeout=6.0)
                 if res.status_code == 200:
-                    data = res.json()
-                    raw_text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
-                    import re
-                    clean_json = re.sub(r"^```(?:json)?\s*", "", raw_text, flags=re.IGNORECASE)
-                    clean_json = re.sub(r"\s*```$", "", clean_json).strip()
-                    return clean_json
-                else:
-                    logger.warning(f"Gemini API returned status {res.status_code}: {res.text}")
+                    raw_text = res.json()["candidates"][0]["content"]["parts"][0]["text"]
+                    return raw_text.replace("```json", "").replace("```", "").strip()
         except Exception as e:
             logger.error(f"Gemini fallback failed: {e}")
 
-    raise Exception("All AI generation models rate limited or unavailable.")
+    raise Exception("All AI generation backends unavailable.")
 
 async def call_groq_api(prompt: str, response_format: Optional[dict] = None) -> str:
     return await call_ai_with_rate_limit_fallback(prompt, response_format=response_format)
@@ -1056,59 +1023,76 @@ async def call_groq_api(prompt: str, response_format: Optional[dict] = None) -> 
 async def call_groq_prompt(prompt: str, response_format: Optional[dict] = None) -> str:
     return await call_ai_with_rate_limit_fallback(prompt, response_format=response_format)
 
+async def process_single_venue(client: httpx.AsyncClient, item: dict, clean_dest: str, pillar: str, idx: int) -> dict:
+    if isinstance(item, str):
+        item = {"name": item}
+    elif not isinstance(item, dict):
+        item = {}
+
+    v_name = item.get("name") or item.get("title") or f"{clean_dest} Spot {idx+1}"
+    v_name = clean_venue_title(str(v_name), clean_dest)
+    if not v_name or v_name.lower() == clean_dest.lower():
+        v_name = f"{clean_dest} Spot {idx+1}"
+
+    v_loc = item.get("location") or item.get("address") or clean_dest
+    v_loc = str(v_loc).strip()
+    v_desc = item.get("description") or f"Verified {pillar.replace('_', ' ')} venue in {clean_dest}."
+    query_str = f"{v_name}, {v_loc}, {clean_dest}".strip()
+    
+    nav_url = f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(query_str)}"
+    img_url = await get_async_place_photo(client, v_name, clean_dest, category=pillar)
+
+    return {
+        "id": item.get("id") or f"{pillar}_{idx+1}",
+        "title": v_name,
+        "name": v_name,
+        "category": pillar.replace("_", " ").title(),
+        "description": str(v_desc),
+        "address": v_loc,
+        "location": v_loc,
+        "maps_url": nav_url,
+        "navigation_url": nav_url,
+        "image_url": img_url,
+        "image": img_url,
+    }
+
 async def fetch_dynamic_destination_data(destination: str) -> dict:
     clean_dest = destination.split(",")[0].strip().title()
     
     prompt = f"""
     You are an expert global travel concierge engine.
-    For destination '{clean_dest}', generate a JSON object with keys: {json.dumps(PILLAR_KEYS)}.
-    For EACH key, generate an array of AT LEAST 25 distinct, real-world, verified venues or activities in {clean_dest}.
+    For the destination '{clean_dest}', generate a JSON object with keys: {json.dumps(PILLAR_KEYS)}.
+    For EACH key, generate an array of AT LEAST 25 distinct, real-world, verified venues or activities located in {clean_dest}.
     
-    Format per venue:
-    {{"id": "string", "name": "Exact real venue name in {clean_dest}", "location": "Locality in {clean_dest}", "description": "1 sentence description"}}
+    Venue schema:
+    {{"id": "string", "name": "Real Landmark Name", "location": "Neighborhood/Locality", "description": "1 concise sentence description"}}
+    
+    Rules:
+    - Never prepend the raw country or repetitive geocode prefix to names.
+    - Never use generic placeholder names like '{clean_dest} Spot 1'.
     """
 
     try:
-        raw_response = await call_ai_with_rate_limit_fallback(prompt, response_format={"type": "json_object"})
+        raw_response = await call_ai_with_rate_limit_fallback(prompt)
         parsed_data = json.loads(raw_response)
         
-        for pillar in PILLAR_KEYS:
-            raw_items = parsed_data.get(pillar, [])
-            items = []
-            fallback_img = CATEGORY_SAFE_FALLBACKS.get(pillar, CATEGORY_SAFE_FALLBACKS["attractions"])
-            for idx, item in enumerate(raw_items):
-                v_name = item.get("name", "").strip() if isinstance(item, dict) else str(item)
-                v_name = clean_venue_title(v_name, clean_dest)
-                if not v_name or v_name.lower() == clean_dest.lower():
-                    v_name = f"{clean_dest} Spot {idx+1}"
+        async with httpx.AsyncClient() as client:
+            for pillar in PILLAR_KEYS:
+                items = parsed_data.get(pillar, [])
+                tasks = [process_single_venue(client, item, clean_dest, pillar, idx) for idx, item in enumerate(items)]
+                parsed_data[pillar] = await asyncio.gather(*tasks)
                 
-                v_loc = item.get("location", clean_dest) if isinstance(item, dict) else clean_dest
-                v_desc = item.get("description", f"Verified {pillar.replace('_', ' ')} venue in {clean_dest}.") if isinstance(item, dict) else f"Verified venue in {clean_dest}."
-                query_str = f"{v_name}, {v_loc}, {clean_dest}".strip()
-                
-                nav_url = f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(query_str)}"
-                
-                items.append({
-                    "id": f"{pillar}_{idx+1}",
-                    "title": v_name,
-                    "name": v_name,
-                    "category": pillar.replace("_", " ").title(),
-                    "description": v_desc,
-                    "address": v_loc,
-                    "location": v_loc,
-                    "maps_url": nav_url,
-                    "navigation_url": nav_url,
-                    "image_url": fallback_img,
-                    "image": fallback_img,
-                })
-            parsed_data[pillar] = items
         return parsed_data
 
     except Exception as e:
         logger.error(f"AI generation exception for {clean_dest}: {e}")
-        return generate_structural_dynamic_fallback(clean_dest)
+        return generate_procedural_fallback(clean_dest)
 
-def generate_structural_dynamic_fallback(destination: str) -> dict:
+@app.get("/api/destination")
+async def get_destination_data(destination: str = Query(..., min_length=1)):
+    return await fetch_dynamic_destination_data(destination)
+
+def generate_procedural_fallback(destination: str) -> dict:
     """Guaranteed free fallback generator—never repeats raw city name or hangs."""
     clean_dest = destination.split(",")[0].strip().title()
     fallback = {}
@@ -1151,6 +1135,8 @@ def generate_structural_dynamic_fallback(destination: str) -> dict:
         fallback[pillar] = items
         
     return fallback
+
+generate_structural_dynamic_fallback = generate_procedural_fallback
 
 
 async def build_fallback_trip_plan(
@@ -1415,12 +1401,11 @@ async def autocomplete_destinations(q: str = ""):
     suggestions = []
     seen = set()
 
-    # 1. Query TomTom Search API dynamically
     if TOMTOM_API_KEY:
         try:
-            url = f"https://api.tomtom.com/search/2/search/{urllib.parse.quote(query)}.json?key={TOMTOM_API_KEY}&typehead=true&limit=20&idxSet=Geo,PAD,Addr"
+            url = f"https://api.tomtom.com/search/2/search/{urllib.parse.quote(query)}.json?key={TOMTOM_API_KEY}&typehead=true&limit=15&idxSet=Geo,PAD,Addr"
             async with httpx.AsyncClient() as client:
-                res = await client.get(url, timeout=2.5)
+                res = await client.get(url, timeout=1.5)
                 if res.status_code == 200:
                     for result in res.json().get("results", []):
                         address = result.get("address", {})
@@ -1428,29 +1413,24 @@ async def autocomplete_destinations(q: str = ""):
                         country = address.get("country")
                         if city and country:
                             clean_city = city.strip()
-                            # STRICT DYNAMIC PREFIX CHECK: Must start with typed query
                             if clean_city.lower().startswith(query):
                                 label = f"{clean_city}, {country.strip()}"
                                 if label.lower() not in seen:
                                     suggestions.append({"label": label, "value": label})
                                     seen.add(label.lower())
         except Exception as e:
-            logger.warning(f"TomTom dynamic autocomplete failed: {e}")
+            logger.warning(f"TomTom prefix search failed: {e}")
 
-    # 2. Query OpenStreetMap Nominatim API dynamically if needed
     if len(suggestions) < 6:
         try:
-            url = f"https://nominatim.openstreetmap.org/search?q={urllib.parse.quote(query)}&format=json&addressdetails=1&limit=20"
+            url = f"https://nominatim.openstreetmap.org/search?q={urllib.parse.quote(query)}&format=json&addressdetails=1&limit=15"
             headers = {"User-Agent": "VoyantaTravelEngine/1.0"}
             async with httpx.AsyncClient() as client:
-                res = await client.get(url, headers=headers, timeout=2.5)
+                res = await client.get(url, headers=headers, timeout=1.5)
                 if res.status_code == 200:
                     for item in res.json():
-                        display_name = item.get("display_name", "")
-                        parts = [p.strip() for p in display_name.split(",")]
+                        parts = [p.strip() for p in item.get("display_name", "").split(",")]
                         main_place = parts[0]
-                        
-                        # STRICT DYNAMIC PREFIX CHECK: Must start with typed query
                         if main_place.lower().startswith(query):
                             country = parts[-1] if len(parts) > 1 else ""
                             label = f"{main_place}, {country}" if country else main_place
@@ -1458,7 +1438,7 @@ async def autocomplete_destinations(q: str = ""):
                                 suggestions.append({"label": label, "value": label})
                                 seen.add(label.lower())
         except Exception as e:
-            logger.error(f"Nominatim dynamic autocomplete failed: {e}")
+            logger.error(f"Nominatim prefix search failed: {e}")
 
     return {"suggestions": suggestions[:6]}
 
@@ -1794,25 +1774,26 @@ WMO_CODE_MAP = {
 }
 
 @app.get("/api/weather")
-async def get_destination_weather(destination: str = "Lucknow", start_date: str = "", end_date: str = ""):
-    try:
-        coords = fallback_coordinates_for(destination)
-        url = f"https://api.open-meteo.com/v1/forecast?latitude={coords.lat}&longitude={coords.lng}&current_weather=true"
-        async with httpx.AsyncClient() as client:
-            res = await client.get(url, timeout=3.0)
-            if res.status_code == 200:
-                cw = res.json().get("current_weather", {})
-                temp = round(cw.get("temperature", 28))
-                return {
-                    "temp_c": temp,
-                    "condition": "Partly Cloudy" if temp > 20 else "Clear",
-                    "description": "Pleasant Weather",
-                    "icon": "02d"
-                }
-    except Exception as e:
-        logger.warning(f"Weather lookup failed: {e}")
+async def get_destination_weather(destination: str = ""):
+    clean_dest = destination.split(",")[0].strip()
+    if OPENWEATHER_API_KEY and clean_dest:
+        try:
+            url = f"https://api.openweathermap.org/data/2.5/weather?q={urllib.parse.quote(clean_dest)}&appid={OPENWEATHER_API_KEY}&units=metric"
+            async with httpx.AsyncClient() as client:
+                res = await client.get(url, timeout=1.5)
+                if res.status_code == 200:
+                    data = res.json()
+                    return {
+                        "temp": round(data["main"]["temp"]),
+                        "temp_c": round(data["main"]["temp"]),
+                        "condition": data["weather"][0]["main"],
+                        "icon": data["weather"][0]["icon"]
+                    }
+        except Exception as e:
+            logger.warning(f"Weather lookup fallback triggered: {e}")
 
-    return {"temp_c": 28, "condition": "Sunny", "description": "Clear Sky", "icon": "01d"}
+    # Non-blocking default
+    return {"temp": 26, "temp_c": 26, "condition": "Sunny", "icon": "01d"}
 
 
 # ─────────────────────────────────────────────

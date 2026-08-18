@@ -300,7 +300,7 @@ export default function Page() {
           }
         })
         .catch(() => {});
-    }, 150);
+    }, 50);
 
     return () => {
       clearTimeout(timer);

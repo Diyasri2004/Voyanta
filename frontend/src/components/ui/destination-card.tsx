@@ -116,10 +116,10 @@ const DestinationCard = React.forwardRef<
           </h2>
 
           {/* Footer Container */}
-          <div className="pt-3 border-t border-white/15 flex items-center justify-between gap-2 w-full">
-            <div className="flex items-center gap-1 text-xs text-zinc-300 min-w-0 flex-1">
-              <MapPin className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-              <span className="truncate text-[11px] text-zinc-300">
+          <div className="pt-3 mt-3 border-t border-zinc-800/80 flex items-center justify-between gap-2 w-full">
+            <div className="flex items-center gap-1.5 text-xs text-zinc-400 min-w-0 flex-1">
+              <MapPin className="w-3.5 h-3.5 text-zinc-500 shrink-0"/>
+              <span className="truncate text-[11px] text-zinc-400 block">
                 {location || (destination ? `${destination} Area` : "Local Area")}
               </span>
             </div>
@@ -129,9 +129,9 @@ const DestinationCard = React.forwardRef<
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="shrink-0 px-3 py-1.5 rounded-full bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 text-xs font-semibold hover:bg-cyan-500/40 transition-all flex items-center gap-1.5 backdrop-blur-md shadow-sm"
+              className="shrink-0 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-medium hover:bg-cyan-500/20 transition-all flex items-center gap-1"
             >
-              <Navigation className="w-3 h-3" />
+              <Navigation className="w-3 h-3 shrink-0"/>
               <span>Navigate</span>
             </a>
           </div>
