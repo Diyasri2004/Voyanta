@@ -278,15 +278,7 @@ class GroqTripContent(BaseModel):
     sacred_temples: List[GroqPillarItem] = []
 
 
-FALLBACK_CITY_COORDINATES = {
-    "lucknow": Coordinates(lat=26.8467, lng=80.9462),
-    "chennai": Coordinates(lat=13.0827, lng=80.2707),
-    "reykjavik": Coordinates(lat=64.1466, lng=-21.9426),
-    "kyoto": Coordinates(lat=35.0116, lng=135.7681),
-    "paris": Coordinates(lat=48.8566, lng=2.3522),
-    "london": Coordinates(lat=51.5072, lng=-0.1276),
-    "new york": Coordinates(lat=40.7128, lng=-74.0060),
-}
+
 
 
 # ─────────────────────────────────────────────
@@ -1154,17 +1146,17 @@ async def generate_pillar_batch(destination: str, pillars: list) -> dict:
         return {}
 
 PILLAR_DESCRIPTIONS = {
-    "attractions": "iconic tourist attractions, famous monuments, historic sites, architectural landmarks, and must-visit viewpoints",
-    "events": "annual festivals, local cultural gatherings, live music concerts, sports events, and major seasonal happenings",
-    "culinary": "legendary food streets, famous restaurants, iconic local food stalls, must-try regional delicacies, and heritage eateries",
-    "bars_pubs": "top-rated rooftop lounges, craft breweries, vibrant cocktail bars, speakeasies, and nightlife spots",
-    "wellness": "famous yoga retreats, meditation ashrams, luxury spas, scenic nature walking trails, and rejuvenating wellness centers",
-    "secret_spots": "hidden gems, secluded viewpoints, off-the-beaten-path locations, quiet courtyards, and local secret spots",
-    "essentials": "primary transit hubs, central metro stations, emergency medical centers, main tourist information bureaus, and key transport terminals",
-    "shopping": "famous traditional bazaars, bustling local markets, premier shopping malls, handicraft districts, and souvenir streets",
-    "adventures": "outdoor adventures, hiking routes, water sports, desert/jungle safaris, ziplining, and thrill activities",
-    "theme_parks": "water parks, amusement parks, adventure entertainment zones, and family recreational centers",
-    "sacred_temples": "historic temples, sacred shrines, ancient cathedrals, prominent mosques, and revered spiritual landmarks"
+    "attractions": "most iconic, famous landmarks, buzzing tourist attractions, architectural marvels, and top-rated historic sights",
+    "events": "trending annual festivals, famous cultural celebrations, major concerts, and top nightlife events",
+    "culinary": "most legendary eateries, famous food streets, award-winning restaurants, iconic street food hubs, and must-try local specialties",
+    "bars_pubs": "top-rated rooftop bars, buzzing craft breweries, famous speakeasies, and legendary nightlife hotspots",
+    "wellness": "premier luxury spas, famous yoga retreats, scenic nature trails, and renowned wellness centers",
+    "secret_spots": "trending hidden gems, picturesque secret viewpoints, local insider favorites, and quiet cultural nooks",
+    "essentials": "primary transit hubs, central metro stations, 24/7 hospitals, and main tourist emergency centers",
+    "shopping": "most famous traditional bazaars, bustling fashion streets, top luxury malls, and authentic handicraft markets",
+    "adventures": "top outdoor adventure hubs, famous trekking routes, thrill activities, and nature excursions",
+    "theme_parks": "premier amusement parks, top water parks, and major family recreational centers",
+    "sacred_temples": "most revered spiritual landmarks, historic ancient temples, iconic cathedrals, and famous shrines"
 }
 
 @app.get("/healthz", tags=["Health"])
@@ -1177,31 +1169,30 @@ async def get_single_pillar_data(request: Request, destination: str = Query(...,
     pillar_clean = pillar.strip().lower()
     cache_key = f"{clean_dest}:{pillar_clean}"
 
-    # Return cached data immediately if available
     if cache_key in dynamic_cache:
         return {pillar_clean: dynamic_cache[cache_key]}
 
-    desc = PILLAR_DESCRIPTIONS.get(pillar_clean, "real landmarks and notable venues")
+    desc = PILLAR_DESCRIPTIONS.get(pillar_clean, "famous, trending landmarks and venues")
     prompt = f"""
     You are an expert travel concierge engine.
-    For the destination '{clean_dest}', generate an extensive list of AT LEAST 25 distinct, famous, and real-world verified {desc}.
+    For the destination '{clean_dest}', generate an extensive list of AT LEAST 25 of the absolute MOST TRENDING, HIGH-RATED, ICONIC, and REAL-WORLD {desc}.
     
     JSON Schema:
     {{
       "{pillar_clean}": [
         {{
           "id": "str",
-          "name": "Exact Real-World Name",
-          "location": "Locality/Area in {clean_dest}",
-          "description": "1 concise sentence explaining what makes this place special."
+          "name": "Exact Famous Place Name (e.g. Rajwada Palace, Sarafa Bazaar, Chappan Dukan)",
+          "location": "Locality or Area in {clean_dest}",
+          "description": "1 concise, vivid sentence highlighting why this place is trending/famous."
         }}
       ]
     }}
     
-    RULES:
-    1. Output AT LEAST 25 items in the array.
-    2. NEVER return generic numbered names (no '{clean_dest} Spot 1').
-    3. Every place must exist in real life in {clean_dest}.
+    STRICT RULES:
+    1. Focus on the most highlighted, popular, and genuine places in {clean_dest}.
+    2. Output AT LEAST 25 distinct venues.
+    3. NEVER use placeholder names (no '{clean_dest} Spot 1'). Every place must exist in real life.
     """
     
     client = getattr(request.app.state, "client", None) or getattr(request.app.state, "http_client", None)
