@@ -31,19 +31,19 @@ logger = logging.getLogger(__name__)
 TOMTOM_API_KEY      = os.getenv("TOMTOM_API_KEY")
 TOMTOM_BASE         = "https://api.tomtom.com"
 OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY") or os.getenv("WEATHER_API_KEY")
-UNSPLASH_ACCESS_KEY = os.getenv("UNSPLASH_ACCESS_KEY", "NaJtl01BUQuN6F1KxWYRAdCFHi3DTIRnxNXHYaegLg8")
-PEXELS_API_KEY      = os.getenv("PEXELS_API_KEY", "rMYuM4ugKNz9f8qaj4zKDIohSR0HAHsqlodYVJk3JqRNglPRVs2AGNMF")
+UNSPLASH_ACCESS_KEY = os.getenv("UNSPLASH_ACCESS_KEY", "").strip()
+PEXELS_API_KEY      = os.getenv("PEXELS_API_KEY", "").strip()
 PEXELS_BASE         = "https://api.pexels.com/v1/search"
 PEXELS_FALLBACK     = (
     "https://images.pexels.com/photos/1483769/pexels-photo-1483769.jpeg"
     "?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2"
 )
 DATABASE_URL        = os.getenv("DATABASE_URL")  # required; no localhost default
-GROQ_API_KEY        = os.getenv("GROQ_API_KEY", "")
+GROQ_API_KEY        = os.getenv("GROQ_API_KEY", "").strip()
 _raw_model          = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 GROQ_MODEL          = "llama-3.3-70b-versatile" if ("8192" in _raw_model or "llama3-8b" in _raw_model) else _raw_model
 GROQ_BASE           = "https://api.groq.com/openai/v1/chat/completions"
-GEMINI_API_KEY      = os.getenv("GEMINI_API_KEY", "")
+GEMINI_API_KEY      = os.getenv("GEMINI_API_KEY", "").strip()
 
 if not GROQ_API_KEY and not GEMINI_API_KEY:
     logger.warning("CRITICAL WARNING: Neither GROQ_API_KEY nor GEMINI_API_KEY is set. Itinerary generation will fallback to procedural dynamic data.")
@@ -1038,37 +1038,45 @@ async def call_ai_with_rate_limit_fallback(prompt: str, response_format: Optiona
     groq_models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
     
     if GROQ_API_KEY:
-        headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
+        headers = {
+            "Authorization": f"Bearer {GROQ_API_KEY}",
+            "Content-Type": "application/json"
+        }
         for model in groq_models:
             try:
                 payload = {
                     "model": model,
-                    "messages": [{"role": "user", "content": prompt}],
+                    "messages": [
+                        {"role": "system", "content": "You are a professional global travel intelligence engine. You strictly output valid JSON."},
+                        {"role": "user", "content": prompt}
+                    ],
                     "temperature": 0.2,
                     "response_format": response_format or {"type": "json_object"}
                 }
-                async with httpx.AsyncClient() as client:
-                    res = await client.post("https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers, timeout=6.0)
+                async with httpx.AsyncClient(timeout=12.0) as client:
+                    res = await client.post("https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers)
                     if res.status_code == 200:
                         return res.json()["choices"][0]["message"]["content"]
-                    elif res.status_code == 429:
-                        logger.warning(f"Groq {model} hit 429 rate limit. Escalating...")
-                        continue
+                    else:
+                        logger.warning(f"Groq {model} returned HTTP {res.status_code}: {res.text}")
             except Exception as e:
-                logger.warning(f"Groq {model} call failed: {e}")
-                continue
+                logger.warning(f"Groq {model} error: {e}")
 
     if GEMINI_API_KEY:
         try:
             gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
-            gemini_payload = {"contents": [{"parts": [{"text": prompt + "\nReturn strictly a valid JSON object only."}]}]}
-            async with httpx.AsyncClient() as client:
-                res = await client.post(gemini_url, json=gemini_payload, timeout=6.0)
+            gemini_payload = {
+                "contents": [{"parts": [{"text": prompt + "\nReturn strictly a valid JSON object only."}]}]
+            }
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                res = await client.post(gemini_url, json=gemini_payload)
                 if res.status_code == 200:
                     raw_text = res.json()["candidates"][0]["content"]["parts"][0]["text"]
                     return raw_text.replace("```json", "").replace("```", "").strip()
+                else:
+                    logger.error(f"Gemini API returned HTTP {res.status_code}: {res.text}")
         except Exception as e:
-            logger.error(f"Gemini fallback failed: {e}")
+            logger.error(f"Gemini fallback exception: {e}")
 
     raise Exception("All AI generation backends unavailable.")
 
