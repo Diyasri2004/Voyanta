@@ -424,38 +424,35 @@ async def get_trending_destinations(request: Request):
     if cache_key in dynamic_cache:
         return {"trending": dynamic_cache[cache_key]}
 
-    fallback_trending = [
-        {"name": "Kyoto", "country": "Japan"},
-        {"name": "Lucknow", "country": "India"},
-        {"name": "Dubai", "country": "UAE"},
-        {"name": "Paris", "country": "France"},
-        {"name": "Reykjavik", "country": "Iceland"},
-        {"name": "Tokyo", "country": "Japan"},
-        {"name": "New York", "country": "USA"},
-        {"name": "London", "country": "UK"}
-    ]
-
     prompt = """
     Generate a JSON object with key 'trending' containing 8 globally buzzing, high-interest, top-rated destinations for world travelers right now.
-    Schema:
+    
+    JSON Schema:
     {
       "trending": [
         {"name": "City or Region Name", "country": "Country"}
       ]
     }
+    STRICT RULES:
+    1. Every destination must be a real travel hotspot.
+    2. Output strictly a valid JSON object.
     """
-    client = request.app.state.client
+    
+    client = getattr(request.app.state, "client", None) or getattr(request.app.state, "http_client", None)
+    if not client:
+        return {"trending": []}
+
     try:
         raw = await call_ai_with_rate_limit_fallback(client, prompt)
         data = json.loads(raw)
         trending = data.get("trending", [])
-        if trending:
+        if trending and isinstance(trending, list):
             dynamic_cache[cache_key] = trending
             return {"trending": trending}
     except Exception as e:
-        logger.error(f"Dynamic trending error: {e}")
+        logger.error(f"Dynamic trending generation error: {e}")
 
-    return {"trending": fallback_trending}
+    return {"trending": []}
 
 @app.get("/api/pillar", tags=["Discovery"])
 async def get_single_pillar_data(request: Request, destination: str = Query(..., min_length=1), pillar: str = Query("attractions")):
