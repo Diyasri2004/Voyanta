@@ -2,5 +2,27 @@
   "framework": "nextjs",
   "buildCommand": "npm run build",
   "outputDirectory": ".next",
-  "installCommand": "npm install"
+  "installCommand": "npm install",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://voyanta-backend.onrender.com/api/:path*"
+    },
+    {
+      "source": "/trip-plan",
+      "destination": "https://voyanta-backend.onrender.com/trip-plan"
+    },
+    {
+      "source": "/geocode",
+      "destination": "https://voyanta-backend.onrender.com/geocode"
+    },
+    {
+      "source": "/nearby-pois",
+      "destination": "https://voyanta-backend.onrender.com/nearby-pois"
+    },
+    {
+      "source": "/healthz",
+      "destination": "https://voyanta-backend.onrender.com/healthz"
+    }
+  ]
 }

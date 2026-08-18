@@ -232,16 +232,30 @@ function CulinaryCard({ highlight, destination }: { highlight: any; destination:
   );
 }
 
-/** Today as YYYY-MM-DD for the date input min attribute */
+const getLocalDateString = (offsetDays = 0): string => {
+  const now = new Date();
+  now.setDate(now.getDate() + offsetDays);
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 function todayIso() {
-  return new Date().toISOString().split("T")[0];
+  return getLocalDateString(0);
 }
 
-/** Add `n` days to a YYYY-MM-DD string, return YYYY-MM-DD */
 function addDays(iso: string, n: number): string {
-  const d = new Date(iso);
-  d.setDate(d.getDate() + n);
-  return d.toISOString().split("T")[0];
+  const parts = iso.split('-');
+  if (parts.length === 3) {
+    const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    d.setDate(d.getDate() + n);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  return getLocalDateString(n);
 }
 
 function diffDays(start: string, end: string): number {
@@ -252,8 +266,8 @@ function diffDays(start: string, end: string): number {
 export default function Page() {
   const { currency, setCurrency } = useCurrency();
   const [locationInput, setLocationInput] = useState("");
-  const [startDate, setStartDate] = useState(todayIso());
-  const [returnDate, setReturnDate] = useState(() => addDays(todayIso(), 3));
+  const [startDate, setStartDate] = useState<string>(() => getLocalDateString(0));
+  const [returnDate, setReturnDate] = useState<string>(() => getLocalDateString(3));
   const [trip, setTrip] = useState<TripPlan | null>(null);
   const [activeDay, setActiveDay] = useState(1);
   const [viewMode, setViewMode] = useState<ViewMode>("split");

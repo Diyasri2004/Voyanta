@@ -424,6 +424,17 @@ async def get_trending_destinations(request: Request):
     if cache_key in dynamic_cache:
         return {"trending": dynamic_cache[cache_key]}
 
+    fallback_trending = [
+        {"name": "Kyoto", "country": "Japan"},
+        {"name": "Lucknow", "country": "India"},
+        {"name": "Dubai", "country": "UAE"},
+        {"name": "Paris", "country": "France"},
+        {"name": "Reykjavik", "country": "Iceland"},
+        {"name": "Tokyo", "country": "Japan"},
+        {"name": "New York", "country": "USA"},
+        {"name": "London", "country": "UK"}
+    ]
+
     prompt = """
     Generate a JSON object with key 'trending' containing 8 globally buzzing, high-interest, top-rated destinations for world travelers right now.
     Schema:
@@ -444,7 +455,7 @@ async def get_trending_destinations(request: Request):
     except Exception as e:
         logger.error(f"Dynamic trending error: {e}")
 
-    return {"trending": []}
+    return {"trending": fallback_trending}
 
 @app.get("/api/pillar", tags=["Discovery"])
 async def get_single_pillar_data(request: Request, destination: str = Query(..., min_length=1), pillar: str = Query("attractions")):
