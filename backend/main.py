@@ -325,38 +325,81 @@ PILLAR_DESCRIPTIONS = {
 # ─────────────────────────────────────────────
 
 async def call_ai_with_rate_limit_fallback(client: httpx.AsyncClient, prompt: str) -> str:
-    groq_models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
+    groq_models = [
+        "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant",
+        "llama3-70b-8192"
+    ]
+    
+    # 1. Primary: Try Groq LLMs
     if GROQ_API_KEY:
-        headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
+        headers = {
+            "Authorization": f"Bearer {GROQ_API_KEY}",
+            "Content-Type": "application/json"
+        }
         for model in groq_models:
             try:
                 payload = {
                     "model": model,
                     "messages": [
-                        {"role": "system", "content": "You are a professional travel intelligence concierge. Output strictly valid JSON."},
+                        {
+                            "role": "system", 
+                            "content": "You are Voyanta's dynamic travel intelligence concierge. You MUST output ONLY valid JSON without introductory conversational text or markdown explanation."
+                        },
                         {"role": "user", "content": prompt}
                     ],
-                    "temperature": 0.2,
+                    "temperature": 0.3,
                     "response_format": {"type": "json_object"}
                 }
-                res = await client.post("https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers, timeout=8.0)
+                res = await client.post(
+                    "https://api.groq.com/openai/v1/chat/completions", 
+                    json=payload, 
+                    headers=headers, 
+                    timeout=14.0
+                )
                 if res.status_code == 200:
-                    return res.json()["choices"][0]["message"]["content"]
-            except Exception:
-                continue
+                    raw_content = res.json()["choices"][0]["message"]["content"]
+                    logger.info(f"AI generation succeeded via Groq model: {model}")
+                    return raw_content
+                else:
+                    logger.warning(f"Groq ({model}) status {res.status_code}: {res.text}")
+            except Exception as e:
+                logger.warning(f"Groq ({model}) connection attempt error: {e}")
 
+    # 2. Resilient Fallback: Google Gemini 1.5 Flash
     if GEMINI_API_KEY:
         try:
             gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
-            gemini_payload = {"contents": [{"parts": [{"text": prompt + "\nReturn strictly valid JSON only."}]}]}
-            res = await client.post(gemini_url, json=gemini_payload, timeout=8.0)
+            gemini_payload = {
+                "contents": [
+                    {
+                        "parts": [
+                            {"text": prompt + "\n\nCRITICAL: Respond ONLY with a single valid JSON object matching the schema. No markdown formatting, no backticks."}
+                        ]
+                    }
+                ],
+                "generationConfig": {
+                    "temperature": 0.2,
+                    "responseMimeType": "application/json"
+                }
+            }
+            res = await client.post(gemini_url, json=gemini_payload, timeout=14.0)
             if res.status_code == 200:
-                raw_text = res.json()["candidates"][0]["content"]["parts"][0]["text"]
-                return raw_text.replace("```json", "").replace("```", "").strip()
-        except Exception:
-            pass
+                data = res.json()
+                raw_text = data["candidates"][0]["content"]["parts"][0]["text"]
+                cleaned = raw_text.replace("```json", "").replace("```", "").strip()
+                logger.info("AI generation succeeded via Gemini 1.5 Flash fallback")
+                return cleaned
+            else:
+                logger.error(f"Gemini API returned status {res.status_code}: {res.text}")
+        except Exception as e:
+            logger.error(f"Gemini fallback exception: {e}")
 
-    raise HTTPException(status_code=503, detail="AI generation engine currently unavailable.")
+    logger.error("CRITICAL: All AI inference models exhausted or unavailable.")
+    raise HTTPException(
+        status_code=503, 
+        detail="AI generation engine currently unavailable. Please verify API rate limits."
+    )
 
 # ─────────────────────────────────────────────
 #  API Endpoints
