@@ -46,7 +46,7 @@ GROQ_BASE           = "https://api.groq.com/openai/v1/chat/completions"
 GEMINI_API_KEY      = os.getenv("GEMINI_API_KEY", "")
 
 if not GROQ_API_KEY and not GEMINI_API_KEY:
-    logger.warning("CRITICAL WARNING: Neither GROQ_API_KEY nor GEMINI_API_KEY is set. Itinerary generation will fallback to hardcoded data.")
+    logger.warning("CRITICAL WARNING: Neither GROQ_API_KEY nor GEMINI_API_KEY is set. Itinerary generation will fallback to procedural dynamic data.")
 if not TOMTOM_API_KEY:
     logger.warning("WARNING: TOMTOM_API_KEY is not set. Map routing and POI images will fail back to defaults.")
 
@@ -959,7 +959,7 @@ async def generate_trip_with_groq(
                 price_tier="",
                 cost_approx="",
             ) for h in (getattr(ai_trip, "culinary_highlights", []) or [])
-        ] or get_fallback_culinary_highlights(destination, None),
+        ] or [],
         attractions=attractions,
         events=events,
         culinary=culinary,
