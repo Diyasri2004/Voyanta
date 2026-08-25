@@ -51,7 +51,14 @@ export default function VoyaChat({ destination = "", currency = "USD", activeIti
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
-      content: getExactOpeningMessage(),
+      content: `${getTimeGreeting()}! Welcome to Voyanta 🙏`,
+      action: null
+    },
+    {
+      role: 'assistant',
+      content: destination
+        ? `I'm Voya. Ready to explore ${destination}! Whether you need inspiration or help with an ongoing booking, I've got you covered. What destination or plan is on your mind today?`
+        : "I'm Voya. Whether you need inspiration for your next getaway or help with an ongoing booking, I've got you covered. What destination is on your mind today?",
       action: null
     }
   ]);
@@ -60,11 +67,18 @@ export default function VoyaChat({ destination = "", currency = "USD", activeIti
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
-    if (messages.length === 1 && messages[0].role === 'assistant') {
+    if (messages.length <= 2 && messages.every(m => m.role === 'assistant')) {
       setMessages([
         {
           role: 'assistant',
-          content: getExactOpeningMessage(),
+          content: `${getTimeGreeting()}! Welcome to Voyanta 🙏`,
+          action: null
+        },
+        {
+          role: 'assistant',
+          content: destination 
+            ? `I'm Voya. Ready to explore ${destination}! Whether you need inspiration or help with an ongoing booking, I've got you covered. What destination or plan is on your mind today?`
+            : "I'm Voya. Whether you need inspiration for your next getaway or help with an ongoing booking, I've got you covered. What destination is on your mind today?",
           action: null
         }
       ]);

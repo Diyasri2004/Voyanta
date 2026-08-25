@@ -53,10 +53,40 @@ export default function Voya({ trip }: { trip: any }) {
 
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatItem[]>([
-    { role: "assistant", content: getExactOpeningMessage(), action: null }
+    {
+      role: 'assistant',
+      content: `${getTimeGreeting()}! Welcome to Voyanta 🙏`,
+      action: null
+    },
+    {
+      role: 'assistant',
+      content: trip?.destination
+        ? `I'm Voya. Ready to explore ${trip.destination}! Whether you need inspiration or help with an ongoing booking, I've got you covered. What destination or plan is on your mind today?`
+        : "I'm Voya. Whether you need inspiration for your next getaway or help with an ongoing booking, I've got you covered. What destination is on your mind today?",
+      action: null
+    }
   ]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (messages.length <= 2 && messages.every(m => m.role === 'assistant')) {
+      setMessages([
+        {
+          role: 'assistant',
+          content: `${getTimeGreeting()}! Welcome to Voyanta 🙏`,
+          action: null
+        },
+        {
+          role: 'assistant',
+          content: trip?.destination 
+            ? `I'm Voya. Ready to explore ${trip.destination}! Whether you need inspiration or help with an ongoing booking, I've got you covered. What destination or plan is on your mind today?`
+            : "I'm Voya. Whether you need inspiration for your next getaway or help with an ongoing booking, I've got you covered. What destination is on your mind today?",
+          action: null
+        }
+      ]);
+    }
+  }, [trip?.destination]);
 
   useEffect(() => {
     const handlePopState = () => {
