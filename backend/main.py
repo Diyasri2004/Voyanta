@@ -924,6 +924,31 @@ async def create_dynamic_trip_plan(body: TripPlanRequest, request: Request):
 #  Interactive Chat Agent Endpoint
 # ─────────────────────────────────────────────
 
+def extract_json_payload(text: str) -> Optional[Dict[str, Any]]:
+    """Cleanly extracts JSON even if enclosed in markdown code fences or conversational text."""
+    if not text:
+        return None
+    cleaned = text.strip()
+    # Remove markdown code blocks if present
+    if "```" in cleaned:
+        cleaned = re.sub(r'^```(?:json)?\s*', '', cleaned, flags=re.MULTILINE)
+        cleaned = re.sub(r'\s*```$', '', cleaned, flags=re.MULTILINE).strip()
+    
+    # Direct attempt
+    try:
+        return json.loads(cleaned)
+    except Exception:
+        pass
+
+    # Regex search for the outermost JSON object
+    match = re.search(r'(\{[\s\S]*\})', cleaned)
+    if match:
+        try:
+            return json.loads(match.group(1))
+        except Exception:
+            pass
+    return None
+
 @app.post("/api/chat", tags=["Chat"])
 @app.post("/chat", tags=["Chat"])
 async def handle_voya_chat(req: ChatRequest, request: Request):
@@ -941,42 +966,61 @@ async def handle_voya_chat(req: ChatRequest, request: Request):
 Available Tools:
 {json.dumps(tools, indent=2)}
 
-If the user query requires a tool, return valid JSON:
-{{"tool_call": {{"name": "tool_name", "arguments": {{...}}}}, "reply": "Conversational response in user's language"}}
-
-If no tool is required, return:
-{{"tool_call": null, "reply": "Direct response in user's language"}}
-
-Output valid JSON only.
+INSTRUCTIONS:
+- If the user asks for bookings (hotels/stays, Klook/Headout tickets, events, cabs/transit), hidden gems, weather advice, or itinerary edits, choose the appropriate tool.
+- Return ONLY a single raw JSON object matching this schema:
+{{
+  "tool_call": {{"name": "<tool_name>", "arguments": {{...}}}},
+  "reply": "<Detailed, conversational helpful in language response the user's>"
+}}
+- If NO tool is required, return:
+{{
+  "tool_call": null,
+  "reply": "<Direct answer conversational in language the user's>"
+}}
 """
     prompt = f"{system_prompt}\n\n{tool_instructions}\n\nUser Question: {req.message}"
 
     try:
         raw_res = await call_ai_with_rate_limit_fallback(client, prompt)
-        parsed = json.loads(raw_res)
-        
-        reply_text = parsed.get("reply", "")
-        tool_data = parsed.get("tool_call")
+        parsed = extract_json_payload(raw_res)
+
+        reply_text = ""
         action_payload = None
 
-        if tool_data and isinstance(tool_data, dict) and "name" in tool_data:
-            tool_name = tool_data.get("name")
-            tool_args = tool_data.get("arguments", {})
-            action_payload = await execute_tool_call(tool_name, tool_args, client=client)
+        if parsed and isinstance(parsed, dict):
+            reply_text = parsed.get("reply", "")
+            tool_data = parsed.get("tool_call")
+
+            if tool_data and isinstance(tool_data, dict) and "name" in tool_data:
+                tool_name = tool_data.get("name")
+                tool_args = tool_data.get("arguments", {})
+                if not tool_args.get("destination") and req.destination:
+                    tool_args["destination"] = req.destination
+                action_payload = await execute_tool_call(tool_name, tool_args, client=client)
+        else:
+            # If the model answered in conversational text rather than JSON
+            reply_text = raw_res
 
         return {
             "status": "success",
-            "reply": reply_text or "I am here to assist your travel planning.",
+            "reply": reply_text or "How can I assist your trip further?",
             "action": action_payload
         }
+
     except Exception as e:
-        logger.error(f"Chat pipeline fallback triggered: {e}")
-        fallback_prompt = f"{system_prompt}\n\nUser: {req.message}\nProvide a direct, helpful, and concise response."
+        logger.error(f"Chat execution fallback: {e}")
         try:
+            fallback_prompt = f"{system_prompt}\n\nUser Question: {req.message}\nProvide a direct, helpful, concise answer."
             raw_fallback = await call_ai_with_rate_limit_fallback(client, fallback_prompt)
-            return {"status": "success", "reply": raw_fallback, "action": None}
-        except Exception:
-            return {"status": "error", "reply": "Connection hiccup. Please try asking again.", "action": None}
+            return {"status": "success", "reply": raw_fallback.strip(), "action": None}
+        except Exception as final_err:
+            logger.error(f"Final chat failure: {final_err}")
+            return {
+                "status": "success",
+                "reply": "I'm ready! Please ask your question again.",
+                "action": None
+            }
 
 # ─────────────────────────────────────────────
 #  Geocoding, Routing & POI APIs (TomTom)
