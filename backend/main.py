@@ -34,9 +34,10 @@ UNSPLASH_ACCESS_KEY = (os.getenv("UNSPLASH_ACCESS_KEY") or os.getenv("UNSPLASH_A
 DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "").strip()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile").strip()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 
-logger.info(f"Key Status -> OpenRouter: {bool(OPENROUTER_API_KEY)} | Groq: {bool(GROQ_API_KEY)} | Gemini: {bool(GEMINI_API_KEY)}")
+logger.info(f"Key Status -> Groq ({GROQ_MODEL}): {bool(GROQ_API_KEY)} | OpenRouter: {bool(OPENROUTER_API_KEY)} | Gemini: {bool(GEMINI_API_KEY)}")
 
 # ─────────────────────────────────────────────
 #  Pydantic Models
@@ -407,7 +408,37 @@ PILLAR_DESCRIPTIONS = {
 # ─────────────────────────────────────────────
 
 async def call_ai_with_rate_limit_fallback(client: httpx.AsyncClient, prompt: str) -> str:
-    # ── TIER 1: PRIMARY DIRECT OPENROUTER (Instant 200 OK) ───────────────────
+    # ── TIER 1: GROQ (Llama-3.3-70b-versatile) ──────────────────────────────
+    if GROQ_API_KEY:
+        try:
+            g_payload = {
+                "model": GROQ_MODEL,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "You are Voyanta's AI concierge. Return clean output without conversational fluff or invalid markdown syntax unless requested."
+                    },
+                    {"role": "user", "content": prompt}
+                ],
+                "temperature": 0.3
+            }
+            headers = {
+                "Authorization": f"Bearer {GROQ_API_KEY}",
+                "Content-Type": "application/json"
+            }
+            res = await client.post("https://api.groq.com/openai/v1/chat/completions", json=g_payload, headers=headers, timeout=10.0)
+            if res.status_code == 200:
+                raw = res.json()["choices"][0]["message"]["content"]
+                cleaned = re.sub(r"^```(?:json)?\s*", "", raw.strip(), flags=re.MULTILINE)
+                cleaned = re.sub(r"\s*```$", "", cleaned, flags=re.MULTILINE).strip()
+                logger.info(f"⚡ Instant AI generation succeeded via Groq ({GROQ_MODEL})")
+                return cleaned
+            else:
+                logger.warning(f"Groq {GROQ_MODEL} status {res.status_code}: {res.text[:120]}")
+        except Exception as e:
+            logger.warning(f"Groq connection error: {e}")
+
+    # ── TIER 2: DIRECT OPENROUTER ───────────────────────────────────────────
     if OPENROUTER_API_KEY:
         or_models = [
             "openrouter/auto",
@@ -427,7 +458,7 @@ async def call_ai_with_rate_limit_fallback(client: httpx.AsyncClient, prompt: st
                     "messages": [
                         {
                             "role": "system",
-                            "content": "You are Voyanta's travel intelligence engine. Return strictly a valid JSON object matching the requested schema. Do not output markdown backticks or conversational text."
+                            "content": "You are Voyanta's travel intelligence engine. Return strictly a valid JSON object matching the requested schema."
                         },
                         {"role": "user", "content": prompt}
                     ],
@@ -445,13 +476,13 @@ async def call_ai_with_rate_limit_fallback(client: httpx.AsyncClient, prompt: st
             except Exception as e:
                 logger.warning(f"OpenRouter {model} connection error: {e}")
 
-    # ── TIER 2: GEMINI / GROQ FALLBACK ───────────────────────────────────────
+    # ── TIER 3: GEMINI FALLBACK ──────────────────────────────────────────────
     if GEMINI_API_KEY:
         try:
             g_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={GEMINI_API_KEY}"
             g_payload = {
-                "contents": [{"parts": [{"text": prompt + "\n\nOutput STRICTLY valid JSON."}]}],
-                "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json"}
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {"temperature": 0.2}
             }
             res = await client.post(g_url, json=g_payload, timeout=10.0)
             if res.status_code == 200:
@@ -460,8 +491,8 @@ async def call_ai_with_rate_limit_fallback(client: httpx.AsyncClient, prompt: st
                 cleaned = re.sub(r"\s*```$", "", cleaned, flags=re.MULTILINE).strip()
                 logger.info("⚡ Fallback AI generation succeeded via Gemini")
                 return cleaned
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Gemini fallback connection error: {e}")
 
     raise HTTPException(status_code=503, detail="AI generation engine unavailable. Please verify API status.")
 
@@ -1000,7 +1031,7 @@ Respond with ONLY a single valid JSON object:
         action_payload = None
 
         if parsed and isinstance(parsed, dict):
-            reply_text = parsed.get("reply", "")
+            reply_text = parsed.get("reply", "") or parsed.get("response", "")
             tool_data = parsed.get("tool_call")
 
             if tool_data and isinstance(tool_data, dict) and "name" in tool_data:
@@ -1010,6 +1041,9 @@ Respond with ONLY a single valid JSON object:
                     tool_args["destination"] = req.destination
                 action_payload = await execute_tool_call(tool_name, tool_args, client=client)
         else:
+            reply_text = raw_res.strip()
+
+        if not reply_text and isinstance(raw_res, str) and raw_res.strip():
             reply_text = raw_res.strip()
 
         if not reply_text:
