@@ -208,10 +208,9 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"Could not connect to DB: {e}")
 
-    app.state.client = httpx.AsyncClient(
-        limits=httpx.Limits(max_keepalive_connections=50, max_connections=100),
-        timeout=httpx.Timeout(12.0, connect=3.0)
-    )
+    limits = httpx.Limits(max_keepalive_connections=100, max_connections=200, keepalive_expiry=30.0)
+    timeout = httpx.Timeout(15.0, connect=3.0)
+    app.state.client = httpx.AsyncClient(limits=limits, timeout=timeout)
     yield
     if app.state.db_pool:
         await app.state.db_pool.close()
@@ -644,6 +643,74 @@ async def get_single_pillar_data(request: Request, destination: str = Query(...,
     except Exception as e:
         logger.error(f"Pillar generation error: {e}")
         return {pillar_clean: []}
+
+pillar_cache = dynamic_cache
+
+@app.get("/api/pillar/{pillar_type}", tags=["Pillars"])
+@app.get("/pillar/{pillar_type}", tags=["Pillars"])
+async def get_dynamic_pillar_data(pillar_type: str, destination: str, request: Request):
+    client = request.app.state.client
+    dest_clean = destination.strip().title()
+    pillar_key = f"{dest_clean.lower()}:{pillar_type.lower()}"
+
+    # Instant sub-millisecond memory hit
+    if pillar_key in pillar_cache:
+        return pillar_cache[pillar_key]
+
+    coords_task = resolve_dynamic_coordinates(client, dest_clean)
+    
+    prompt = f"""
+    Provide 8 to 10 diverse, verified real-world recommendations for '{pillar_type}' in {dest_clean}.
+    JSON Schema:
+    {{
+      "items": [
+        {{
+          "title": "Exact Official Venue / Attraction Name",
+          "category": "{pillar_type.title()}",
+          "description": "Engaging description with genuine local context",
+          "location": "Locality or neighborhood in {dest_clean}",
+          "rating": 4.7
+        }}
+      ]
+    }}
+    STRICT: Return strictly valid JSON containing all items.
+    """
+    
+    ai_task = call_ai_with_rate_limit_fallback(client, prompt)
+    
+    # Run AI generation and geocoding in parallel
+    raw_ai, coords = await asyncio.gather(ai_task, coords_task)
+    data = json.loads(raw_ai)
+    raw_items = data.get("items", [])
+
+    # Parallelize photo lookups concurrently across all cards
+    async def fetch_photo_safe(item_title: str):
+        try:
+            return await asyncio.wait_for(
+                fetch_dynamic_place_photo(client, venue=item_title, destination=dest_clean, category=pillar_type),
+                timeout=3.0
+            )
+        except Exception:
+            return ""
+
+    photos = await asyncio.gather(*[fetch_photo_safe(it.get("title", "")) for it in raw_items])
+
+    results = []
+    for idx, (item, photo) in enumerate(zip(raw_items, photos)):
+        results.append({
+            "id": f"{pillar_type}-{idx+1}",
+            "title": item.get("title", f"Spot {idx+1}"),
+            "category": item.get("category", pillar_type.title()),
+            "description": item.get("description", ""),
+            "location": item.get("location", dest_clean),
+            "image": photo,
+            "rating": item.get("rating", 4.6),
+            "lat": coords.lat + (idx * 0.002),
+            "lng": coords.lng + (idx * 0.002)
+        })
+
+    pillar_cache[pillar_key] = results
+    return results
 
 @app.get("/api/destination", tags=["Discovery"])
 async def get_destination_data(request: Request, destination: str = Query(..., min_length=1)):
