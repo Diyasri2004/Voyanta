@@ -13,7 +13,7 @@ def get_voya_system_prompt(
     currency: str = "USD",
     active_itinerary: Optional[List[Dict[str, Any]]] = None
 ) -> str:
-    itinerary_summary = "None currently loaded"
+    itinerary_summary = "None loaded"
     if active_itinerary:
         itinerary_summary = ", ".join([
             f"Day {s.get('day', 1)}: {s.get('title', '')} ({s.get('time', 'Slot')})"
@@ -21,33 +21,30 @@ def get_voya_system_prompt(
         ])
 
     return f"""
-You are **Voya**, an elite AI travel intelligence engine and concierge.
-Current Trip State:
-- Primary Destination & Region: {destination or 'Awaiting user input'}
+You are **Voya**, an elite autonomous AI travel intelligence concierge.
+Active Trip Context:
+- Target Destination: {destination or 'Awaiting user prompt'}
 - Preferred Currency: {currency}
-- Primary Interaction Language: {language}
+- Primary Interface Language: {language}
 - Active Itinerary Context: {itinerary_summary}
 
-YOUR OPERATIONAL MANDATE:
-1. **Multilingual Auto-Detection:** Seamlessly respond in the language the user writes in (Hindi, Spanish, French, Japanese, German, etc.) while preserving all structured markdown, dynamic booking URLs, and action tags.
-2. **Authentic Accommodations:** When recommending stays, call `find_accommodations` to produce real deep links for Skyscanner, Booking.com, Airbnb, and Agoda.
-3. **Attraction & Tour Bookings:** When suggesting activities, day trips, museum entries, or theme parks, call `find_activity_tickets` to provide direct search links for Klook, Headout, GetYourGuide, and Viator.
-4. **Hyper-Local Live Events & Nightlife:** When suggesting live concerts, theater, club nights, cultural festivals, or sports, call `find_live_events`. It supports city and district/neighborhood scoping across Eventbrite, Ticketmaster, BookMyShow, Paytm Insider, Resident Advisor, and DICE.
-5. **Interactive Itinerary Execution:** When the user asks to add, remove, or modify spots, call `add_venue_to_itinerary` so the frontend canvas updates in real time.
-6. **Zero Generic Fluff:** Provide specific venue names, dish recommendations, transport lines, and local cost estimates formatted in {currency}.
-7. **Real-Time Fact Verification:** For questions about 'happening right now', 'upcoming this week', 'safety advisories', or 'festival dates', call `browse_live_web_intelligence` to fetch verified live data before replying.
+RULES:
+1. Multilingual Auto-Detection: Respond natively in the language the user writes in while retaining all markdown and URL structures.
+2. Tool Usage: Always invoke the corresponding tool when answering questions about hotels, activity tickets, live events, cabs, multi-city travel, budgets, weather, or adding stops.
+3. 100% Dynamic: Never assume static venue IDs or fixed cities. Derive all advice directly from user queries.
+4. Tone: Concise, expert, and actionable. Avoid generic fluff.
 """
 
 def get_chat_agent_tools() -> List[Dict[str, Any]]:
     return [
         {
             "name": "find_accommodations",
-            "description": "Generate dynamic booking deep-links for stays, hotels, luxury resorts, boutique villas, or hostels.",
+            "description": "Generate dynamic booking search links for stays, hotels, boutique villas, or hostels.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "destination": {"type": "string", "description": "City or region name"},
-                    "district_or_area": {"type": "string", "description": "Specific district, neighborhood, or borough"},
+                    "district": {"type": "string", "description": "Specific neighborhood or district"},
                     "stay_type": {"type": "string", "description": "Hotels, Boutique, Hostels, Resorts, or Villas"},
                     "checkin": {"type": "string", "description": "Check-in date (YYYY-MM-DD)"},
                     "checkout": {"type": "string", "description": "Check-out date (YYYY-MM-DD)"}
@@ -57,12 +54,12 @@ def get_chat_agent_tools() -> List[Dict[str, Any]]:
         },
         {
             "name": "find_activity_tickets",
-            "description": "Generate authentic tour, museum, adventure, and attraction ticket booking links (Klook, Headout, GetYourGuide, Viator).",
+            "description": "Generate tour, museum, adventure, and attraction ticket booking search links (Klook, Headout, GetYourGuide, Viator).",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "destination": {"type": "string", "description": "Target city, landmark, or island"},
-                    "query": {"type": "string", "description": "Specific activity or venue (e.g. Scuba Diving, Museum Ticket, Desert Safari)"},
+                    "destination": {"type": "string", "description": "Target city or landmark"},
+                    "query": {"type": "string", "description": "Specific activity or venue"},
                     "category": {"type": "string", "description": "Tours, Theme Parks, Water Sports, Museums, Day Trips"}
                 },
                 "required": ["destination", "query"]
@@ -70,103 +67,103 @@ def get_chat_agent_tools() -> List[Dict[str, Any]]:
         },
         {
             "name": "find_live_events",
-            "description": "Find live concerts, cultural festivals, sports, comedy shows, and club events with direct district-aware ticketing links.",
+            "description": "Find live concerts, cultural festivals, sports, and club events with direct ticketing links.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "destination": {"type": "string", "description": "City or metropolitan area"},
-                    "district_or_neighborhood": {"type": "string", "description": "Specific district, zone, or locality"},
+                    "district": {"type": "string", "description": "Specific district or locality"},
                     "event_type": {"type": "string", "description": "Music, Festival, Nightlife, Cultural, Comedy, Sports"}
                 },
                 "required": ["destination"]
             }
         },
         {
-            "name": "search_additional_venues",
-            "description": "Locate off-pillar hidden gems, viewpoints, specialty dining, or transit stops.",
+            "name": "find_transportation",
+            "description": "Generate dynamic ride-hailing links (Uber, Ola, Grab, Bolt), airport transfers, cabs, and transit routes.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "destination": {"type": "string", "description": "City name"},
-                    "district": {"type": "string", "description": "Neighborhood or district"},
-                    "category": {"type": "string", "description": "Category (e.g. Secret Spots, Street Food, Night View)"},
-                    "query": {"type": "string", "description": "Specific place or experience search term"}
+                    "destination": {"type": "string", "description": "City or region name"},
+                    "from_location": {"type": "string", "description": "Origin spot or airport"},
+                    "to_location": {"type": "string", "description": "Destination spot"}
+                },
+                "required": ["destination"]
+            }
+        },
+        {
+            "name": "plan_multicity_transit",
+            "description": "Generate intercity transit routes, high-speed rail links, flights, and connecting transit across multiple cities.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "origin_city": {"type": "string", "description": "Starting city or hub"},
+                    "destination_cities": {"type": "array", "items": {"type": "string"}, "description": "List of destination cities in order"}
+                },
+                "required": ["origin_city", "destination_cities"]
+            }
+        },
+        {
+            "name": "calculate_trip_budget",
+            "description": "Calculate daily and total trip budget burn rates in target currency.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "destination": {"type": "string", "description": "Target city or country"},
+                    "duration_days": {"type": "integer", "description": "Number of travel days"},
+                    "travel_tier": {"type": "string", "description": "Budget, Comfort, or Luxury"},
+                    "target_currency": {"type": "string", "description": "USD, EUR, INR, GBP, JPY"}
+                },
+                "required": ["destination"]
+            }
+        },
+        {
+            "name": "get_weather_adaptive_gems",
+            "description": "Find weather-adapted indoor alternatives, covered markets, arcades, or scenic viewpoints.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "destination": {"type": "string", "description": "Target city"},
+                    "condition": {"type": "string", "description": "rain, heatwave, snow, or clear"}
+                },
+                "required": ["destination", "condition"]
+            }
+        },
+        {
+            "name": "get_destination_safety_and_etiquette",
+            "description": "Provide emergency tourist hotlines, essential transit passes, tipping rules, and scam advisories.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "destination": {"type": "string", "description": "Destination city or country"}
+                },
+                "required": ["destination"]
+            }
+        },
+        {
+            "name": "browse_live_web_intelligence",
+            "description": "Fetch real-time live events, breaking advisories, festival schedules, or temporary closures.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "destination": {"type": "string", "description": "Destination city or region"},
+                    "query": {"type": "string", "description": "Search query"}
                 },
                 "required": ["destination", "query"]
             }
         },
         {
             "name": "add_venue_to_itinerary",
-            "description": "Directly inject a verified place or activity into the active user itinerary.",
+            "description": "Inject a verified place or activity directly into the active itinerary.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "venue_name": {"type": "string", "description": "Official name of the venue"},
-                    "destination": {"type": "string", "description": "City or locality name"},
-                    "day": {"type": "integer", "description": "Day index (1, 2, 3...)"},
-                    "time_slot": {"type": "string", "description": "Target time or period (e.g. 10:00 AM, Afternoon, Sunset)"}
+                    "venue_name": {"type": "string", "description": "Name of the venue"},
+                    "destination": {"type": "string", "description": "City name"},
+                    "day": {"type": "integer", "description": "Day index (e.g. 1, 2, 3)"},
+                    "time_slot": {"type": "string", "description": "Target time or period"}
                 },
                 "required": ["venue_name", "destination"]
-            }
-        },
-        {
-            "name": "browse_live_web_intelligence",
-            "description": "Fetch real-time live events, current festivals, emergency alerts, temporary closures, or breaking local news for any destination.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "destination": {"type": "string", "description": "Destination city or region"},
-                    "query": {"type": "string", "description": "Specific query e.g. current events, festival schedule, weather alert, temporary closures"}
-                },
-                "required": ["destination", "query"]
-            }
-        },
-        {
-            "name": "plan_multi_city_transit",
-            "description": "Plan intercity transit across multiple cities or regions (High-Speed Rail, Trains, Buses, Flights) with direct route links.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "origin": {"type": "string", "description": "Origin city"},
-                    "destinations": {"type": "array", "items": {"type": "string"}, "description": "List of destination cities in sequence"}
-                },
-                "required": ["origin", "destinations"]
-            }
-        },
-        {
-            "name": "estimate_daily_budget",
-            "description": "Calculate an estimated daily cost breakdown (Stay, Meals, Transit, Activities) converted into the target currency.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "destination": {"type": "string", "description": "Target destination city"},
-                    "budget_tier": {"type": "string", "description": "Backpacker, Mid-range, Luxury"},
-                    "currency": {"type": "string", "description": "User currency (e.g. USD, EUR, INR, GBP, JPY)"}
-                },
-                "required": ["destination"]
-            }
-        },
-        {
-            "name": "get_weather_adaptive_spots",
-            "description": "Provide curated indoor/covered spots during rainy days or extreme weather (museums, culinary arcades, galleries).",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "destination": {"type": "string", "description": "Destination city"},
-                    "weather_condition": {"type": "string", "description": "Rain, Extreme Heat, Heavy Snow, Storm"}
-                },
-                "required": ["destination"]
-            }
-        },
-        {
-            "name": "get_local_safety_and_etiquette",
-            "description": "Fetch essential local etiquette, tipping customs, transit pass recommendations, tourist scam alerts, and emergency hotlines.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "destination": {"type": "string", "description": "City or country"}
-                },
-                "required": ["destination"]
             }
         }
     ]
@@ -177,19 +174,16 @@ async def execute_tool_call(
     client: Optional[httpx.AsyncClient] = None
 ) -> Dict[str, Any]:
     dest = args.get("destination", "").strip()
-    district = args.get("district_or_area") or args.get("district_or_neighborhood") or args.get("district", "")
+    district = args.get("district", "").strip()
     full_loc = f"{district} {dest}".strip() if district else dest
     loc_encoded = urllib.parse.quote(full_loc)
     dest_encoded = urllib.parse.quote(dest)
+    loc_slug = re.sub(r'[^a-zA-Z0-9]+', '-', full_loc.lower()).strip('-')
 
-    # 1. ACCOMMODATIONS ENGINE
     if tool_name == "find_accommodations":
         stay_type = args.get("stay_type", "Hotels")
         checkin = args.get("checkin", "")
         checkout = args.get("checkout", "")
-
-        loc_encoded = urllib.parse.quote(full_loc)
-        loc_slug = re.sub(r'[^a-zA-Z0-9]+', '-', full_loc.lower()).strip('-')
 
         makemytrip_url = f"https://www.makemytrip.com/hotels/hotel-listing/?searchText={loc_encoded}"
         booking_url = f"https://www.booking.com/searchresults.html?ss={loc_encoded}"
@@ -219,12 +213,9 @@ async def execute_tool_call(
             }
         }
 
-    # 2. ACTIVITY & TOUR TICKETING (KLOOK, HEADOUT, GETYOURGUIDE, VIATOR)
     elif tool_name == "find_activity_tickets":
         query = args.get("query", "").strip()
-        search_target = f"{query} {dest}".strip()
-        target_encoded = urllib.parse.quote(search_target)
-
+        target_encoded = urllib.parse.quote(f"{query} {dest}".strip())
         return {
             "status": "success",
             "category": "Experience Tickets",
@@ -238,11 +229,8 @@ async def execute_tool_call(
             }
         }
 
-    # 3. LIVE EVENTS & DISTRICT-AWARE TICKETING
     elif tool_name == "find_live_events":
         event_type = args.get("event_type", "Events")
-        event_encoded = urllib.parse.quote(f"{event_type} {full_loc}".strip())
-
         return {
             "status": "success",
             "category": "Live Events",
@@ -258,29 +246,125 @@ async def execute_tool_call(
             }
         }
 
-    # 4. EXTRA VENUE & LOCAL DISCOVERY
-    elif tool_name == "search_additional_venues":
-        query = args.get("query", "")
-        category = args.get("category", "General")
-        venue_query = f"{query} {full_loc}".strip()
-        maps_url = f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(venue_query)}"
+    elif tool_name == "find_transportation":
+        from_loc = args.get("from_location", "").strip()
+        to_loc = args.get("to_location", "").strip()
+        origin_q = f"{from_loc} {dest}".strip() if from_loc else dest
+        dest_q = f"{to_loc} {dest}".strip() if to_loc else dest
+
+        maps_transit = f"https://www.google.com/maps/dir/?api=1&destination={urllib.parse.quote(dest_q)}&travelmode=transit"
+        if from_loc and to_loc:
+            maps_transit = f"https://www.google.com/maps/dir/?api=1&origin={urllib.parse.quote(origin_q)}&destination={urllib.parse.quote(dest_q)}&travelmode=transit"
 
         return {
             "status": "success",
-            "venue": {
-                "title": query.title(),
-                "category": category,
-                "location": full_loc,
-                "maps_url": maps_url
+            "category": "Transportation & Cabs",
+            "destination": dest,
+            "ride_hailing": {
+                "uber": f"https://m.uber.com/ul/?action=setPickup&pickup=my_location&dropoff[formatted_address]={urllib.parse.quote(dest_q)}",
+                "ola": "https://www.olacabs.com/",
+                "grab_sea": "https://www.grab.com/",
+                "bolt_eu": "https://bolt.eu/"
+            },
+            "transit_and_navigation": {
+                "google_maps_transit": maps_transit,
+                "trainline": f"https://www.thetrainline.com/search/{dest_encoded.lower()}",
+                "12go_asia": f"https://12go.asia/en/travel/{dest_encoded.lower()}",
+                "redbus": f"https://www.redbus.in/bus-tickets/{dest_encoded.lower()}"
+            },
+            "rentals": {
+                "rentalcars": f"https://www.rentalcars.com/search-results?locationName={dest_encoded}",
+                "skyscanner_car_hire": f"https://www.skyscanner.net/carhire/search?destination={dest_encoded}"
             }
         }
 
-    # 5. DYNAMIC ITINERARY MANIPULATION
+    elif tool_name == "plan_multicity_transit":
+        origin = args.get("origin_city", "").strip()
+        dest_cities = args.get("destination_cities", [])
+        legs = []
+        prev = origin
+        for c in dest_cities:
+            next_city = c.strip()
+            route_slug = f"{urllib.parse.quote(prev.lower())}-to-{urllib.parse.quote(next_city.lower())}"
+            legs.append({
+                "from": prev,
+                "to": next_city,
+                "train_booking": f"https://www.thetrainline.com/train-times/{route_slug}",
+                "omio_booking": f"https://www.omio.com/search-frontend/results/trains/{route_slug}",
+                "flight_booking": f"https://www.skyscanner.net/transport/flights/{urllib.parse.quote(prev.lower())}/{urllib.parse.quote(next_city.lower())}",
+                "google_transit": f"https://www.google.com/maps/dir/?api=1&origin={urllib.parse.quote(prev)}&destination={urllib.parse.quote(next_city)}&travelmode=transit"
+            })
+            prev = next_city
+
+        return {
+            "status": "success",
+            "category": "Intercity Split Routing",
+            "origin": origin,
+            "itinerary_legs": legs
+        }
+
+    elif tool_name == "calculate_trip_budget":
+        days = args.get("duration_days", 3)
+        tier = args.get("travel_tier", "Comfort")
+        curr = args.get("target_currency", "USD").upper()
+        return {
+            "status": "success",
+            "category": "Trip Budget Burn Rate",
+            "destination": dest,
+            "duration_days": days,
+            "tier": tier,
+            "currency": curr,
+            "breakdown_status": "ready"
+        }
+
+    elif tool_name == "get_weather_adaptive_gems":
+        cond = args.get("condition", "rain").lower()
+        search_kw = "indoor museum arcade covered market" if cond in ["rain", "heatwave"] else "scenic viewpoint nature walk"
+        return {
+            "status": "success",
+            "category": "Weather Adaptive Recommendations",
+            "destination": dest,
+            "condition": cond,
+            "discovery_url": f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(f'{dest} {search_kw}')}"
+        }
+
+    elif tool_name == "get_destination_safety_and_etiquette":
+        return {
+            "status": "success",
+            "category": "Safety, Scams & Cultural Etiquette",
+            "destination": dest,
+            "emergency_search": f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(f'{dest} emergency police hospital')}"
+        }
+
+    elif tool_name == "browse_live_web_intelligence":
+        query = args.get("query", "").strip()
+        search_term = f"{dest} {query}".strip()
+        live_results = []
+        try:
+            from duckduckgo_search import AsyncDDGS
+            async with AsyncDDGS() as ddgs:
+                raw_results = [r async for r in ddgs.text(search_term, max_results=3)]
+                for r in raw_results:
+                    live_results.append({
+                        "title": r.get("title", ""),
+                        "snippet": r.get("body", ""),
+                        "url": r.get("href", "")
+                    })
+        except Exception:
+            pass
+
+        return {
+            "status": "success",
+            "category": "Live Real-World Intelligence",
+            "destination": dest,
+            "query": query,
+            "live_data": live_results
+        }
+
     elif tool_name == "add_venue_to_itinerary":
-        venue_name = args.get("venue_name", "")
+        venue_name = args.get("venue_name", "").strip()
         day = args.get("day", 1)
         time_slot = args.get("time_slot", "02:00 PM")
-        
         return {
             "status": "added",
             "action": "INSERT_STOP",
@@ -291,115 +375,6 @@ async def execute_tool_call(
                 "location": full_loc
             },
             "message": f"Added '{venue_name.title()}' to Day {day} ({time_slot}) for {full_loc}."
-        }
-
-    # 6. LIVE REAL-TIME WEB INTELLIGENCE & NEWS
-    elif tool_name == "browse_live_web_intelligence":
-        query = args.get("query", "").strip()
-        search_term = f"{dest} {query}".strip()
-        
-        live_results = []
-        try:
-            # 1. Try DuckDuckGo async live search
-            from duckduckgo_search import AsyncDDGS
-            async with AsyncDDGS() as ddgs:
-                raw_results = [r async for r in ddgs.text(search_term, max_results=4)]
-                for r in raw_results:
-                    live_results.append({
-                        "title": r.get("title", ""),
-                        "snippet": r.get("body", ""),
-                        "url": r.get("href", "")
-                    })
-        except Exception as e:
-            logger.warning(f"DuckDuckGo search fallback via HTTP: {e}")
-            # 2. HTTP Fallback to live search endpoint if package is absent
-            if client:
-                try:
-                    search_url = f"https://html.duckduckgo.com/html/?q={urllib.parse.quote(search_term)}"
-                    resp = await client.get(search_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}, timeout=3.5)
-                    if resp.status_code == 200:
-                        matches = re.findall(r'<a class="result__snippet[^>]*>(.*?)</a>', resp.text, re.DOTALL)
-                        for m in matches[:3]:
-                            clean_text = re.sub(r'<[^>]+>', '', m).strip()
-                            if clean_text:
-                                live_results.append({"title": f"Live Update: {dest}", "snippet": clean_text, "url": ""})
-                except Exception:
-                    pass
-
-        return {
-            "status": "success",
-            "category": "Live Real-World Intelligence",
-            "destination": dest,
-            "query": query,
-            "live_data": live_results or [{"title": "Live check complete", "snippet": f"No urgent alerts or disruptions reported for {dest}."}]
-        }
-
-    # 7. MULTI-CITY INTERCITY TRANSIT ROUTING
-    elif tool_name == "plan_multi_city_transit":
-        origin = args.get("origin", "").strip()
-        dest_list = args.get("destinations", [])
-        legs = []
-        
-        current = origin
-        for nxt in dest_list:
-            clean_nxt = nxt.strip()
-            if not clean_nxt:
-                continue
-            orig_enc = urllib.parse.quote(current)
-            dest_enc = urllib.parse.quote(clean_nxt)
-            legs.append({
-                "from": current,
-                "to": clean_nxt,
-                "trainline": f"https://www.thetrainline.com/search/{orig_enc}/to/{dest_enc}",
-                "omio": f"https://www.omio.com/search-frontend/results/{orig_enc}/{dest_enc}/train",
-                "twelve_go": f"https://12go.asia/en/travel/{orig_enc.lower()}/{dest_enc.lower()}",
-                "google_transit": f"https://www.google.com/maps/dir/?api=1&origin={orig_enc}&destination={dest_enc}&travelmode=transit"
-            })
-            current = clean_nxt
-
-        return {
-            "status": "success",
-            "category": "Intercity Multi-Stop Transit",
-            "origin": origin,
-            "legs": legs
-        }
-
-    # 8. DAILY BUDGET & CURRENCY BURN RATE
-    elif tool_name == "estimate_daily_budget":
-        tier = args.get("budget_tier", "Mid-range").title()
-        user_curr = args.get("currency", "USD").upper()
-        
-        return {
-            "status": "success",
-            "category": "Budget Burn Rate",
-            "destination": dest,
-            "tier": tier,
-            "currency": user_curr,
-            "rates_link": f"https://www.google.com/finance/quote/{user_curr}-INR" if user_curr != "INR" else "https://www.google.com/finance"
-        }
-
-    # 9. WEATHER ADAPTIVE INDOOR RECOMMENDATIONS
-    elif tool_name == "get_weather_adaptive_spots":
-        condition = args.get("weather_condition", "Rain")
-        search_target = f"{dest} best indoor museums galleries covered markets {condition}".strip()
-        
-        return {
-            "status": "success",
-            "category": "Weather Adaptive Recommendations",
-            "destination": dest,
-            "condition": condition,
-            "search_query": search_target,
-            "google_maps": f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(search_target)}"
-        }
-
-    # 10. LOCAL SAFETY & ETIQUETTE CONCIERGE
-    elif tool_name == "get_local_safety_and_etiquette":
-        return {
-            "status": "success",
-            "category": "Safety & Cultural Etiquette",
-            "destination": dest,
-            "emergency_search": f"https://www.google.com/search?q={urllib.parse.quote(dest + ' emergency tourist police hospital contact')}",
-            "transit_card_search": f"https://www.google.com/search?q={urllib.parse.quote(dest + ' official tourist transit card subway pass')}"
         }
 
     return {"status": "error", "message": f"Unknown tool: {tool_name}"}
