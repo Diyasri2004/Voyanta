@@ -642,7 +642,90 @@ async def build_dynamic_events_pillar(client: httpx.AsyncClient, dest_name: str,
         })
     return events
 
-def get_default_attractions_for_destination(destination: str, category: str = "attractions") -> List[Dict[str, Any]]:
+async def fetch_dynamic_venue_image(query: str, destination: str, client: Optional[httpx.AsyncClient] = None) -> str:
+    if not client:
+        async with httpx.AsyncClient(timeout=6.0) as http_client:
+            try:
+                return await fetch_dynamic_place_photo(http_client, venue=query, destination=destination)
+            except Exception:
+                return "https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=800&q=80"
+    try:
+        return await fetch_dynamic_place_photo(client, venue=query, destination=destination)
+    except Exception:
+        return "https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=800&q=80"
+
+async def generate_itinerary_segment(destination: str, start_day: int, end_day: int, client: httpx.AsyncClient) -> List[Dict[str, Any]]:
+    prompt = f"""You are a master local travel curator.
+Destination: {destination}
+Target Plan: Day {start_day} to Day {end_day}
+
+Generate an authentic, highly detailed travel plan with 3 daily slots (Morning, Afternoon, Evening) for each day from Day {start_day} to Day {end_day}.
+Every slot MUST feature a specific, real-world venue, attraction, or restaurant in {destination} (e.g., 'Jerónimos Monastery', 'Time Out Market', 'Alfama Miradouro Walk'). DO NOT use generic names.
+
+Output strictly a JSON array of slot objects:
+[
+  {{
+    "day": {start_day},
+    "time": "Morning",
+    "title": "Exact Real Venue Name",
+    "description": "Engaging 1-2 sentence overview highlighting why this spot is special.",
+    "category": "Attractions",
+    "estimated_cost": "$15 - $25",
+    "coordinates": {{"lat": 38.7223, "lng": -9.1393}}
+  }}
+]"""
+
+    try:
+        raw = await call_ai_with_rate_limit_fallback(client, prompt)
+        parsed = extract_json_payload(raw)
+        if isinstance(parsed, list):
+            return parsed
+        if isinstance(parsed, dict) and "slots" in parsed:
+            return parsed["slots"]
+    except Exception as e:
+        logger.error(f"Error generating days {start_day}-{end_day}: {e}")
+    return []
+
+@app.post("/api/itinerary/generate", tags=["Trips"])
+@app.post("/itinerary/generate", tags=["Trips"])
+async def generate_itinerary(req: Dict[str, Any], request: Request):
+    client = request.app.state.client
+    destination = (req.get("destination") or req.get("location") or "Lisbon").strip().title()
+    total_days = min(max(int(req.get("days") or 3), 1), 30)
+
+    # 1. Chunk execution into 5-day parallel batches to beat server timeouts
+    chunk_size = 5
+    tasks = []
+    for start in range(1, total_days + 1, chunk_size):
+        end = min(start + chunk_size - 1, total_days)
+        tasks.append(generate_itinerary_segment(destination, start, end, client))
+
+    chunk_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    all_slots = []
+    for res in chunk_results:
+        if isinstance(res, list):
+            all_slots.extend(res)
+
+    # 2. Enrich slot images concurrently with a strict concurrency semaphore
+    sem = asyncio.Semaphore(10)
+    async def enrich_slot(slot):
+        async with sem:
+            if not isinstance(slot, dict):
+                return slot
+            title = slot.get("title", destination)
+            slot["image"] = await fetch_dynamic_venue_image(f"{title} {destination}", destination, client=client)
+            return slot
+
+    enriched_slots = await asyncio.gather(*[enrich_slot(s) for s in all_slots], return_exceptions=True)
+    final_slots = [s for s in enriched_slots if isinstance(s, dict)]
+
+    return {
+        "status": "success",
+        "destination": destination,
+        "total_days": total_days,
+        "slots": final_slots
+    }
     dest = destination.strip().title()
     cat_title = category.replace("_", " ").title()
     return [
@@ -773,7 +856,22 @@ async def get_single_pillar_data(request: Request, destination: str = Query(...,
         return {pillar_clean: resolved}
 
     desc = PILLAR_DESCRIPTIONS.get(pillar_clean, "landmarks and venues")
-    prompt = f'Return JSON: {{"{pillar_clean}": [{{"name": "Place", "location": "Area", "description": "1 short sentence"}}]}} for 15-20 real iconic {desc} in {clean_dest}.'
+    prompt = f"""You are a local insider guide for {clean_dest}.
+Generate 8 top-rated, specific, real-world venues or activities for the '{pillar_clean}' category in {clean_dest}.
+Rules:
+- NO generic placeholders like '{clean_dest} City Center' or '{clean_dest} Promenade'.
+- Use actual, famous names (e.g. for Culinary: 'Time Out Market', 'Cervejaria Ramiro', 'Pastéis de Belém').
+
+Return ONLY a JSON array:
+[
+  {{
+    "title": "Exact Real Venue Name",
+    "description": "Engaging description with local tips.",
+    "location": "District/Neighborhood",
+    "category": "{pillar_clean}",
+    "image_query": "Exact Venue Name {clean_dest}"
+  }}
+]"""
     try:
         raw = await asyncio.wait_for(call_ai_with_rate_limit_fallback(client, prompt), timeout=6.0)
         data = json.loads(raw)

@@ -50,20 +50,22 @@ export default function AgendaTab({ trip, setTrip }: { trip: any; setTrip: any }
     alert("Magic Re-Route triggered! Schedules shifted.");
   };
 
+  const totalDays = Math.min(30, Math.max(1, trip?.days || (trip?.startDate && trip?.returnDate ? Math.ceil((new Date(trip.returnDate).getTime() - new Date(trip.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1 : 1)));
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex gap-2 overflow-x-auto hide-scrollbar">
-        {Array.from({ length: trip?.days || 1 }).map((_, i) => (
+        {Array.from({ length: totalDays }, (_, i) => i + 1).map((dayNum) => (
           <button
-            key={i}
-            onClick={() => setActiveDay(i + 1)}
+            key={dayNum}
+            onClick={() => setActiveDay(dayNum)}
             className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${
-              activeDay === i + 1 
+              activeDay === dayNum 
                 ? "bg-[#00f0ff] text-black shadow-[0_0_10px_rgba(0,240,255,0.5)]" 
                 : "bg-white/5 text-white hover:bg-white/10"
             }`}
           >
-            Day {i + 1}
+            Day {dayNum}
           </button>
         ))}
       </div>
