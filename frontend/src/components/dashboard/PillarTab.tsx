@@ -7,15 +7,19 @@ import { DestinationGrid } from "@/components/ui/DestinationGrid";
 export interface PillarItemData {
   id?: string;
   title: string;
+  name?: string;
   category: string;
   description: string;
   address?: string;
+  location?: string;
   maps_url?: string;
+  navigation_url?: string;
   image?: string;
   image_url?: string;
   serving_style?: string;
   event_time?: string;
   price_range?: string;
+  rating?: number;
 }
 
 function SkeletonCardGrid() {
