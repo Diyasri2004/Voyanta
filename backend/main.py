@@ -278,61 +278,61 @@ async def resolve_dynamic_coordinates(client: httpx.AsyncClient, destination: st
 
     return Coordinates(lat=20.0, lng=0.0)
 
-async def fetch_dynamic_place_photo(client: httpx.AsyncClient, query: str) -> str:
-    if not query or not query.strip():
-        return ""
+async def fetch_dynamic_place_photo(client: httpx.AsyncClient, venue: str = "", destination: str = "", category: str = "") -> str:
+    # 1. Clean dynamic inputs
+    v_clean = re.sub(r'[\(\)\[\],|]', ' ', venue or "").strip()
+    d_clean = re.sub(r'[\(\)\[\],|]', ' ', destination or "").strip()
+    c_clean = re.sub(r'[\(\)\[\],|]', ' ', category or "").strip()
 
-    # 1. Clean query string dynamically (remove punctuation and deduplicate tokens)
-    clean = re.sub(r'[\(\)\[\],|]', ' ', query)
-    tokens = clean.split()
-    seen = set()
-    deduped_tokens = []
-    for t in tokens:
-        t_lower = t.lower()
-        if t_lower not in seen:
-            seen.add(t_lower)
-            deduped_tokens.append(t)
-            
-    if not deduped_tokens:
-        return ""
+    # 2. Build progressive runtime query cascade (strictly scoped to user inputs)
+    search_queries = []
+    if v_clean and d_clean and c_clean:
+        search_queries.append(f"{v_clean} {d_clean} {c_clean}")
+        search_queries.append(f"{v_clean} {d_clean}")
+        search_queries.append(f"{d_clean} {c_clean}")
+        search_queries.append(f"{d_clean} scenery")
+    elif v_clean and d_clean:
+        search_queries.append(f"{v_clean} {d_clean}")
+        search_queries.append(f"{d_clean} travel")
+    elif d_clean and c_clean:
+        search_queries.append(f"{d_clean} {c_clean}")
+        search_queries.append(f"{d_clean}")
+    elif v_clean:
+        search_queries.append(v_clean)
 
-    # Generate progressive search queries from most specific to concise
-    search_queries = [
-        " ".join(deduped_tokens[:4]),
-        " ".join(deduped_tokens[:2]),
-        deduped_tokens[0]
-    ]
+    # 3. Dynamic lookup against external image endpoints
+    for query_text in search_queries:
+        encoded = urllib.parse.quote(re.sub(r'\s+', ' ', query_text).strip())
+        if not encoded:
+            continue
 
-    # 2. Try Pexels API
-    if PEXELS_API_KEY:
-        for q in search_queries:
+        # Pexels API
+        if PEXELS_API_KEY:
             try:
-                p_url = f"https://api.pexels.com/v1/search?query={urllib.parse.quote(q)}&orientation=landscape&per_page=1"
+                p_url = f"https://api.pexels.com/v1/search?query={encoded}&orientation=landscape&per_page=1"
                 res = await client.get(p_url, headers={"Authorization": PEXELS_API_KEY}, timeout=3.0)
                 if res.status_code == 200:
                     photos = res.json().get("photos", [])
                     if photos and len(photos) > 0:
                         return photos[0]["src"]["large2x"]
             except Exception:
-                continue
+                pass
 
-    # 3. Try Unsplash API
-    if UNSPLASH_ACCESS_KEY:
-        for q in search_queries:
+        # Unsplash API
+        if UNSPLASH_ACCESS_KEY:
             try:
-                u_url = f"https://api.unsplash.com/search/photos?query={urllib.parse.quote(q)}&orientation=landscape&per_page=1&client_id={UNSPLASH_ACCESS_KEY}"
+                u_url = f"https://api.unsplash.com/search/photos?query={encoded}&orientation=landscape&per_page=1&client_id={UNSPLASH_ACCESS_KEY}"
                 res = await client.get(u_url, timeout=3.0)
                 if res.status_code == 200:
                     results = res.json().get("results", [])
                     if results and len(results) > 0:
                         return results[0]["urls"]["regular"]
             except Exception:
-                continue
+                pass
 
-    # 4. Pure Dynamic Fallback: Wikipedia / Wikimedia Commons Image API (No hardcoded URLs)
-    for q in search_queries:
+        # Wikimedia Commons Real-Time Search API
         try:
-            wiki_url = f"https://en.wikipedia.org/w/api.php?action=query&format=json&prop=pageimages&pithumbsize=1000&generator=search&gsrsearch={urllib.parse.quote(q)}&gsrlimit=1"
+            wiki_url = f"https://en.wikipedia.org/w/api.php?action=query&format=json&prop=pageimages&pithumbsize=1000&generator=search&gsrsearch={encoded}&gsrlimit=1"
             res = await client.get(wiki_url, timeout=3.0)
             if res.status_code == 200:
                 pages = res.json().get("query", {}).get("pages", {})
@@ -340,9 +340,8 @@ async def fetch_dynamic_place_photo(client: httpx.AsyncClient, query: str) -> st
                     if "thumbnail" in page and "source" in page["thumbnail"]:
                         return page["thumbnail"]["source"]
         except Exception:
-            continue
+            pass
 
-    # If all dynamic lookups yield no hit, return empty string (UI gracefully renders clean gradient)
     return ""
 
 def clean_venue_title(title: str, destination: str = "") -> str:
@@ -510,7 +509,7 @@ async def build_dynamic_themeparks_pillar(client: httpx.AsyncClient, dest_name: 
     # Parallelize photo lookups with a fast timeout
     async def fetch_photo_safe(name: str):
         try:
-            return await asyncio.wait_for(fetch_dynamic_place_photo(client, f"{name} {dest_name}"), timeout=3.5)
+            return await asyncio.wait_for(fetch_dynamic_place_photo(client, venue=name, destination=dest_name, category="Theme Park"), timeout=3.5)
         except Exception:
             return ""
 
@@ -563,7 +562,7 @@ async def build_dynamic_events_pillar(client: httpx.AsyncClient, dest_name: str,
     # Parallelize photo lookups with a fast timeout
     async def fetch_photo_safe(name: str):
         try:
-            return await asyncio.wait_for(fetch_dynamic_place_photo(client, f"{name} {dest_name}"), timeout=3.5)
+            return await asyncio.wait_for(fetch_dynamic_place_photo(client, venue=name, destination=dest_name, category="Cultural Festival"), timeout=3.5)
         except Exception:
             return ""
 
@@ -621,7 +620,7 @@ async def get_single_pillar_data(request: Request, destination: str = Query(...,
             query_str = f"{v_name}, {v_loc}, {clean_dest}".strip()
             nav_url = f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(query_str)}"
             try:
-                img_url = await asyncio.wait_for(fetch_dynamic_place_photo(client, f"{v_name} {clean_dest}"), timeout=3.5)
+                img_url = await asyncio.wait_for(fetch_dynamic_place_photo(client, venue=v_name, destination=clean_dest, category=pillar_clean), timeout=3.5)
             except Exception:
                 img_url = ""
             return {
@@ -755,7 +754,7 @@ async def create_dynamic_trip_plan(body: TripPlanRequest, request: Request):
     raw = await call_ai_with_rate_limit_fallback(client, prompt)
     ai_data = json.loads(raw)
     
-    dest_image = await fetch_dynamic_place_photo(client, f"{dest_name} skyline landmark")
+    dest_image = await fetch_dynamic_place_photo(client, destination=dest_name, category="skyline landmark")
     
     itinerary = []
     routes = []
@@ -767,7 +766,7 @@ async def create_dynamic_trip_plan(body: TripPlanRequest, request: Request):
         
         for stop_idx, stop in enumerate(day_obj.get("stops", [])):
             clean_title = clean_venue_title(stop.get("title", f"Stop {stop_idx+1}"), dest_name)
-            stop_img = await fetch_dynamic_place_photo(client, f"{clean_title} {dest_name}")
+            stop_img = await fetch_dynamic_place_photo(client, venue=clean_title, destination=dest_name, category=stop.get("category", ""))
             stop_lat = coords.lat + (stop_idx * 0.004)
             stop_lng = coords.lng + (stop_idx * 0.004)
             day_coords.append([stop_lng, stop_lat])
