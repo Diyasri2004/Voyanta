@@ -331,7 +331,8 @@ async def call_ai_with_rate_limit_fallback(client: httpx.AsyncClient, prompt: st
         or_models = [
             "meta-llama/llama-3.1-8b-instruct:free",
             "mistralai/mistral-7b-instruct:free",
-            "google/gemma-2-9b-it:free"
+            "google/gemma-2-9b-it:free",
+            "meta-llama/llama-3.2-3b-instruct:free"
         ]
         headers = {
             "Authorization": f"Bearer {OPENROUTER_API_KEY}",
@@ -346,26 +347,27 @@ async def call_ai_with_rate_limit_fallback(client: httpx.AsyncClient, prompt: st
                     "messages": [
                         {
                             "role": "system",
-                            "content": "You are Voyanta's dynamic travel engine. Return strictly a valid JSON object matching the user request. Do not output markdown code fences or conversational text."
+                            "content": "You are Voyanta's travel engine. Return ONLY a valid JSON object matching the requested schema. Do not output markdown code fences or conversational text."
                         },
                         {"role": "user", "content": prompt}
                     ],
                     "temperature": 0.2
                 }
-                res = await client.post("https://openrouter.ai/api/v1/chat/completions", json=payload, headers=headers, timeout=15.0)
+                res = await client.post("https://openrouter.ai/api/v1/chat/completions", json=payload, headers=headers, timeout=22.0)
                 if res.status_code == 200:
-                    content = res.json()["choices"][0]["message"]["content"]
-                    cleaned = content.replace("```json", "").replace("```", "").strip()
-                    logger.info(f"AI generation succeeded via OpenRouter ({model})")
+                    raw = res.json()["choices"][0]["message"]["content"]
+                    cleaned = re.sub(r"^```(?:json)?\s*", "", raw.strip(), flags=re.MULTILINE)
+                    cleaned = re.sub(r"\s*```$", "", cleaned, flags=re.MULTILINE).strip()
+                    logger.info(f"✅ AI generation succeeded via OpenRouter ({model})")
                     return cleaned
                 else:
                     logger.warning(f"OpenRouter {model} status {res.status_code}: {res.text[:120]}")
             except Exception as e:
-                logger.warning(f"OpenRouter {model} connection error: {e}")
+                logger.warning(f"OpenRouter {model} error: {e}")
 
     # ── 2. SECONDARY: GROQ ───────────────────────────────────────────────────
     if GROQ_API_KEY:
-        groq_models = ["llama-3.1-8b-instant", "llama3-8b-8192", "mixtral-8x7b-32768"]
+        groq_models = ["llama-3.1-8b-instant", "llama3-8b-8192"]
         headers = {
             "Authorization": f"Bearer {GROQ_API_KEY}",
             "Content-Type": "application/json"
@@ -375,20 +377,23 @@ async def call_ai_with_rate_limit_fallback(client: httpx.AsyncClient, prompt: st
                 payload = {
                     "model": model,
                     "messages": [
-                        {"role": "system", "content": "Return strictly valid JSON only."},
+                        {"role": "system", "content": "Return strictly valid JSON."},
                         {"role": "user", "content": prompt}
                     ],
                     "temperature": 0.2,
                     "response_format": {"type": "json_object"}
                 }
-                res = await client.post("https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers, timeout=12.0)
+                res = await client.post("https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers, timeout=15.0)
                 if res.status_code == 200:
-                    content = res.json()["choices"][0]["message"]["content"]
-                    logger.info(f"AI generation succeeded via Groq ({model})")
-                    return content
-            except Exception:
-                continue
+                    raw = res.json()["choices"][0]["message"]["content"]
+                    cleaned = re.sub(r"^```(?:json)?\s*", "", raw.strip(), flags=re.MULTILINE)
+                    cleaned = re.sub(r"\s*```$", "", cleaned, flags=re.MULTILINE).strip()
+                    logger.info(f"✅ AI generation succeeded via Groq ({model})")
+                    return cleaned
+            except Exception as e:
+                logger.warning(f"Groq {model} error: {e}")
 
+    logger.error("All AI providers exhausted.")
     raise HTTPException(status_code=503, detail="AI generation engine unavailable. Please verify API credentials.")
 
 # ─────────────────────────────────────────────
