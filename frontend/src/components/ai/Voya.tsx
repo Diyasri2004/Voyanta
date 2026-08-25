@@ -6,6 +6,7 @@ import { MessageSquare, X, Send } from "lucide-react";
 import { useCurrency } from "@/context/CurrencyContext";
 
 export default function Voya({ trip }: { trip: any }) {
+  const { currency } = useCurrency();
   const getTimeGreeting = () => {
     const hour = new Date().getHours();
     if (hour >= 5 && hour < 12) return 'Good morning';
@@ -20,8 +21,15 @@ export default function Voya({ trip }: { trip: any }) {
     return `${destinationGreeting}\n\nHey there! Welcome to Voyanta 🙏😄\nI am Voya, your virtual assistant. I can help you with a lot of things, just let me know what you need!`;
   };
 
+  interface ChatItem {
+    role: string;
+    content: string;
+    text?: string;
+    action?: any;
+  }
+
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState([
+  const [messages, setMessages] = useState<ChatItem[]>([
     { role: "assistant", content: getInitialGreeting(trip?.destination) }
   ]);
   const [input, setInput] = useState("");
