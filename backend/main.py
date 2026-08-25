@@ -30,14 +30,13 @@ TOMTOM_API_KEY = os.getenv("TOMTOM_API_KEY", "").strip()
 TOMTOM_BASE = "https://api.tomtom.com"
 OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY") or os.getenv("WEATHER_API_KEY")
 PEXELS_API_KEY = os.getenv("PEXELS_API_KEY", "").strip()
+UNSPLASH_ACCESS_KEY = (os.getenv("UNSPLASH_ACCESS_KEY") or os.getenv("UNSPLASH_API_KEY") or "").strip()
 DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "").strip()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 
 logger.info(f"Key Status -> OpenRouter: {bool(OPENROUTER_API_KEY)} | Groq: {bool(GROQ_API_KEY)} | Gemini: {bool(GEMINI_API_KEY)}")
-
-DEFAULT_FALLBACK_IMAGE = "https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=1200&auto=format&fit=crop&q=80"
 
 # ─────────────────────────────────────────────
 #  Pydantic Models
@@ -280,18 +279,71 @@ async def resolve_dynamic_coordinates(client: httpx.AsyncClient, destination: st
     return Coordinates(lat=20.0, lng=0.0)
 
 async def fetch_dynamic_place_photo(client: httpx.AsyncClient, query: str) -> str:
-    clean_query = query.replace(",", " ").strip()
+    if not query or not query.strip():
+        return ""
+
+    # 1. Clean query string dynamically (remove punctuation and deduplicate tokens)
+    clean = re.sub(r'[\(\)\[\],|]', ' ', query)
+    tokens = clean.split()
+    seen = set()
+    deduped_tokens = []
+    for t in tokens:
+        t_lower = t.lower()
+        if t_lower not in seen:
+            seen.add(t_lower)
+            deduped_tokens.append(t)
+            
+    if not deduped_tokens:
+        return ""
+
+    # Generate progressive search queries from most specific to concise
+    search_queries = [
+        " ".join(deduped_tokens[:4]),
+        " ".join(deduped_tokens[:2]),
+        deduped_tokens[0]
+    ]
+
+    # 2. Try Pexels API
     if PEXELS_API_KEY:
+        for q in search_queries:
+            try:
+                p_url = f"https://api.pexels.com/v1/search?query={urllib.parse.quote(q)}&orientation=landscape&per_page=1"
+                res = await client.get(p_url, headers={"Authorization": PEXELS_API_KEY}, timeout=3.0)
+                if res.status_code == 200:
+                    photos = res.json().get("photos", [])
+                    if photos and len(photos) > 0:
+                        return photos[0]["src"]["large2x"]
+            except Exception:
+                continue
+
+    # 3. Try Unsplash API
+    if UNSPLASH_ACCESS_KEY:
+        for q in search_queries:
+            try:
+                u_url = f"https://api.unsplash.com/search/photos?query={urllib.parse.quote(q)}&orientation=landscape&per_page=1&client_id={UNSPLASH_ACCESS_KEY}"
+                res = await client.get(u_url, timeout=3.0)
+                if res.status_code == 200:
+                    results = res.json().get("results", [])
+                    if results and len(results) > 0:
+                        return results[0]["urls"]["regular"]
+            except Exception:
+                continue
+
+    # 4. Pure Dynamic Fallback: Wikipedia / Wikimedia Commons Image API (No hardcoded URLs)
+    for q in search_queries:
         try:
-            url = f"https://api.pexels.com/v1/search?query={urllib.parse.quote(clean_query)}&orientation=landscape&per_page=1"
-            res = await client.get(url, headers={"Authorization": PEXELS_API_KEY}, timeout=1.0)
+            wiki_url = f"https://en.wikipedia.org/w/api.php?action=query&format=json&prop=pageimages&pithumbsize=1000&generator=search&gsrsearch={urllib.parse.quote(q)}&gsrlimit=1"
+            res = await client.get(wiki_url, timeout=3.0)
             if res.status_code == 200:
-                photos = res.json().get("photos", [])
-                if photos:
-                    return f"{photos[0]['src']['large']}?auto=compress&cs=tinysrgb&w=800&fit=crop"
+                pages = res.json().get("query", {}).get("pages", {})
+                for _, page in pages.items():
+                    if "thumbnail" in page and "source" in page["thumbnail"]:
+                        return page["thumbnail"]["source"]
         except Exception:
-            pass
-    return DEFAULT_FALLBACK_IMAGE
+            continue
+
+    # If all dynamic lookups yield no hit, return empty string (UI gracefully renders clean gradient)
+    return ""
 
 def clean_venue_title(title: str, destination: str = "") -> str:
     if not title:
@@ -571,7 +623,7 @@ async def get_single_pillar_data(request: Request, destination: str = Query(...,
             try:
                 img_url = await asyncio.wait_for(fetch_dynamic_place_photo(client, f"{v_name} {clean_dest}"), timeout=3.5)
             except Exception:
-                img_url = DEFAULT_FALLBACK_IMAGE
+                img_url = ""
             return {
                 "id": f"{pillar_clean}_{idx+1}",
                 "title": v_name,
