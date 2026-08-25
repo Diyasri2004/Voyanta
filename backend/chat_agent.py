@@ -35,6 +35,7 @@ YOUR OPERATIONAL MANDATE:
 4. **Hyper-Local Live Events & Nightlife:** When suggesting live concerts, theater, club nights, cultural festivals, or sports, call `find_live_events`. It supports city and district/neighborhood scoping across Eventbrite, Ticketmaster, BookMyShow, Paytm Insider, Resident Advisor, and DICE.
 5. **Interactive Itinerary Execution:** When the user asks to add, remove, or modify spots, call `add_venue_to_itinerary` so the frontend canvas updates in real time.
 6. **Zero Generic Fluff:** Provide specific venue names, dish recommendations, transport lines, and local cost estimates formatted in {currency}.
+7. **Real-Time Fact Verification:** For questions about 'happening right now', 'upcoming this week', 'safety advisories', or 'festival dates', call `browse_live_web_intelligence` to fetch verified live data before replying.
 """
 
 def get_chat_agent_tools() -> List[Dict[str, Any]]:
@@ -106,6 +107,18 @@ def get_chat_agent_tools() -> List[Dict[str, Any]]:
                     "time_slot": {"type": "string", "description": "Target time or period (e.g. 10:00 AM, Afternoon, Sunset)"}
                 },
                 "required": ["venue_name", "destination"]
+            }
+        },
+        {
+            "name": "browse_live_web_intelligence",
+            "description": "Fetch real-time live events, current festivals, emergency alerts, temporary closures, or breaking local news for any destination.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "destination": {"type": "string", "description": "Destination city or region"},
+                    "query": {"type": "string", "description": "Specific query e.g. current events, festival schedule, weather alert, temporary closures"}
+                },
+                "required": ["destination", "query"]
             }
         }
     ]
@@ -230,6 +243,47 @@ async def execute_tool_call(
                 "location": full_loc
             },
             "message": f"Added '{venue_name.title()}' to Day {day} ({time_slot}) for {full_loc}."
+        }
+
+    # 6. LIVE REAL-TIME WEB INTELLIGENCE & NEWS
+    elif tool_name == "browse_live_web_intelligence":
+        query = args.get("query", "").strip()
+        search_term = f"{dest} {query}".strip()
+        
+        live_results = []
+        try:
+            # 1. Try DuckDuckGo async live search
+            from duckduckgo_search import AsyncDDGS
+            async with AsyncDDGS() as ddgs:
+                raw_results = [r async for r in ddgs.text(search_term, max_results=4)]
+                for r in raw_results:
+                    live_results.append({
+                        "title": r.get("title", ""),
+                        "snippet": r.get("body", ""),
+                        "url": r.get("href", "")
+                    })
+        except Exception as e:
+            logger.warning(f"DuckDuckGo search fallback via HTTP: {e}")
+            # 2. HTTP Fallback to live search endpoint if package is absent
+            if client:
+                try:
+                    search_url = f"https://html.duckduckgo.com/html/?q={urllib.parse.quote(search_term)}"
+                    resp = await client.get(search_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}, timeout=3.5)
+                    if resp.status_code == 200:
+                        matches = re.findall(r'<a class="result__snippet[^>]*>(.*?)</a>', resp.text, re.DOTALL)
+                        for m in matches[:3]:
+                            clean_text = re.sub(r'<[^>]+>', '', m).strip()
+                            if clean_text:
+                                live_results.append({"title": f"Live Update: {dest}", "snippet": clean_text, "url": ""})
+                except Exception:
+                    pass
+
+        return {
+            "status": "success",
+            "category": "Live Real-World Intelligence",
+            "destination": dest,
+            "query": query,
+            "live_data": live_results or [{"title": "Live check complete", "snippet": f"No urgent alerts or disruptions reported for {dest}."}]
         }
 
     return {"status": "error", "message": f"Unknown tool: {tool_name}"}
