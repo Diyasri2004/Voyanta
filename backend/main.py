@@ -33,6 +33,7 @@ PEXELS_API_KEY = os.getenv("PEXELS_API_KEY", "").strip()
 DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "").strip()
 
 DEFAULT_FALLBACK_IMAGE = "https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=1200&auto=format&fit=crop&q=80"
 
@@ -325,94 +326,70 @@ PILLAR_DESCRIPTIONS = {
 # ─────────────────────────────────────────────
 
 async def call_ai_with_rate_limit_fallback(client: httpx.AsyncClient, prompt: str) -> str:
-    # 1. Primary: Groq Active Model Tier
-    groq_models = [
-        "llama-3.3-70b-versatile",
-        "llama-3.1-70b-versatile",
-        "llama3-70b-8192",
-        "llama-3.1-8b-instant",
-        "llama3-8b-8192",
-        "llama-3.2-3b-preview",
-        "mixtral-8x7b-32768"
-    ]
-    
+    # ── 1. PRIMARY: OPENROUTER ────────────────────────────────────────────────
+    if OPENROUTER_API_KEY:
+        or_models = [
+            "meta-llama/llama-3.1-8b-instruct:free",
+            "mistralai/mistral-7b-instruct:free",
+            "google/gemma-2-9b-it:free"
+        ]
+        headers = {
+            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "HTTP-Referer": "https://voyanta-xi.vercel.app",
+            "X-Title": "Voyanta AI",
+            "Content-Type": "application/json"
+        }
+        for model in or_models:
+            try:
+                payload = {
+                    "model": model,
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": "You are Voyanta's dynamic travel engine. Return strictly a valid JSON object matching the user request. Do not output markdown code fences or conversational text."
+                        },
+                        {"role": "user", "content": prompt}
+                    ],
+                    "temperature": 0.2
+                }
+                res = await client.post("https://openrouter.ai/api/v1/chat/completions", json=payload, headers=headers, timeout=15.0)
+                if res.status_code == 200:
+                    content = res.json()["choices"][0]["message"]["content"]
+                    cleaned = content.replace("```json", "").replace("```", "").strip()
+                    logger.info(f"AI generation succeeded via OpenRouter ({model})")
+                    return cleaned
+                else:
+                    logger.warning(f"OpenRouter {model} status {res.status_code}: {res.text[:120]}")
+            except Exception as e:
+                logger.warning(f"OpenRouter {model} connection error: {e}")
+
+    # ── 2. SECONDARY: GROQ ───────────────────────────────────────────────────
     if GROQ_API_KEY:
+        groq_models = ["llama-3.1-8b-instant", "llama3-8b-8192", "mixtral-8x7b-32768"]
         headers = {
             "Authorization": f"Bearer {GROQ_API_KEY}",
             "Content-Type": "application/json"
         }
         for model in groq_models:
-            for attempt in range(2):
-                try:
-                    payload = {
-                        "model": model,
-                        "messages": [
-                            {
-                                "role": "system",
-                                "content": "You are Voyanta's travel intelligence engine. Output strictly valid JSON matching the user schema."
-                            },
-                            {"role": "user", "content": prompt}
-                        ],
-                        "temperature": 0.2,
-                        "response_format": {"type": "json_object"}
-                    }
-                    res = await client.post(
-                        "https://api.groq.com/openai/v1/chat/completions",
-                        json=payload,
-                        headers=headers,
-                        timeout=14.0
-                    )
-                    if res.status_code == 200:
-                        content = res.json()["choices"][0]["message"]["content"]
-                        logger.info(f"AI generation succeeded via Groq ({model})")
-                        return content
-                    elif res.status_code == 429:
-                        logger.warning(f"Groq {model} rate limited (429). Retrying in 1.5s...")
-                        await asyncio.sleep(1.5)
-                        continue
-                    else:
-                        logger.warning(f"Groq ({model}) status {res.status_code}: {res.text}")
-                        break
-                except Exception as e:
-                    logger.warning(f"Groq ({model}) attempt {attempt+1} failed: {e}")
-                    break
-
-    # 2. Resilient Fallback: Google Gemini v1 REST API
-    if GEMINI_API_KEY:
-        gemini_urls = [
-            f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}",
-            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={GEMINI_API_KEY}",
-            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key={GEMINI_API_KEY}"
-        ]
-        
-        for g_url in gemini_urls:
             try:
-                gemini_payload = {
-                    "contents": [
-                        {
-                            "parts": [
-                                {"text": prompt + "\n\nCRITICAL: Return strictly a valid JSON object matching the requested schema."}
-                            ]
-                        }
+                payload = {
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": "Return strictly valid JSON only."},
+                        {"role": "user", "content": prompt}
                     ],
-                    "generationConfig": {
-                        "temperature": 0.2,
-                        "responseMimeType": "application/json"
-                    }
+                    "temperature": 0.2,
+                    "response_format": {"type": "json_object"}
                 }
-                res = await client.post(g_url, json=gemini_payload, timeout=14.0)
+                res = await client.post("https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers, timeout=12.0)
                 if res.status_code == 200:
-                    raw_text = res.json()["candidates"][0]["content"]["parts"][0]["text"]
-                    cleaned = raw_text.replace("```json", "").replace("```", "").strip()
-                    logger.info("AI generation succeeded via Google Gemini fallback")
-                    return cleaned
-                else:
-                    logger.warning(f"Gemini endpoint failed [{res.status_code}]: {res.text}")
-            except Exception as e:
-                logger.warning(f"Gemini request exception: {e}")
+                    content = res.json()["choices"][0]["message"]["content"]
+                    logger.info(f"AI generation succeeded via Groq ({model})")
+                    return content
+            except Exception:
+                continue
 
-    logger.error("All AI providers exhausted.")
-    raise HTTPException(status_code=503, detail="AI generation engine currently unavailable. Please verify API rate limits.")
+    raise HTTPException(status_code=503, detail="AI generation engine unavailable. Please verify API credentials.")
 
 # ─────────────────────────────────────────────
 #  API Endpoints
@@ -427,7 +404,7 @@ async def root():
     return {
         "status": "online",
         "service": "Voyanta Pure AI Engine",
-        "ai_active": bool(GROQ_API_KEY or GEMINI_API_KEY),
+        "ai_active": bool(OPENROUTER_API_KEY or GROQ_API_KEY or GEMINI_API_KEY),
         "geocoding": "Dynamic Open-Meteo & TomTom"
     }
 
