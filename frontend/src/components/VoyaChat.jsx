@@ -6,10 +6,16 @@ export default function VoyaChat({ destination = "", currency = "USD", activeIti
   
   const getTimeGreeting = () => {
     const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 17) return 'Good afternoon';
-    if (hour < 21) return 'Good evening';
+    if (hour >= 5 && hour < 12) return 'Good morning';
+    if (hour >= 12 && hour < 17) return 'Good afternoon';
+    if (hour >= 17 && hour < 22) return 'Good evening';
     return 'Good night';
+  };
+
+  const getInitialGreeting = (dest) => {
+    const timeGreeting = getTimeGreeting();
+    const destinationGreeting = dest ? `${timeGreeting} from ${dest}!` : `${timeGreeting}!`;
+    return `${destinationGreeting}\n\nHey there! Welcome to Voyanta 🙏😄\nI am Voya, your virtual assistant. I can help you with a lot of things, just let me know what you need!`;
   };
 
   const getUserTimeContext = () => {
@@ -22,13 +28,25 @@ export default function VoyaChat({ destination = "", currency = "USD", activeIti
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
-      content: `${getTimeGreeting()}! I'm **Voya**, your AI concierge. Ask me for stays, tickets, live events, cabs, or weather-smart spots in **${destination || 'your destination'}**!`,
+      content: getInitialGreeting(destination),
       action: null
     }
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef(null);
+
+  useEffect(() => {
+    if (messages.length === 1 && messages[0].role === 'assistant') {
+      setMessages([
+        {
+          role: 'assistant',
+          content: getInitialGreeting(destination),
+          action: null
+        }
+      ]);
+    }
+  }, [destination]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
