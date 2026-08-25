@@ -127,8 +127,13 @@ async def execute_tool_call(
         checkin = args.get("checkin", "")
         checkout = args.get("checkout", "")
 
-        skyscanner_url = f"https://www.skyscanner.net/hotels/search?destination={loc_encoded}"
+        loc_encoded = urllib.parse.quote(full_loc)
+        loc_slug = re.sub(r'[^a-zA-Z0-9]+', '-', full_loc.lower()).strip('-')
+
+        makemytrip_url = f"https://www.makemytrip.com/hotels/hotel-listing/?searchText={loc_encoded}"
         booking_url = f"https://www.booking.com/searchresults.html?ss={loc_encoded}"
+        goibibo_url = f"https://www.goibibo.com/hotels/find-hotels-in-{loc_slug}/"
+        skyscanner_url = f"https://www.skyscanner.net/hotels/search?destination={loc_encoded}"
         airbnb_url = f"https://www.airbnb.com/s/{loc_encoded}/homes"
         agoda_url = f"https://www.agoda.com/search?text={loc_encoded}"
 
@@ -136,6 +141,7 @@ async def execute_tool_call(
             booking_url += f"&checkin={checkin}&checkout={checkout}"
             airbnb_url += f"?checkin={checkin}&checkout={checkout}"
             agoda_url += f"&checkIn={checkin}&checkOut={checkout}"
+            makemytrip_url += f"&checkin={checkin}&checkout={checkout}"
 
         return {
             "status": "success",
@@ -143,10 +149,12 @@ async def execute_tool_call(
             "location": full_loc,
             "stay_type": stay_type,
             "booking_platforms": {
-                "skyscanner": skyscanner_url,
+                "makemytrip": makemytrip_url,
                 "booking_com": booking_url,
-                "airbnb": airbnb_url,
-                "agoda": agoda_url
+                "goibibo": goibibo_url,
+                "skyscanner": skyscanner_url,
+                "agoda": agoda_url,
+                "airbnb": airbnb_url
             }
         }
 
