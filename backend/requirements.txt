@@ -5,4 +5,4 @@ asyncpg
 python-dotenv
 httpx
 cachetools
-
+duckduckgo-search
