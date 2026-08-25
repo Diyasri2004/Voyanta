@@ -17,7 +17,7 @@ import asyncpg
 from cachetools import TTLCache
 
 from models import EventFestival
-from chat_agent import get_chat_agent_tools, execute_tool_call
+from chat_agent import get_voya_system_prompt, get_chat_agent_tools, execute_tool_call
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("voyanta")
@@ -189,10 +189,17 @@ class TripPlanResponse(BaseModel):
     theme_parks: List[PillarItem] = Field(default_factory=list)
     sacred_temples: List[PillarItem] = Field(default_factory=list)
 
-class ChatMessageRequest(BaseModel):
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+class ChatRequest(BaseModel):
     message: str
-    destination: Optional[str] = "Global"
-    history: Optional[List[Dict[str, Any]]] = None
+    destination: Optional[str] = ""
+    language: Optional[str] = "en"
+    currency: Optional[str] = "USD"
+    history: Optional[List[ChatMessage]] = []
+    active_itinerary: Optional[List[Dict[str, Any]]] = []
 
 # ─────────────────────────────────────────────
 #  Lifespan & Initialization
@@ -918,24 +925,68 @@ async def create_dynamic_trip_plan(body: TripPlanRequest, request: Request):
 # ─────────────────────────────────────────────
 
 @app.post("/api/chat", tags=["Chat"])
-async def chat_with_agent(body: ChatMessageRequest):
+@app.post("/chat", tags=["Chat"])
+async def handle_voya_chat(req: ChatRequest, request: Request):
+    client = request.app.state.client
+    
+    # 1. Build contextual dynamic system prompt
+    system_prompt = get_voya_system_prompt(
+        destination=req.destination,
+        language=req.language,
+        currency=req.currency,
+        active_itinerary=req.active_itinerary
+    )
+
+    # 2. Assemble conversational message list
+    messages = [{"role": "system", "content": system_prompt}]
+    for msg in (req.history or [])[-6:]:
+        messages.append({"role": msg.role, "content": msg.content})
+    messages.append({"role": "user", "content": req.message})
+
+    # 3. Dynamic Tool Definition & Intent Inference Prompt
+    tools = get_chat_agent_tools()
+    tool_instructions = f"""
+Available Tools:
+{json.dumps(tools, indent=2)}
+
+If the user request requires a tool (e.g. accommodations, activity tickets like Klook/Headout, live events ticketing, searching extra spots, or adding to itinerary), output a JSON object:
+{{"tool_call": {{"name": "tool_name", "arguments": {{...}}}}, "reply": "Your conversational response in user's language"}}
+
+If no tool is required, output:
+{{"tool_call": null, "reply": "Your direct helpful answer in user's language"}}
+
+Strictly return valid JSON only.
+"""
+    prompt = f"{system_prompt}\n\n{tool_instructions}\n\nUser Question: {req.message}"
+    
     try:
-        tools = get_chat_agent_tools()
-        msg_lower = body.message.lower()
-        if any(k in msg_lower for k in ["search", "find", "market", "bazaar", "food"]):
-            result = await execute_tool_call("search_additional_venues", {"destination": body.destination or "Global", "query": body.message})
-            return {
-                "text": f"Found venue for {body.destination}: {result['venue']['title']} ({result['venue']['category']})",
-                "tool_called": "search_additional_venues",
-                "result": result
-            }
+        raw_res = await call_ai_with_rate_limit_fallback(client, prompt)
+        parsed = json.loads(raw_res)
+        
+        reply_text = parsed.get("reply", "")
+        tool_data = parsed.get("tool_call")
+        action_payload = None
+
+        # 4. Execute tool call if requested by AI
+        if tool_data and isinstance(tool_data, dict) and "name" in tool_data:
+            tool_name = tool_data.get("name")
+            tool_args = tool_data.get("arguments", {})
+            action_payload = await execute_tool_call(tool_name, tool_args, client=client)
+
         return {
-            "text": f"Voyanta AI Concierge: Ready to help craft your dynamic adventure in {body.destination}!",
-            "tool_called": None
+            "status": "success",
+            "reply": reply_text or "How else can I assist with your journey?",
+            "action": action_payload
         }
     except Exception as e:
-        logger.error(f"Chat agent error: {e}")
-        return {"text": f"Voyanta AI Concierge: How can I assist your trip to {body.destination}?"}
+        logger.error(f"Chat pipeline error: {e}")
+        # Fallback simple conversational response
+        fallback_prompt = f"{system_prompt}\n\nUser: {req.message}\nProvide a direct, helpful, and concise response."
+        try:
+            raw_fallback = await call_ai_with_rate_limit_fallback(client, fallback_prompt)
+            return {"status": "success", "reply": raw_fallback, "action": None}
+        except Exception:
+            return {"status": "error", "reply": "I'm experiencing a momentary connection issue. Please try again.", "action": None}
 
 # ─────────────────────────────────────────────
 #  Geocoding, Routing & POI APIs (TomTom)
