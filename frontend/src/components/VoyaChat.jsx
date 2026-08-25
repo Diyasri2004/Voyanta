@@ -12,10 +12,9 @@ export default function VoyaChat({ destination = "", currency = "USD", activeIti
     return 'Good night';
   };
 
-  const getInitialGreeting = (dest) => {
+  const getExactOpeningMessage = () => {
     const timeGreeting = getTimeGreeting();
-    const destinationGreeting = dest ? `${timeGreeting} from ${dest}!` : `${timeGreeting}!`;
-    return `${destinationGreeting}\n\nHey there! Welcome to Voyanta 🙏😄\nI am Voya, your virtual assistant. I can help you with a lot of things, just let me know what you need!`;
+    return `${timeGreeting}! Welcome to Voyanta 🙏\nI'm Voya. Whether you need inspiration for your next getaway or help with an ongoing booking, I've got you covered. What destination is on your mind today?`;
   };
 
   const getUserTimeContext = () => {
@@ -28,7 +27,7 @@ export default function VoyaChat({ destination = "", currency = "USD", activeIti
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
-      content: getInitialGreeting(destination),
+      content: getExactOpeningMessage(),
       action: null
     }
   ]);
@@ -41,7 +40,7 @@ export default function VoyaChat({ destination = "", currency = "USD", activeIti
       setMessages([
         {
           role: 'assistant',
-          content: getInitialGreeting(destination),
+          content: getExactOpeningMessage(),
           action: null
         }
       ]);

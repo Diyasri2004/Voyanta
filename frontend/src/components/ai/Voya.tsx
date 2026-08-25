@@ -15,10 +15,9 @@ export default function Voya({ trip }: { trip: any }) {
     return 'Good night';
   };
 
-  const getInitialGreeting = (dest?: string) => {
+  const getExactOpeningMessage = () => {
     const timeGreeting = getTimeGreeting();
-    const destinationGreeting = dest ? `${timeGreeting} from ${dest}!` : `${timeGreeting}!`;
-    return `${destinationGreeting}\n\nHey there! Welcome to Voyanta 🙏😄\nI am Voya, your virtual assistant. I can help you with a lot of things, just let me know what you need!`;
+    return `${timeGreeting}! Welcome to Voyanta 🙏\nI'm Voya. Whether you need inspiration for your next getaway or help with an ongoing booking, I've got you covered. What destination is on your mind today?`;
   };
 
   interface ChatItem {
@@ -30,7 +29,7 @@ export default function Voya({ trip }: { trip: any }) {
 
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatItem[]>([
-    { role: "assistant", content: getInitialGreeting(trip?.destination) }
+    { role: "assistant", content: getExactOpeningMessage(), action: null }
   ]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
