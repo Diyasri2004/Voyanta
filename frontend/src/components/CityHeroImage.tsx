@@ -8,8 +8,7 @@ interface CityHeroImageProps {
   className?: string;
 }
 
-const FALLBACK_URL =
-  "https://images.pexels.com/photos/1483769/pexels-photo-1483769.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2";
+const FALLBACK_URL = "";
 
 export default function CityHeroImage({ city, className = "" }: CityHeroImageProps) {
   const [photo, setPhoto] = useState<CityPhotoResult | null>(null);

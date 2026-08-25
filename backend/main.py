@@ -279,34 +279,33 @@ async def resolve_dynamic_coordinates(client: httpx.AsyncClient, destination: st
     return Coordinates(lat=20.0, lng=0.0)
 
 async def fetch_dynamic_place_photo(client: httpx.AsyncClient, venue: str = "", destination: str = "", category: str = "") -> str:
-    # 1. Clean dynamic inputs
-    v_clean = re.sub(r'[\(\)\[\],|]', ' ', venue or "").strip()
-    d_clean = re.sub(r'[\(\)\[\],|]', ' ', destination or "").strip()
-    c_clean = re.sub(r'[\(\)\[\],|]', ' ', category or "").strip()
-
-    # 2. Build progressive runtime query cascade (strictly scoped to user inputs)
+    v = re.sub(r'[\(\)\[\],|]', ' ', venue or "").strip()
+    d = re.sub(r'[\(\)\[\],|]', ' ', destination or "").strip()
+    c = re.sub(r'[\(\)\[\],|]', ' ', category or "").strip()
+    
+    # Clean redundant destination words (e.g. "Telangana India")
+    d_short = d.split(",")[0].strip() if d else ""
+    
     search_queries = []
-    if v_clean and d_clean and c_clean:
-        search_queries.append(f"{v_clean} {d_clean} {c_clean}")
-        search_queries.append(f"{v_clean} {d_clean}")
-        search_queries.append(f"{d_clean} {c_clean}")
-        search_queries.append(f"{d_clean} scenery")
-    elif v_clean and d_clean:
-        search_queries.append(f"{v_clean} {d_clean}")
-        search_queries.append(f"{d_clean} travel")
-    elif d_clean and c_clean:
-        search_queries.append(f"{d_clean} {c_clean}")
-        search_queries.append(f"{d_clean}")
-    elif v_clean:
-        search_queries.append(v_clean)
+    if v and d_short and c:
+        search_queries.append(f"{v} {d_short}")
+        search_queries.append(f"{v} {c}")
+        search_queries.append(f"{d_short} {c}")
+    elif v and d_short:
+        search_queries.append(f"{v} {d_short}")
+        search_queries.append(f"{v}")
+        search_queries.append(f"{d_short} travel")
+    elif v:
+        search_queries.append(v)
+    elif d_short:
+        search_queries.append(f"{d_short} scenery")
 
-    # 3. Dynamic lookup against external image endpoints
-    for query_text in search_queries:
-        encoded = urllib.parse.quote(re.sub(r'\s+', ' ', query_text).strip())
+    for q in search_queries:
+        encoded = urllib.parse.quote(re.sub(r'\s+', ' ', q).strip())
         if not encoded:
             continue
 
-        # Pexels API
+        # 1. Pexels Dynamic Lookup
         if PEXELS_API_KEY:
             try:
                 p_url = f"https://api.pexels.com/v1/search?query={encoded}&orientation=landscape&per_page=1"
@@ -318,7 +317,7 @@ async def fetch_dynamic_place_photo(client: httpx.AsyncClient, venue: str = "", 
             except Exception:
                 pass
 
-        # Unsplash API
+        # 2. Unsplash Dynamic Lookup
         if UNSPLASH_ACCESS_KEY:
             try:
                 u_url = f"https://api.unsplash.com/search/photos?query={encoded}&orientation=landscape&per_page=1&client_id={UNSPLASH_ACCESS_KEY}"
@@ -330,7 +329,7 @@ async def fetch_dynamic_place_photo(client: httpx.AsyncClient, venue: str = "", 
             except Exception:
                 pass
 
-        # Wikimedia Commons Real-Time Search API
+        # 3. Wikimedia Commons Dynamic Search API
         try:
             wiki_url = f"https://en.wikipedia.org/w/api.php?action=query&format=json&prop=pageimages&pithumbsize=1000&generator=search&gsrsearch={encoded}&gsrlimit=1"
             res = await client.get(wiki_url, timeout=3.0)
@@ -342,6 +341,7 @@ async def fetch_dynamic_place_photo(client: httpx.AsyncClient, venue: str = "", 
         except Exception:
             pass
 
+    # Strictly return empty string — do NOT provide any default static image URL
     return ""
 
 def clean_venue_title(title: str, destination: str = "") -> str:

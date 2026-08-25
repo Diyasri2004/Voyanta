@@ -38,7 +38,7 @@ export const DestinationCard = ({
   const imageUrl =
     item.image_url ||
     item.image ||
-    "https://images.unsplash.com/photo-1524492412937-b28074a5d7da?w=900&auto=format&fit=crop&q=80";
+    "";
 
   const navUrl =
     item.navigation_url ||
@@ -51,20 +51,21 @@ export const DestinationCard = ({
     <div className="group relative bg-zinc-900/90 border border-zinc-800/80 hover:border-cyan-500/40 rounded-2xl overflow-hidden flex flex-col h-[380px] min-h-[380px] transition-all duration-300 hover:shadow-xl hover:shadow-cyan-500/10">
       {/* Background Image Container */}
       <div className="relative h-48 w-full aspect-video shrink-0 overflow-hidden bg-zinc-950">
-        <img
-          src={imageUrl}
-          alt={name}
-          loading="lazy"
-          decoding="async"
-          {...({ fetchPriority: "low" } as any)}
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-          onError={(e) => {
-            const target = e.target as HTMLImageElement;
-            target.onerror = null;
-            target.src =
-              "https://images.unsplash.com/photo-1524492412937-b28074a5d7da?w=900&auto=format&fit=crop&q=80";
-          }}
-        />
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt={name}
+            loading="lazy"
+            decoding="async"
+            {...({ fetchPriority: "low" } as any)}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+            onError={(e) => {
+              const target = e.target as HTMLImageElement;
+              target.onerror = null;
+              target.style.display = "none";
+            }}
+          />
+        ) : null}
         <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/30 to-transparent" />
 
         {/* Top Badges */}

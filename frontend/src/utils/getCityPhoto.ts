@@ -7,7 +7,7 @@ export interface CityPhotoResult {
 }
 
 const FALLBACK: CityPhotoResult = {
-  url: "https://images.pexels.com/photos/1483769/pexels-photo-1483769.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2",
+  url: "",
   photographer: "",
   photographerUrl: "https://www.pexels.com",
   pexelsUrl: "https://www.pexels.com",

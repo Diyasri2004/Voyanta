@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 const PEXELS_API_KEY = process.env.PEXELS_API_KEY ?? "";
 
-const FALLBACK_IMAGE =
-  "https://images.pexels.com/photos/1483769/pexels-photo-1483769.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2";
+const FALLBACK_IMAGE = "";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);

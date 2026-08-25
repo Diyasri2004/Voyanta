@@ -35,8 +35,8 @@ export default function CulinaryPillarTab({
     address: item.address || item.location || destination,
     maps_url: item.maps_url || item.navigation_url,
     navigation_url: item.navigation_url || item.maps_url,
-    image_url: item.image_url || item.image || "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=900&auto=format&fit=crop&q=80",
-    image: item.image || item.image_url || "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=900&auto=format&fit=crop&q=80"
+    image_url: item.image_url || item.image || "",
+    image: item.image || item.image_url || ""
   }));
 
   return (

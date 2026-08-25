@@ -43,7 +43,7 @@ async def execute_tool_call(tool_name: str, args: Dict[str, Any], client: Option
         category = args.get("category", "Attractions")
         venue_title = f"{query} in {destination}"
         maps_url = f"https://www.google.com/maps/search/?api=1&query={venue_title.replace(' ', '+')}"
-        image_url = "https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=900&auto=format&fit=crop&q=80"
+        image_url = ""
         
         return {
             "status": "success",

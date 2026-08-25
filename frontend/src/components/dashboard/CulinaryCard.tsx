@@ -35,7 +35,7 @@ export default function CulinaryCard({
     image_url:
       highlight.image_url ||
       highlight.image ||
-      "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=900&auto=format&fit=crop&q=80",
+      "",
   };
 
   return <DestinationCard item={item} destination={destination} />;
