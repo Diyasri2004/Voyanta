@@ -307,17 +307,17 @@ def format_date_range(start: date, days: int) -> str:
     return f"{start.strftime('%b %d')} - {end.strftime('%b %d')}"
 
 PILLAR_DESCRIPTIONS = {
-    "attractions": "most iconic, famous landmarks, buzzing tourist attractions, architectural marvels, and top-rated historic sights",
-    "events": "trending annual festivals, famous cultural celebrations, major concerts, and top nightlife events",
-    "culinary": "most legendary eateries, famous food streets, award-winning restaurants, iconic street food hubs, and must-try local specialties",
-    "bars_pubs": "top-rated rooftop bars, buzzing craft breweries, famous speakeasies, and legendary nightlife hotspots",
-    "wellness": "premier luxury spas, famous yoga retreats, scenic nature trails, and renowned wellness centers",
-    "secret_spots": "trending hidden gems, picturesque secret viewpoints, local insider favorites, and quiet cultural nooks",
-    "essentials": "primary transit hubs, central metro stations, 24/7 hospitals, and main tourist emergency centers",
-    "shopping": "most famous traditional bazaars, bustling fashion streets, top luxury malls, and authentic handicraft markets",
-    "adventures": "top outdoor adventure hubs, famous trekking routes, thrill activities, and nature excursions",
-    "theme_parks": "premier amusement parks, top water parks, and major family recreational centers",
-    "sacred_temples": "most revered spiritual landmarks, historic ancient temples, iconic cathedrals, and famous shrines"
+    "attractions": "iconic landmarks and sights",
+    "events": "annual festivals and top events",
+    "culinary": "famous eateries and local specialties",
+    "bars_pubs": "rooftop bars and nightlife hotspots",
+    "wellness": "luxury spas and nature spots",
+    "secret_spots": "hidden gems and local nooks",
+    "essentials": "transit hubs, hospitals, and emergency centers",
+    "shopping": "bazaars, markets, and malls",
+    "adventures": "outdoor adventure hubs and trails",
+    "theme_parks": "amusement and water parks",
+    "sacred_temples": "historic temples, cathedrals, and shrines"
 }
 
 # ─────────────────────────────────────────────
@@ -325,46 +325,46 @@ PILLAR_DESCRIPTIONS = {
 # ─────────────────────────────────────────────
 
 async def call_ai_with_rate_limit_fallback(client: httpx.AsyncClient, prompt: str) -> str:
-    groq_models = [
-        "llama-3.3-70b-versatile",
-        "llama-3.1-8b-instant",
-        "llama3-70b-8192"
-    ]
-    
-    # 1. Primary: Try Groq LLMs
+    # 1. Try Groq Primary Models with Auto-Retry
     if GROQ_API_KEY:
         headers = {
             "Authorization": f"Bearer {GROQ_API_KEY}",
             "Content-Type": "application/json"
         }
-        for model in groq_models:
-            try:
-                payload = {
-                    "model": model,
-                    "messages": [
-                        {
-                            "role": "system", 
-                            "content": "You are Voyanta's dynamic travel intelligence concierge. You MUST output ONLY valid JSON without introductory conversational text or markdown explanation."
-                        },
-                        {"role": "user", "content": prompt}
-                    ],
-                    "temperature": 0.3,
-                    "response_format": {"type": "json_object"}
-                }
-                res = await client.post(
-                    "https://api.groq.com/openai/v1/chat/completions", 
-                    json=payload, 
-                    headers=headers, 
-                    timeout=14.0
-                )
-                if res.status_code == 200:
-                    raw_content = res.json()["choices"][0]["message"]["content"]
-                    logger.info(f"AI generation succeeded via Groq model: {model}")
-                    return raw_content
-                else:
-                    logger.warning(f"Groq ({model}) status {res.status_code}: {res.text}")
-            except Exception as e:
-                logger.warning(f"Groq ({model}) connection attempt error: {e}")
+        for model in ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]:
+            for attempt in range(2):
+                try:
+                    payload = {
+                        "model": model,
+                        "messages": [
+                            {
+                                "role": "system",
+                                "content": "You are a concise travel concierge. Return strictly valid JSON matching the requested schema."
+                            },
+                            {"role": "user", "content": prompt}
+                        ],
+                        "temperature": 0.2,
+                        "response_format": {"type": "json_object"}
+                    }
+                    res = await client.post(
+                        "https://api.groq.com/openai/v1/chat/completions",
+                        json=payload,
+                        headers=headers,
+                        timeout=12.0
+                    )
+                    if res.status_code == 200:
+                        content = res.json()["choices"][0]["message"]["content"]
+                        logger.info(f"AI generation succeeded via Groq ({model})")
+                        return content
+                    elif res.status_code == 429:
+                        logger.warning(f"Groq {model} rate limited (429). Retrying in 1.5s...")
+                        await asyncio.sleep(1.5)
+                        continue
+                    else:
+                        logger.error(f"Groq ({model}) failed [{res.status_code}]: {res.text}")
+                        break
+                except Exception as e:
+                    logger.warning(f"Groq ({model}) connection attempt {attempt+1} error: {e}")
 
     # 2. Resilient Fallback: Google Gemini 1.5 Flash
     if GEMINI_API_KEY:
@@ -374,7 +374,7 @@ async def call_ai_with_rate_limit_fallback(client: httpx.AsyncClient, prompt: st
                 "contents": [
                     {
                         "parts": [
-                            {"text": prompt + "\n\nCRITICAL: Respond ONLY with a single valid JSON object matching the schema. No markdown formatting, no backticks."}
+                            {"text": prompt + "\n\nOutput strictly valid JSON."}
                         ]
                     }
                 ],
@@ -383,23 +383,19 @@ async def call_ai_with_rate_limit_fallback(client: httpx.AsyncClient, prompt: st
                     "responseMimeType": "application/json"
                 }
             }
-            res = await client.post(gemini_url, json=gemini_payload, timeout=14.0)
+            res = await client.post(gemini_url, json=gemini_payload, timeout=12.0)
             if res.status_code == 200:
-                data = res.json()
-                raw_text = data["candidates"][0]["content"]["parts"][0]["text"]
+                raw_text = res.json()["candidates"][0]["content"]["parts"][0]["text"]
                 cleaned = raw_text.replace("```json", "").replace("```", "").strip()
                 logger.info("AI generation succeeded via Gemini 1.5 Flash fallback")
                 return cleaned
             else:
-                logger.error(f"Gemini API returned status {res.status_code}: {res.text}")
+                logger.error(f"Gemini API failed [{res.status_code}]: {res.text}")
         except Exception as e:
             logger.error(f"Gemini fallback exception: {e}")
 
-    logger.error("CRITICAL: All AI inference models exhausted or unavailable.")
-    raise HTTPException(
-        status_code=503, 
-        detail="AI generation engine currently unavailable. Please verify API rate limits."
-    )
+    logger.error("All AI providers exhausted.")
+    raise HTTPException(status_code=503, detail="AI generation engine currently unavailable. Please verify API rate limits.")
 
 # ─────────────────────────────────────────────
 #  API Endpoints
@@ -424,19 +420,7 @@ async def get_trending_destinations(request: Request):
     if cache_key in dynamic_cache:
         return {"trending": dynamic_cache[cache_key]}
 
-    prompt = """
-    Generate a JSON object with key 'trending' containing 8 globally buzzing, high-interest, top-rated destinations for world travelers right now.
-    
-    JSON Schema:
-    {
-      "trending": [
-        {"name": "City or Region Name", "country": "Country"}
-      ]
-    }
-    STRICT RULES:
-    1. Every destination must be a real travel hotspot.
-    2. Output strictly a valid JSON object.
-    """
+    prompt = 'Return JSON with key "trending" listing 8 top travel destinations: {"trending": [{"name": "City", "country": "Country"}]}'
     
     client = getattr(request.app.state, "client", None) or getattr(request.app.state, "http_client", None)
     if not client:
@@ -463,24 +447,8 @@ async def get_single_pillar_data(request: Request, destination: str = Query(...,
     if cache_key in dynamic_cache:
         return {pillar_clean: dynamic_cache[cache_key]}
 
-    desc = PILLAR_DESCRIPTIONS.get(pillar_clean, "trending landmarks and venues")
-    prompt = f"""
-    For destination '{clean_dest}', generate an extensive list of AT LEAST 25 real-world, iconic, highly-rated {desc}.
-    Schema:
-    {{
-      "{pillar_clean}": [
-        {{
-          "id": "str",
-          "name": "Exact Real Place Name",
-          "location": "Locality or Area in {clean_dest}",
-          "description": "1 vivid sentence explaining why this place is iconic or trending."
-        }}
-      ]
-    }}
-    STRICT RULES:
-    1. Every place must exist in real life. No generic placeholder names.
-    2. Output at least 25 items.
-    """
+    desc = PILLAR_DESCRIPTIONS.get(pillar_clean, "landmarks and venues")
+    prompt = f'Return JSON: {{"{pillar_clean}": [{{"name": "Place", "location": "Area", "description": "1 short sentence"}}]}} for 15-20 real iconic {desc} in {clean_dest}.'
     client = request.app.state.client
     try:
         raw = await call_ai_with_rate_limit_fallback(client, prompt)
@@ -585,35 +553,9 @@ async def create_dynamic_trip_plan(body: TripPlanRequest, request: Request):
     start_date = body.start_date or date.today()
     coords = await resolve_dynamic_coordinates(client, dest_name)
     
-    prompt = f"""
-    Create a detailed, non-repeating {num_days}-day travel itinerary for {dest_name}.
-    Pace: {body.pace or 'Balanced'}. Budget: {body.budget or 'Moderate'}. Group: {body.travelers.group_type if body.travelers else 'Solo'}.
-    
-    Return strictly JSON:
-    {{
-      "summary": "1 sentence overview",
-      "days": [
-        {{
-          "day": 1,
-          "theme": "Theme title",
-          "stops": [
-            {{
-              "title": "Exact Real Place Name",
-              "location": "Area in {dest_name}",
-              "category": "Sightseeing",
-              "duration_minutes": 90,
-              "best_time": "09:30 AM",
-              "cost_range": "$10 - $25"
-            }}
-          ]
-        }}
-      ],
-      "culinary_highlights": [
-        {{"title": "Famous Eatery", "description": "Authentic dish", "famous_for": "Signature Dish", "location": "Area"}}
-      ]
-    }}
-    Provide 3 unique stops per day.
-    """
+    prompt = f"""Return JSON {num_days}-day itinerary for {dest_name} (Pace: {body.pace or 'Balanced'}, Budget: {body.budget or 'Moderate'}):
+{{"summary":"Overview","days":[{"day":1,"theme":"Theme","stops":[{"title":"Place Name","location":"Area","category":"Sightseeing","duration_minutes":90,"best_time":"09:30 AM","cost_range":"$10-$25"}]}],"culinary_highlights":[{"title":"Eatery","description":"Dish","famous_for":"Specialty","location":"Area"}]}}
+Provide 3 real stops/day."""
     
     raw = await call_ai_with_rate_limit_fallback(client, prompt)
     ai_data = json.loads(raw)
