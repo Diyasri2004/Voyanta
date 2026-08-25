@@ -967,24 +967,30 @@ async def handle_voya_chat(req: ChatRequest, request: Request):
     )
 
     tools = get_chat_agent_tools()
-    tool_instructions = f"""
+    
+    convo_history_str = ""
+    if req.history:
+        for m in req.history[-8:]:
+            role_label = "User" if m.role == "user" else "Voya"
+            convo_history_str += f"{role_label}: {m.content}\n"
+
+    prompt = f"""{system_prompt}
+
+Conversation History:
+{convo_history_str}
+User's Latest Query: {req.message}
+
 Available Tools:
 {json.dumps(tools, indent=2)}
 
-INSTRUCTIONS:
-- If the user asks for bookings (hotels/stays, Klook/Headout tickets, events, cabs/transit), hidden gems, weather advice, or itinerary edits, choose the appropriate tool.
-- Return ONLY a single raw JSON object matching this schema:
-{{
-  "tool_call": {{"name": "<tool_name>", "arguments": {{...}}}},
-  "reply": "<Detailed, conversational helpful in language response the user's>"
-}}
-- If NO tool is required, return:
-{{
-  "tool_call": null,
-  "reply": "<Direct answer conversational in language the user's>"
-}}
+OUTPUT FORMAT:
+Respond with ONLY a single valid JSON object:
+- If invoking a tool:
+{{"tool_call": {{"name": "<tool_name>", "arguments": {{...}}}}, "reply": "<Your full, detailed conversational answer in {req.language}>"}}
+
+- If answering directly (general knowledge, recommendations, advice, banter):
+{{"tool_call": null, "reply": "<Your full, engaging, concrete answer in {req.language}>"}}
 """
-    prompt = f"{system_prompt}\n\n{tool_instructions}\n\nUser Question: {req.message}"
 
     try:
         raw_res = await call_ai_with_rate_limit_fallback(client, prompt)
@@ -1004,32 +1010,25 @@ INSTRUCTIONS:
                     tool_args["destination"] = req.destination
                 action_payload = await execute_tool_call(tool_name, tool_args, client=client)
         else:
-            # If the model answered in conversational text rather than JSON
-            reply_text = raw_res
+            reply_text = raw_res.strip()
+
+        if not reply_text:
+            reply_text = "I'm ready! Tell me what you'd like to discover or organize for your journey."
 
         return {
             "status": "success",
-            "reply": reply_text or "How can I assist your trip further?",
-            "response": reply_text or "How can I assist your trip further?",
+            "reply": reply_text,
+            "response": reply_text,
             "action": action_payload
         }
-
     except Exception as e:
         logger.error(f"Chat execution fallback: {e}")
         try:
-            fallback_prompt = f"{system_prompt}\n\nUser Question: {req.message}\nProvide a direct, helpful, concise answer."
+            fallback_prompt = f"{system_prompt}\n\nUser: {req.message}\nProvide an informative, direct response."
             raw_fallback = await call_ai_with_rate_limit_fallback(client, fallback_prompt)
-            clean_fb = raw_fallback.strip()
-            return {"status": "success", "reply": clean_fb, "response": clean_fb, "action": None}
-        except Exception as final_err:
-            logger.error(f"Final chat failure: {final_err}")
-            msg = "I'm ready! Please ask your question again."
-            return {
-                "status": "success",
-                "reply": msg,
-                "response": msg,
-                "action": None
-            }
+            return {"status": "success", "reply": raw_fallback.strip(), "response": raw_fallback.strip(), "action": None}
+        except Exception:
+            return {"status": "success", "reply": "I'm here to assist your travel planning. What destination or question do you have?", "response": "I'm here to assist your travel planning. What destination or question do you have?", "action": None}
 
 # ─────────────────────────────────────────────
 #  Geocoding, Routing & POI APIs (TomTom)
