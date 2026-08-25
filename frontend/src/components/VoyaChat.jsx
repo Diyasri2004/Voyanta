@@ -89,13 +89,15 @@ export default function VoyaChat({ destination = "", currency = "USD", activeIti
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isOpen]);
 
-  const handleSend = async (e) => {
-    e?.preventDefault();
-    if (!input.trim() || loading) return;
+  const handleSend = async (customMessage) => {
+    if (customMessage && typeof customMessage === 'object' && customMessage.preventDefault) {
+      customMessage.preventDefault();
+    }
+    const userText = (typeof customMessage === 'string' ? customMessage : input).trim();
+    if (!userText || loading) return;
 
-    const userText = input.trim();
     setInput('');
-    const newHistory = [...messages, { role: 'user', content: userText }];
+    const newHistory = [...messages, { role: 'user', content: userText, text: userText }];
     setMessages(newHistory);
     setLoading(true);
 
@@ -109,19 +111,16 @@ export default function VoyaChat({ destination = "", currency = "USD", activeIti
           message: userText,
           destination: destination || '',
           currency: currency || 'USD',
+          language: activeLang || 'en',
           user_time: timeContext.time,
           user_timezone: timeContext.timeZone,
-          history: newHistory.map(m => ({ role: m.role, content: m.content })),
+          history: newHistory.map(m => ({ role: m.role, content: m.content || m.text || '' })),
           active_itinerary: activeItinerary || []
         })
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error: ${response.status}`);
-      }
-
       const data = await response.json();
-      const outputText = data.reply || data.response || data.message || "Here is what I found for you:";
+      const aiText = data.reply || data.response || data.message || ("I'm ready! How else can I assist your trip to " + (destination || 'your destination') + "?");
 
       if (data.action?.action === 'INSERT_STOP' && data.action?.stop) {
         onAddStop(data.action.stop);
@@ -129,12 +128,23 @@ export default function VoyaChat({ destination = "", currency = "USD", activeIti
 
       setMessages(prev => [
         ...prev,
-        { role: 'assistant', content: outputText, text: outputText, action: data.action || null }
+        {
+          role: 'assistant',
+          content: aiText,
+          text: aiText,
+          action: data.action || null
+        }
       ]);
     } catch (err) {
+      console.error("Voya Chat Error:", err);
       setMessages(prev => [
         ...prev,
-        { role: 'assistant', content: "Network error reaching Voya services. Please try again.", action: null }
+        {
+          role: 'assistant',
+          content: "I encountered a hiccup connecting to local services. Please try again!",
+          text: "I encountered a hiccup connecting to local services. Please try again!",
+          action: null
+        }
       ]);
     } finally {
       setLoading(false);

@@ -112,9 +112,18 @@ export default function Voya({ trip }: { trip: any }) {
     "☔ Rainy day backup plan",
   ];
 
-  const sendMessage = async (e?: React.FormEvent, presetMessage?: string) => {
-    if (e) e.preventDefault();
-    const userMsg = presetMessage || input.trim();
+  const sendMessage = async (customMessage?: any, presetMessage?: string) => {
+    let userMsg = "";
+    if (typeof customMessage === "string") {
+      userMsg = customMessage;
+    } else if (presetMessage) {
+      userMsg = presetMessage;
+    } else if (customMessage && customMessage.preventDefault) {
+      customMessage.preventDefault();
+      userMsg = input.trim();
+    } else {
+      userMsg = input.trim();
+    }
     if (!userMsg || isLoading) return;
 
     const newMessages = [...messages, { role: "user", content: userMsg, text: userMsg }];
@@ -130,9 +139,10 @@ export default function Voya({ trip }: { trip: any }) {
           message: userMsg,
           destination: trip?.destination || '',
           currency: currency || 'USD',
+          language: activeLang || 'en',
           user_time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           user_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-          history: newMessages.map(m => ({ role: m.role, content: m.content || m.text })),
+          history: newMessages.map(m => ({ role: m.role, content: m.content || m.text || '' })),
           active_itinerary: trip?.itinerary || []
         })
       });
@@ -142,20 +152,28 @@ export default function Voya({ trip }: { trip: any }) {
       }
 
       const data = await response.json();
-      const outputText = data.reply || data.response || data.message || "Here is what I found for you:";
+      const aiText = data.reply || data.response || data.message || ("I'm ready! How else can I assist your trip to " + (trip?.destination || 'your destination') + "?");
 
       setMessages(prev => [
         ...prev,
         {
           role: 'assistant',
-          content: outputText,
-          text: outputText,
+          content: aiText,
+          text: aiText,
           action: data.action || null
         }
       ]);
     } catch (err) {
       console.error("Voya Chat Fetch Error:", err);
-      setMessages(prev => [...prev, { role: "assistant", content: "Connection hiccup. Please try again.", text: "Connection hiccup. Please try again." }]);
+      setMessages(prev => [
+        ...prev,
+        {
+          role: "assistant",
+          content: "I encountered a hiccup connecting to local services. Please try again!",
+          text: "I encountered a hiccup connecting to local services. Please try again!",
+          action: null
+        }
+      ]);
     } finally {
       setIsLoading(false);
     }
