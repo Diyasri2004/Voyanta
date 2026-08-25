@@ -281,37 +281,44 @@ async def fetch_dynamic_place_photo(client: httpx.AsyncClient, venue: str = "", 
     # 1. Clean dynamic inputs at runtime
     v_clean = re.sub(r'[\(\)\[\],|]', ' ', venue or "").strip()
     d_clean = destination.split(",")[0].strip() if destination else ""
-    c_clean = re.sub(r'[\(\)\[\],|]', ' ', category or "").strip()
+    c_clean = re.sub(r'[\(\)\[\],|]', ' ', category or "").strip().lower()
 
-    # 2. Build progressive runtime search queries
+    # 2. Derive dynamic contextual keyword based on category
+    context_suffix = ""
+    if any(k in c_clean for k in ["culinary", "food", "restaurant", "cafe", "dining", "bakery", "dhaba"]):
+        context_suffix = "food dish"
+    elif any(k in c_clean for k in ["wellness", "spa", "meditation", "massage", "yoga", "retreat"]):
+        context_suffix = "spa wellness resort"
+    elif any(k in c_clean for k in ["bar", "pub", "nightlife", "cocktail", "lounge"]):
+        context_suffix = "cocktail bar lounge"
+    elif any(k in c_clean for k in ["theme", "park", "water", "amusement"]):
+        context_suffix = "theme park rides"
+    elif any(k in c_clean for k in ["temple", "shrine", "church", "mosque", "monastery"]):
+        context_suffix = "temple shrine architecture"
+    elif any(k in c_clean for k in ["adventure", "trekking", "hiking", "safari"]):
+        context_suffix = "outdoor adventure nature"
+    elif any(k in c_clean for k in ["shopping", "market", "bazaar", "mall"]):
+        context_suffix = "shopping street market"
+    elif any(k in c_clean for k in ["secret", "hidden", "viewpoint"]):
+        context_suffix = "scenic view landscape"
+    elif any(k in c_clean for k in ["event", "festival", "concert"]):
+        context_suffix = "festival celebration event"
+    else:
+        context_suffix = "travel landmark scenery"
+
+    # 3. Build cascading dynamic search queries
     search_queries = []
     if v_clean and d_clean:
-        search_queries.append(f"{v_clean} {d_clean}")
-        search_queries.append(v_clean)
+        search_queries.append(f"{v_clean} {context_suffix}".strip())
+        search_queries.append(f"{v_clean} {d_clean}".strip())
+        search_queries.append(f"{d_clean} {context_suffix}".strip())
     elif v_clean:
+        search_queries.append(f"{v_clean} {context_suffix}".strip())
         search_queries.append(v_clean)
+    elif d_clean:
+        search_queries.append(f"{d_clean} {context_suffix}".strip())
 
-    if d_clean and c_clean:
-        search_queries.append(f"{d_clean} {c_clean}")
-    if d_clean:
-        search_queries.append(f"{d_clean} tourism")
-
-    # 3. Wikipedia API (Requires User-Agent header to prevent 403 Forbidden)
-    wiki_headers = {"User-Agent": "VoyantaTravelApp/1.0 (travel@voyanta.app)"}
-    for q in search_queries:
-        encoded = urllib.parse.quote(q)
-        try:
-            wiki_url = f"https://en.wikipedia.org/w/api.php?action=query&format=json&prop=pageimages&pithumbsize=1000&generator=search&gsrsearch={encoded}&gsrlimit=1"
-            res = await client.get(wiki_url, headers=wiki_headers, timeout=2.5)
-            if res.status_code == 200:
-                pages = res.json().get("query", {}).get("pages", {})
-                for _, page in pages.items():
-                    if "thumbnail" in page and "source" in page["thumbnail"]:
-                        return page["thumbnail"]["source"]
-        except Exception:
-            pass
-
-    # 4. Pexels Dynamic Search
+    # 4. Search Pexels API
     if PEXELS_API_KEY:
         for q in search_queries:
             encoded = urllib.parse.quote(q)
@@ -325,7 +332,7 @@ async def fetch_dynamic_place_photo(client: httpx.AsyncClient, venue: str = "", 
             except Exception:
                 pass
 
-    # 5. Unsplash Dynamic Search
+    # 5. Search Unsplash API
     if UNSPLASH_ACCESS_KEY:
         for q in search_queries:
             encoded = urllib.parse.quote(q)
@@ -339,7 +346,21 @@ async def fetch_dynamic_place_photo(client: httpx.AsyncClient, venue: str = "", 
             except Exception:
                 pass
 
-    # Strictly return empty string — no hardcoded fallback URLs
+    # 6. Search Wikipedia Thumbnail API (Filter SVG/PNG maps and icons)
+    wiki_headers = {"User-Agent": "VoyantaTravelApp/1.0 (travel@voyanta.app)"}
+    if v_clean:
+        try:
+            wiki_url = f"https://en.wikipedia.org/w/api.php?action=query&format=json&prop=pageimages&pithumbsize=1000&generator=search&gsrsearch={urllib.parse.quote(v_clean)}&gsrlimit=1"
+            res = await client.get(wiki_url, headers=wiki_headers, timeout=2.0)
+            if res.status_code == 200:
+                pages = res.json().get("query", {}).get("pages", {})
+                for _, page in pages.items():
+                    src = page.get("thumbnail", {}).get("source", "")
+                    if src and not any(ext in src.lower() for ext in [".svg", "flag", "locator_map", "_map", "location_in"]):
+                        return src
+        except Exception:
+            pass
+
     return ""
 
 def clean_venue_title(title: str, destination: str = "") -> str:
