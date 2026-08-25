@@ -328,45 +328,12 @@ PILLAR_DESCRIPTIONS = {
 # ─────────────────────────────────────────────
 
 async def call_ai_with_rate_limit_fallback(client: httpx.AsyncClient, prompt: str) -> str:
-    # ── 1. PRIMARY: GROQ (Optimized JSON formatting) ──────────────────────────
-    if GROQ_API_KEY:
-        groq_models = ["llama-3.1-8b-instant", "llama-3.3-70b-versatile", "llama3-8b-8192", "llama3-70b-8192"]
-        headers = {
-            "Authorization": f"Bearer {GROQ_API_KEY}",
-            "Content-Type": "application/json"
-        }
-        for model in groq_models:
-            try:
-                payload = {
-                    "model": model,
-                    "messages": [
-                        {
-                            "role": "system",
-                            "content": "You are a travel concierge. You MUST output a valid JSON object matching the requested schema. Do not output markdown code blocks or conversational text."
-                        },
-                        {"role": "user", "content": prompt}
-                    ],
-                    "temperature": 0.2
-                }
-                res = await client.post("https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers, timeout=16.0)
-                if res.status_code == 200:
-                    raw = res.json()["choices"][0]["message"]["content"]
-                    cleaned = re.sub(r"^```(?:json)?\s*", "", raw.strip(), flags=re.MULTILINE)
-                    cleaned = re.sub(r"\s*```$", "", cleaned, flags=re.MULTILINE).strip()
-                    logger.info(f"✅ AI generation succeeded via Groq ({model})")
-                    return cleaned
-                else:
-                    logger.warning(f"Groq {model} returned HTTP {res.status_code}: {res.text[:120]}")
-            except Exception as e:
-                logger.warning(f"Groq {model} error: {e}")
-
-    # ── 2. SECONDARY: OPENROUTER (Dynamic Router) ─────────────────────────────
+    # ── TIER 1: PRIMARY DIRECT OPENROUTER (Instant 200 OK) ───────────────────
     if OPENROUTER_API_KEY:
         or_models = [
             "openrouter/auto",
             "meta-llama/llama-3.3-70b-instruct:free",
-            "deepseek/deepseek-r1:free",
-            "google/gemini-2.0-flash-exp:free"
+            "deepseek/deepseek-r1:free"
         ]
         headers = {
             "Authorization": f"Bearer {OPENROUTER_API_KEY}",
@@ -381,25 +348,43 @@ async def call_ai_with_rate_limit_fallback(client: httpx.AsyncClient, prompt: st
                     "messages": [
                         {
                             "role": "system",
-                            "content": "You are Voyanta's travel engine. Return strictly a valid JSON object matching the requested schema. No markdown code blocks."
+                            "content": "You are Voyanta's travel intelligence engine. Return strictly a valid JSON object matching the requested schema. Do not output markdown backticks or conversational text."
                         },
                         {"role": "user", "content": prompt}
                     ],
                     "temperature": 0.2
                 }
-                res = await client.post("https://openrouter.ai/api/v1/chat/completions", json=payload, headers=headers, timeout=18.0)
+                res = await client.post("https://openrouter.ai/api/v1/chat/completions", json=payload, headers=headers, timeout=12.0)
                 if res.status_code == 200:
                     raw = res.json()["choices"][0]["message"]["content"]
                     cleaned = re.sub(r"^```(?:json)?\s*", "", raw.strip(), flags=re.MULTILINE)
                     cleaned = re.sub(r"\s*```$", "", cleaned, flags=re.MULTILINE).strip()
-                    logger.info(f"✅ AI generation succeeded via OpenRouter ({model})")
+                    logger.info(f"⚡ Instant AI generation succeeded via OpenRouter ({model})")
                     return cleaned
                 else:
-                    logger.warning(f"OpenRouter {model} returned HTTP {res.status_code}: {res.text[:120]}")
+                    logger.warning(f"OpenRouter {model} status {res.status_code}: {res.text[:120]}")
             except Exception as e:
-                logger.warning(f"OpenRouter {model} error: {e}")
+                logger.warning(f"OpenRouter {model} connection error: {e}")
 
-    raise HTTPException(status_code=503, detail="AI generation engine unavailable. Please verify API credentials.")
+    # ── TIER 2: GEMINI / GROQ FALLBACK ───────────────────────────────────────
+    if GEMINI_API_KEY:
+        try:
+            g_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={GEMINI_API_KEY}"
+            g_payload = {
+                "contents": [{"parts": [{"text": prompt + "\n\nOutput STRICTLY valid JSON."}]}],
+                "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json"}
+            }
+            res = await client.post(g_url, json=g_payload, timeout=10.0)
+            if res.status_code == 200:
+                raw = res.json()["candidates"][0]["content"]["parts"][0]["text"]
+                cleaned = re.sub(r"^```(?:json)?\s*", "", raw.strip(), flags=re.MULTILINE)
+                cleaned = re.sub(r"\s*```$", "", cleaned, flags=re.MULTILINE).strip()
+                logger.info("⚡ Fallback AI generation succeeded via Gemini")
+                return cleaned
+        except Exception:
+            pass
+
+    raise HTTPException(status_code=503, detail="AI generation engine unavailable. Please verify API status.")
 
 # ─────────────────────────────────────────────
 #  API Endpoints
