@@ -929,7 +929,6 @@ async def create_dynamic_trip_plan(body: TripPlanRequest, request: Request):
 async def handle_voya_chat(req: ChatRequest, request: Request):
     client = request.app.state.client
     
-    # 1. Build contextual dynamic system prompt
     system_prompt = get_voya_system_prompt(
         destination=req.destination,
         language=req.language,
@@ -937,28 +936,21 @@ async def handle_voya_chat(req: ChatRequest, request: Request):
         active_itinerary=req.active_itinerary
     )
 
-    # 2. Assemble conversational message list
-    messages = [{"role": "system", "content": system_prompt}]
-    for msg in (req.history or [])[-6:]:
-        messages.append({"role": msg.role, "content": msg.content})
-    messages.append({"role": "user", "content": req.message})
-
-    # 3. Dynamic Tool Definition & Intent Inference Prompt
     tools = get_chat_agent_tools()
     tool_instructions = f"""
 Available Tools:
 {json.dumps(tools, indent=2)}
 
-If the user request requires a tool (e.g. accommodations, activity tickets like Klook/Headout, live events ticketing, searching extra spots, or adding to itinerary), output a JSON object:
-{{"tool_call": {{"name": "tool_name", "arguments": {{...}}}}, "reply": "Your conversational response in user's language"}}
+If the user query requires a tool, return valid JSON:
+{{"tool_call": {{"name": "tool_name", "arguments": {{...}}}}, "reply": "Conversational response in user's language"}}
 
-If no tool is required, output:
-{{"tool_call": null, "reply": "Your direct helpful answer in user's language"}}
+If no tool is required, return:
+{{"tool_call": null, "reply": "Direct response in user's language"}}
 
-Strictly return valid JSON only.
+Output valid JSON only.
 """
     prompt = f"{system_prompt}\n\n{tool_instructions}\n\nUser Question: {req.message}"
-    
+
     try:
         raw_res = await call_ai_with_rate_limit_fallback(client, prompt)
         parsed = json.loads(raw_res)
@@ -967,7 +959,6 @@ Strictly return valid JSON only.
         tool_data = parsed.get("tool_call")
         action_payload = None
 
-        # 4. Execute tool call if requested by AI
         if tool_data and isinstance(tool_data, dict) and "name" in tool_data:
             tool_name = tool_data.get("name")
             tool_args = tool_data.get("arguments", {})
@@ -975,18 +966,17 @@ Strictly return valid JSON only.
 
         return {
             "status": "success",
-            "reply": reply_text or "How else can I assist with your journey?",
+            "reply": reply_text or "I am here to assist your travel planning.",
             "action": action_payload
         }
     except Exception as e:
-        logger.error(f"Chat pipeline error: {e}")
-        # Fallback simple conversational response
+        logger.error(f"Chat pipeline fallback triggered: {e}")
         fallback_prompt = f"{system_prompt}\n\nUser: {req.message}\nProvide a direct, helpful, and concise response."
         try:
             raw_fallback = await call_ai_with_rate_limit_fallback(client, fallback_prompt)
             return {"status": "success", "reply": raw_fallback, "action": None}
         except Exception:
-            return {"status": "error", "reply": "I'm experiencing a momentary connection issue. Please try again.", "action": None}
+            return {"status": "error", "reply": "Connection hiccup. Please try asking again.", "action": None}
 
 # ─────────────────────────────────────────────
 #  Geocoding, Routing & POI APIs (TomTom)
