@@ -325,13 +325,17 @@ PILLAR_DESCRIPTIONS = {
 # ─────────────────────────────────────────────
 
 async def call_ai_with_rate_limit_fallback(client: httpx.AsyncClient, prompt: str) -> str:
+    # 1. Primary: Groq Active Model Tier
     groq_models = [
         "llama-3.3-70b-versatile",
+        "llama-3.1-70b-versatile",
+        "llama3-70b-8192",
         "llama-3.1-8b-instant",
-        "llama3-70b-8192"
+        "llama3-8b-8192",
+        "llama-3.2-3b-preview",
+        "mixtral-8x7b-32768"
     ]
     
-    # 1. Primary: Groq API with auto-retry
     if GROQ_API_KEY:
         headers = {
             "Authorization": f"Bearer {GROQ_API_KEY}",
@@ -367,39 +371,47 @@ async def call_ai_with_rate_limit_fallback(client: httpx.AsyncClient, prompt: st
                         await asyncio.sleep(1.5)
                         continue
                     else:
-                        logger.warning(f"Groq {model} returned HTTP {res.status_code}: {res.text}")
+                        logger.warning(f"Groq ({model}) status {res.status_code}: {res.text}")
                         break
                 except Exception as e:
-                    logger.warning(f"Groq {model} attempt {attempt+1} failed: {e}")
+                    logger.warning(f"Groq ({model}) attempt {attempt+1} failed: {e}")
+                    break
 
-    # 2. Resilient Fallback: Google Gemini API
+    # 2. Resilient Fallback: Google Gemini v1 REST API
     if GEMINI_API_KEY:
-        try:
-            gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
-            gemini_payload = {
-                "contents": [
-                    {
-                        "parts": [
-                            {"text": prompt + "\n\nCRITICAL: Return strictly a valid JSON object matching the schema."}
-                        ]
+        gemini_urls = [
+            f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}",
+            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={GEMINI_API_KEY}",
+            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key={GEMINI_API_KEY}"
+        ]
+        
+        for g_url in gemini_urls:
+            try:
+                gemini_payload = {
+                    "contents": [
+                        {
+                            "parts": [
+                                {"text": prompt + "\n\nCRITICAL: Return strictly a valid JSON object matching the requested schema."}
+                            ]
+                        }
+                    ],
+                    "generationConfig": {
+                        "temperature": 0.2,
+                        "responseMimeType": "application/json"
                     }
-                ],
-                "generationConfig": {
-                    "temperature": 0.2,
-                    "responseMimeType": "application/json"
                 }
-            }
-            res = await client.post(gemini_url, json=gemini_payload, timeout=14.0)
-            if res.status_code == 200:
-                raw_text = res.json()["candidates"][0]["content"]["parts"][0]["text"]
-                cleaned = raw_text.replace("```json", "").replace("```", "").strip()
-                logger.info("AI generation succeeded via Gemini fallback")
-                return cleaned
-            else:
-                logger.error(f"Gemini API returned HTTP {res.status_code}: {res.text}")
-        except Exception as e:
-            logger.error(f"Gemini fallback error: {e}")
+                res = await client.post(g_url, json=gemini_payload, timeout=14.0)
+                if res.status_code == 200:
+                    raw_text = res.json()["candidates"][0]["content"]["parts"][0]["text"]
+                    cleaned = raw_text.replace("```json", "").replace("```", "").strip()
+                    logger.info("AI generation succeeded via Google Gemini fallback")
+                    return cleaned
+                else:
+                    logger.warning(f"Gemini endpoint failed [{res.status_code}]: {res.text}")
+            except Exception as e:
+                logger.warning(f"Gemini request exception: {e}")
 
+    logger.error("All AI providers exhausted.")
     raise HTTPException(status_code=503, detail="AI generation engine currently unavailable. Please verify API rate limits.")
 
 # ─────────────────────────────────────────────
