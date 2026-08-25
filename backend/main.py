@@ -31,9 +31,11 @@ TOMTOM_BASE = "https://api.tomtom.com"
 OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY") or os.getenv("WEATHER_API_KEY")
 PEXELS_API_KEY = os.getenv("PEXELS_API_KEY", "").strip()
 DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "").strip()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "").strip()
+
+logger.info(f"Key Status -> OpenRouter: {bool(OPENROUTER_API_KEY)} | Groq: {bool(GROQ_API_KEY)} | Gemini: {bool(GEMINI_API_KEY)}")
 
 DEFAULT_FALLBACK_IMAGE = "https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=1200&auto=format&fit=crop&q=80"
 
@@ -347,21 +349,21 @@ async def call_ai_with_rate_limit_fallback(client: httpx.AsyncClient, prompt: st
                     "messages": [
                         {
                             "role": "system",
-                            "content": "You are Voyanta's travel engine. Return ONLY a valid JSON object matching the requested schema. Do not output markdown code fences or conversational text."
+                            "content": "You are Voyanta's travel intelligence engine. Return strictly a valid JSON object matching the requested schema. No markdown formatting, backticks, or extra commentary."
                         },
                         {"role": "user", "content": prompt}
                     ],
                     "temperature": 0.2
                 }
-                res = await client.post("https://openrouter.ai/api/v1/chat/completions", json=payload, headers=headers, timeout=22.0)
+                res = await client.post("https://openrouter.ai/api/v1/chat/completions", json=payload, headers=headers, timeout=20.0)
                 if res.status_code == 200:
                     raw = res.json()["choices"][0]["message"]["content"]
                     cleaned = re.sub(r"^```(?:json)?\s*", "", raw.strip(), flags=re.MULTILINE)
                     cleaned = re.sub(r"\s*```$", "", cleaned, flags=re.MULTILINE).strip()
-                    logger.info(f"✅ AI generation succeeded via OpenRouter ({model})")
+                    logger.info(f"AI generation succeeded via OpenRouter ({model})")
                     return cleaned
                 else:
-                    logger.warning(f"OpenRouter {model} status {res.status_code}: {res.text[:120]}")
+                    logger.warning(f"OpenRouter {model} returned HTTP {res.status_code}: {res.text[:140]}")
             except Exception as e:
                 logger.warning(f"OpenRouter {model} error: {e}")
 
@@ -383,17 +385,16 @@ async def call_ai_with_rate_limit_fallback(client: httpx.AsyncClient, prompt: st
                     "temperature": 0.2,
                     "response_format": {"type": "json_object"}
                 }
-                res = await client.post("https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers, timeout=15.0)
+                res = await client.post("https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers, timeout=14.0)
                 if res.status_code == 200:
                     raw = res.json()["choices"][0]["message"]["content"]
                     cleaned = re.sub(r"^```(?:json)?\s*", "", raw.strip(), flags=re.MULTILINE)
                     cleaned = re.sub(r"\s*```$", "", cleaned, flags=re.MULTILINE).strip()
-                    logger.info(f"✅ AI generation succeeded via Groq ({model})")
+                    logger.info(f"AI generation succeeded via Groq ({model})")
                     return cleaned
             except Exception as e:
                 logger.warning(f"Groq {model} error: {e}")
 
-    logger.error("All AI providers exhausted.")
     raise HTTPException(status_code=503, detail="AI generation engine unavailable. Please verify API credentials.")
 
 # ─────────────────────────────────────────────
