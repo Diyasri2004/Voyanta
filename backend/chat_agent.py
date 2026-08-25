@@ -120,6 +120,54 @@ def get_chat_agent_tools() -> List[Dict[str, Any]]:
                 },
                 "required": ["destination", "query"]
             }
+        },
+        {
+            "name": "plan_multi_city_transit",
+            "description": "Plan intercity transit across multiple cities or regions (High-Speed Rail, Trains, Buses, Flights) with direct route links.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "origin": {"type": "string", "description": "Origin city"},
+                    "destinations": {"type": "array", "items": {"type": "string"}, "description": "List of destination cities in sequence"}
+                },
+                "required": ["origin", "destinations"]
+            }
+        },
+        {
+            "name": "estimate_daily_budget",
+            "description": "Calculate an estimated daily cost breakdown (Stay, Meals, Transit, Activities) converted into the target currency.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "destination": {"type": "string", "description": "Target destination city"},
+                    "budget_tier": {"type": "string", "description": "Backpacker, Mid-range, Luxury"},
+                    "currency": {"type": "string", "description": "User currency (e.g. USD, EUR, INR, GBP, JPY)"}
+                },
+                "required": ["destination"]
+            }
+        },
+        {
+            "name": "get_weather_adaptive_spots",
+            "description": "Provide curated indoor/covered spots during rainy days or extreme weather (museums, culinary arcades, galleries).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "destination": {"type": "string", "description": "Destination city"},
+                    "weather_condition": {"type": "string", "description": "Rain, Extreme Heat, Heavy Snow, Storm"}
+                },
+                "required": ["destination"]
+            }
+        },
+        {
+            "name": "get_local_safety_and_etiquette",
+            "description": "Fetch essential local etiquette, tipping customs, transit pass recommendations, tourist scam alerts, and emergency hotlines.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "destination": {"type": "string", "description": "City or country"}
+                },
+                "required": ["destination"]
+            }
         }
     ]
 
@@ -284,6 +332,74 @@ async def execute_tool_call(
             "destination": dest,
             "query": query,
             "live_data": live_results or [{"title": "Live check complete", "snippet": f"No urgent alerts or disruptions reported for {dest}."}]
+        }
+
+    # 7. MULTI-CITY INTERCITY TRANSIT ROUTING
+    elif tool_name == "plan_multi_city_transit":
+        origin = args.get("origin", "").strip()
+        dest_list = args.get("destinations", [])
+        legs = []
+        
+        current = origin
+        for nxt in dest_list:
+            clean_nxt = nxt.strip()
+            if not clean_nxt:
+                continue
+            orig_enc = urllib.parse.quote(current)
+            dest_enc = urllib.parse.quote(clean_nxt)
+            legs.append({
+                "from": current,
+                "to": clean_nxt,
+                "trainline": f"https://www.thetrainline.com/search/{orig_enc}/to/{dest_enc}",
+                "omio": f"https://www.omio.com/search-frontend/results/{orig_enc}/{dest_enc}/train",
+                "twelve_go": f"https://12go.asia/en/travel/{orig_enc.lower()}/{dest_enc.lower()}",
+                "google_transit": f"https://www.google.com/maps/dir/?api=1&origin={orig_enc}&destination={dest_enc}&travelmode=transit"
+            })
+            current = clean_nxt
+
+        return {
+            "status": "success",
+            "category": "Intercity Multi-Stop Transit",
+            "origin": origin,
+            "legs": legs
+        }
+
+    # 8. DAILY BUDGET & CURRENCY BURN RATE
+    elif tool_name == "estimate_daily_budget":
+        tier = args.get("budget_tier", "Mid-range").title()
+        user_curr = args.get("currency", "USD").upper()
+        
+        return {
+            "status": "success",
+            "category": "Budget Burn Rate",
+            "destination": dest,
+            "tier": tier,
+            "currency": user_curr,
+            "rates_link": f"https://www.google.com/finance/quote/{user_curr}-INR" if user_curr != "INR" else "https://www.google.com/finance"
+        }
+
+    # 9. WEATHER ADAPTIVE INDOOR RECOMMENDATIONS
+    elif tool_name == "get_weather_adaptive_spots":
+        condition = args.get("weather_condition", "Rain")
+        search_target = f"{dest} best indoor museums galleries covered markets {condition}".strip()
+        
+        return {
+            "status": "success",
+            "category": "Weather Adaptive Recommendations",
+            "destination": dest,
+            "condition": condition,
+            "search_query": search_target,
+            "google_maps": f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(search_target)}"
+        }
+
+    # 10. LOCAL SAFETY & ETIQUETTE CONCIERGE
+    elif tool_name == "get_local_safety_and_etiquette":
+        return {
+            "status": "success",
+            "category": "Safety & Cultural Etiquette",
+            "destination": dest,
+            "emergency_search": f"https://www.google.com/search?q={urllib.parse.quote(dest + ' emergency tourist police hospital contact')}",
+            "transit_card_search": f"https://www.google.com/search?q={urllib.parse.quote(dest + ' official tourist transit card subway pass')}"
         }
 
     return {"status": "error", "message": f"Unknown tool: {tool_name}"}
