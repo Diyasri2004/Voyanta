@@ -198,6 +198,8 @@ class ChatRequest(BaseModel):
     destination: Optional[str] = ""
     language: Optional[str] = "en"
     currency: Optional[str] = "USD"
+    user_time: Optional[str] = ""
+    user_timezone: Optional[str] = ""
     history: Optional[List[ChatMessage]] = []
     active_itinerary: Optional[List[Dict[str, Any]]] = []
 
@@ -959,6 +961,8 @@ async def handle_voya_chat(req: ChatRequest, request: Request):
         destination=req.destination,
         language=req.language,
         currency=req.currency,
+        user_time=req.user_time,
+        user_timezone=req.user_timezone,
         active_itinerary=req.active_itinerary
     )
 

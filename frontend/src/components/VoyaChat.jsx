@@ -3,10 +3,26 @@ import { Send, X, ExternalLink, Sparkles, Navigation, Bed, Ticket, Compass } fro
 
 export default function VoyaChat({ destination = "", currency = "USD", activeItinerary = [], onAddStop = () => {} }) {
   const [isOpen, setIsOpen] = useState(false);
+  
+  const getTimeGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    if (hour < 21) return 'Good evening';
+    return 'Good night';
+  };
+
+  const getUserTimeContext = () => {
+    return {
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+    };
+  };
+
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
-      content: `Hello! I'm **Voya**, your AI concierge. Ask me for stays, Klook/Headout tickets, live events, cabs, or weather-smart spots in **${destination || 'your destination'}**!`,
+      content: `${getTimeGreeting()}! I'm **Voya**, your AI concierge. Ask me for stays, tickets, live events, cabs, or weather-smart spots in **${destination || 'your destination'}**!`,
       action: null
     }
   ]);
@@ -28,6 +44,8 @@ export default function VoyaChat({ destination = "", currency = "USD", activeIti
     setMessages(newHistory);
     setLoading(true);
 
+    const timeContext = getUserTimeContext();
+
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
@@ -36,32 +54,34 @@ export default function VoyaChat({ destination = "", currency = "USD", activeIti
           message: userText,
           destination: destination || '',
           currency: currency || 'USD',
+          user_time: timeContext.time,
+          user_timezone: timeContext.timeZone,
           history: newHistory.map(m => ({ role: m.role, content: m.content })),
           active_itinerary: activeItinerary || []
         })
       });
 
       if (!response.ok) {
-        console.error(`HTTP error! status: ${response.status}`);
+        throw new Error(`HTTP error: ${response.status}`);
       }
 
       const data = await response.json();
-      const aiReply = data.reply || data.response || data.message || data.text || "I'm here to help!";
-
-      if (data.action?.action === 'INSERT_STOP' && data.action?.stop) {
-        onAddStop(data.action.stop);
-      }
-
-      setMessages(prev => [
-        ...prev,
-        {
-          role: 'assistant',
-          content: aiReply,
-          action: data.action || null
+      if (data.status === 'success') {
+        if (data.action?.action === 'INSERT_STOP' && data.action?.stop) {
+          onAddStop(data.action.stop);
         }
-      ]);
+
+        setMessages(prev => [
+          ...prev,
+          { role: 'assistant', content: data.reply, action: data.action }
+        ]);
+      } else {
+        setMessages(prev => [
+          ...prev,
+          { role: 'assistant', content: data.reply || "I encountered an issue connecting to local services.", action: null }
+        ]);
+      }
     } catch (err) {
-      console.error("Voya Chat fetch error:", err);
       setMessages(prev => [
         ...prev,
         { role: 'assistant', content: "Network error reaching Voya services. Please try again.", action: null }
@@ -78,7 +98,7 @@ export default function VoyaChat({ destination = "", currency = "USD", activeIti
           onClick={() => setIsOpen(true)}
           className="flex items-center gap-2 bg-gradient-to-r from-pink-600 to-rose-600 text-white px-5 py-3.5 rounded-full shadow-2xl hover:scale-105 transition-all duration-300 font-medium text-sm"
         >
-          <Sparkles className="w-4 h-4 animate-pulse" />
+          <Sparkles className="w-4 h-4 animate-pulse"/>
           <span>Ask Voya AI</span>
         </button>
       )}
@@ -88,7 +108,7 @@ export default function VoyaChat({ destination = "", currency = "USD", activeIti
           <div className="flex items-center justify-between px-4 py-3.5 border-b border-white/10 bg-white/5">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-pink-500 to-rose-600 flex items-center justify-center text-white shadow-md">
-                <Sparkles className="w-4 h-4" />
+                <Sparkles className="w-4 h-4"/>
               </div>
               <div>
                 <h3 className="text-sm font-semibold text-white">Voya Concierge</h3>
@@ -99,7 +119,7 @@ export default function VoyaChat({ destination = "", currency = "USD", activeIti
               onClick={() => setIsOpen(false)}
               className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors"
             >
-              <X className="w-5 h-5" />
+              <X className="w-5 h-5"/>
             </button>
           </div>
 
@@ -119,7 +139,7 @@ export default function VoyaChat({ destination = "", currency = "USD", activeIti
                   {m.action?.booking_platforms && (
                     <div className="mt-3 pt-2.5 border-t border-white/10 space-y-1.5">
                       <div className="flex items-center gap-1 text-[11px] font-semibold text-pink-400">
-                        <Bed className="w-3.5 h-3.5" /> Book Stays:
+                        <Bed className="w-3.5 h-3.5"/> Book Stays:
                       </div>
                       <div className="grid grid-cols-2 gap-1.5">
                         {Object.entries(m.action.booking_platforms).map(([platform, url]) => (
@@ -131,7 +151,7 @@ export default function VoyaChat({ destination = "", currency = "USD", activeIti
                             className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-black/40 hover:bg-pink-600/30 border border-white/10 text-[10px] text-gray-200 transition-colors"
                           >
                             <span className="capitalize">{platform.replace('_', ' ')}</span>
-                            <ExternalLink className="w-2.5 h-2.5 text-gray-400" />
+                            <ExternalLink className="w-2.5 h-2.5 text-gray-400"/>
                           </a>
                         ))}
                       </div>
@@ -142,7 +162,7 @@ export default function VoyaChat({ destination = "", currency = "USD", activeIti
                   {m.action?.ticket_platforms && (
                     <div className="mt-3 pt-2.5 border-t border-white/10 space-y-1.5">
                       <div className="flex items-center gap-1 text-[11px] font-semibold text-emerald-400">
-                        <Ticket className="w-3.5 h-3.5" /> Experience Tickets:
+                        <Ticket className="w-3.5 h-3.5"/> Experience Tickets:
                       </div>
                       <div className="grid grid-cols-2 gap-1.5">
                         {Object.entries(m.action.ticket_platforms).map(([platform, url]) => (
@@ -154,7 +174,7 @@ export default function VoyaChat({ destination = "", currency = "USD", activeIti
                             className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-black/40 hover:bg-emerald-600/30 border border-white/10 text-[10px] text-gray-200 transition-colors"
                           >
                             <span className="capitalize">{platform}</span>
-                            <ExternalLink className="w-2.5 h-2.5 text-gray-400" />
+                            <ExternalLink className="w-2.5 h-2.5 text-gray-400"/>
                           </a>
                         ))}
                       </div>
@@ -165,7 +185,7 @@ export default function VoyaChat({ destination = "", currency = "USD", activeIti
                   {m.action?.ride_hailing && (
                     <div className="mt-3 pt-2.5 border-t border-white/10 space-y-1.5">
                       <div className="flex items-center gap-1 text-[11px] font-semibold text-sky-400">
-                        <Navigation className="w-3.5 h-3.5" /> Cabs & Transit:
+                        <Navigation className="w-3.5 h-3.5"/> Cabs & Transit:
                       </div>
                       <div className="grid grid-cols-2 gap-1.5">
                         {Object.entries(m.action.ride_hailing).map(([platform, url]) => (
@@ -177,7 +197,7 @@ export default function VoyaChat({ destination = "", currency = "USD", activeIti
                             className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-black/40 hover:bg-sky-600/30 border border-white/10 text-[10px] text-gray-200 transition-colors"
                           >
                             <span className="capitalize">{platform.replace('_', ' ')}</span>
-                            <ExternalLink className="w-2.5 h-2.5 text-gray-400" />
+                            <ExternalLink className="w-2.5 h-2.5 text-gray-400"/>
                           </a>
                         ))}
                       </div>
@@ -188,7 +208,7 @@ export default function VoyaChat({ destination = "", currency = "USD", activeIti
                   {m.action?.itinerary_legs && (
                     <div className="mt-3 pt-2.5 border-t border-white/10 space-y-2">
                       <div className="flex items-center gap-1 text-[11px] font-semibold text-amber-400">
-                        <Compass className="w-3.5 h-3.5" /> Transit Connections:
+                        <Compass className="w-3.5 h-3.5"/> Transit Connections:
                       </div>
                       {m.action.itinerary_legs.map((leg, lIdx) => (
                         <div key={lIdx} className="p-2 rounded-lg bg-black/30 border border-white/5 space-y-1">
@@ -206,7 +226,7 @@ export default function VoyaChat({ destination = "", currency = "USD", activeIti
             ))}
             {loading && (
               <div className="flex items-center gap-2 text-gray-400 text-xs italic">
-                <Sparkles className="w-3.5 h-3.5 animate-spin text-pink-500" />
+                <Sparkles className="w-3.5 h-3.5 animate-spin text-pink-500"/>
                 <span>Voya is curating authentic live links...</span>
               </div>
             )}
@@ -226,7 +246,7 @@ export default function VoyaChat({ destination = "", currency = "USD", activeIti
               disabled={loading || !input.trim()}
               className="bg-gradient-to-r from-pink-600 to-rose-600 disabled:opacity-40 text-white p-2.5 rounded-xl hover:scale-105 transition-all"
             >
-              <Send className="w-3.5 h-3.5" />
+              <Send className="w-3.5 h-3.5"/>
             </button>
           </form>
         </div>
