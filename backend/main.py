@@ -552,10 +552,42 @@ async def create_dynamic_trip_plan(body: TripPlanRequest, request: Request):
     num_days = max(1, min(body.days or 3, 30))
     start_date = body.start_date or date.today()
     coords = await resolve_dynamic_coordinates(client, dest_name)
+    group_desc = body.travelers.group_type if body.travelers else "Solo"
     
-    prompt = f"""Return JSON {num_days}-day itinerary for {dest_name} (Pace: {body.pace or 'Balanced'}, Budget: {body.budget or 'Moderate'}):
-{{"summary":"Overview","days":[{"day":1,"theme":"Theme","stops":[{"title":"Place Name","location":"Area","category":"Sightseeing","duration_minutes":90,"best_time":"09:30 AM","cost_range":"$10-$25"}]}],"culinary_highlights":[{"title":"Eatery","description":"Dish","famous_for":"Specialty","location":"Area"}]}}
-Provide 3 real stops/day."""
+    prompt = f"""
+    Create a detailed, non-repeating {num_days}-day travel itinerary for {dest_name}.
+    Pace: {body.pace or 'Balanced'}. Budget: {body.budget or 'Moderate'}. Group: {group_desc}.
+    
+    Return strictly JSON matching this structure:
+    {{
+      "summary": "1 sentence overview of the trip",
+      "days": [
+        {{
+          "day": 1,
+          "theme": "Exploration Theme",
+          "stops": [
+            {{
+              "title": "Exact Real Landmark Name",
+              "location": "Locality or Area in {dest_name}",
+              "category": "Sightseeing",
+              "duration_minutes": 90,
+              "best_time": "09:30 AM",
+              "cost_range": "$10 - $25"
+            }}
+          ]
+        }}
+      ],
+      "culinary_highlights": [
+        {{
+          "title": "Famous Local Eatery",
+          "description": "Must try dish description",
+          "famous_for": "Signature Specialty",
+          "location": "Locality in {dest_name}"
+        }}
+      ]
+    }}
+    Provide 3 distinct real-world stops per day. Do not use generic placeholders.
+    """
     
     raw = await call_ai_with_rate_limit_fallback(client, prompt)
     ai_data = json.loads(raw)
