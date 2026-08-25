@@ -20,6 +20,30 @@ export default function Voya({ trip }: { trip: any }) {
     return `${timeGreeting}! Welcome to Voyanta 🙏\nI'm Voya. Whether you need inspiration for your next getaway or help with an ongoing booking, I've got you covered. What destination is on your mind today?`;
   };
 
+  const LANGUAGE_CONFIRMATIONS: Record<string, string> = {
+    en: "You're all set in English! Feel free to ask about any destination, itinerary, or booking.",
+    hi: "हिन्दी चुनने के लिए धन्यवाद! 🙏\n(You can type in हिन्दी or English letters / Hinglish).",
+    ta: "தமிழைத் தேர்ந்தெடுத்ததற்கு நன்றி! 🙏\n(You can type in தமிழ் or English letters / Tanglish).",
+    te: "తెలుగు ఎంచుకున్నందుకు ధన్యవాదాలు! 🙏\n(You can type in తెలుగు or English letters / Teluglish).",
+    kn: "ಕನ್ನಡವನ್ನು ಆಯ್ಕೆ ಮಾಡಿದ್ದಕ್ಕಾಗಿ ಧನ್ಯವಾದಗಳು! 🙏\n(You can type in ಕನ್ನಡ or English letters / Kanglish).",
+    ml: "മലയാളം തിരഞ്ഞെടുത്തതിന് നന്ദി! 🙏\n(You can type in മലയാളം or English letters / Manglish).",
+    bn: "বাংলা বেছে নেওয়ার জন্য धन्यवाद! 🙏\n(You can type in বাংলা or English letters / Banglish).",
+    ar: "شكراً لاختيارك اللغة العربية! 🌟\n(You can type in العربية or Latin letters / Arabizi).",
+    es: "¡Gracias por elegir español! 🌟\n(Puedes escribir en español o inglés).",
+    fr: "Merci d'avoir choisi le français ! 🌟\n(Vous pouvez écrire en français ou en anglais).",
+    de: "Vielen Dank, dass Sie Deutsch gewählt haben! 🌟\n(Sie können auf Deutsch oder Englisch schreiben).",
+    zh: "感谢您选择中文！🌟\n(您可以使用中文汉字或拼音/Pinyin进行输入)。",
+    ru: "Спасибо, что выбрали русский язык! 🌟\n(Вы можете писать на русском или латиницей/транслитом)."
+  };
+
+  const [activeLang, setActiveLang] = useState("en");
+
+  const selectLanguage = (code: string) => {
+    setActiveLang(code);
+    const confirmation = LANGUAGE_CONFIRMATIONS[code] || LANGUAGE_CONFIRMATIONS.en;
+    setMessages(prev => [...prev, { role: "assistant", content: confirmation, text: confirmation }]);
+  };
+
   interface ChatItem {
     role: string;
     content: string;
@@ -128,9 +152,26 @@ export default function Voya({ trip }: { trip: any }) {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xl transition-transform hover:scale-125 hover:-translate-y-1 duration-300 cursor-pointer drop-shadow-[0_0_5px_rgba(57,255,20,0.8)]">✈️</span>
-            <span className="text-xl transition-transform hover:scale-125 hover:-translate-y-1 duration-300 cursor-pointer drop-shadow-[0_0_5px_rgba(255,0,127,0.8)]">🍣</span>
-            <button onClick={() => setIsOpen(false)} className="text-white/50 hover:text-white ml-2">
+            <select
+              value={activeLang}
+              onChange={(e) => selectLanguage(e.target.value)}
+              className="bg-black/60 text-[#00f0ff] border border-[#00f0ff]/30 text-[10px] rounded-lg px-1.5 py-1 focus:outline-none cursor-pointer"
+            >
+              <option value="en">🌐 EN</option>
+              <option value="hi">🇮🇳 HI (Hinglish)</option>
+              <option value="ta">🇮🇳 TA (Tanglish)</option>
+              <option value="te">🇮🇳 TE (Teluglish)</option>
+              <option value="kn">🇮🇳 KN (Kanglish)</option>
+              <option value="ml">🇮🇳 ML (Manglish)</option>
+              <option value="bn">🇮🇳 BN (Banglish)</option>
+              <option value="ar">🌍 AR (Arabizi)</option>
+              <option value="es">🇪🇸 ES</option>
+              <option value="fr">🇫🇷 FR</option>
+              <option value="de">🇩🇪 DE</option>
+              <option value="zh">🇨🇳 ZH (Pinyin)</option>
+              <option value="ru">🇷🇺 RU (Translit)</option>
+            </select>
+            <button onClick={() => setIsOpen(false)} className="text-white/50 hover:text-white ml-1">
               <X className="h-5 w-5" />
             </button>
           </div>
