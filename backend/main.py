@@ -330,7 +330,7 @@ PILLAR_DESCRIPTIONS = {
 async def call_ai_with_rate_limit_fallback(client: httpx.AsyncClient, prompt: str) -> str:
     # ── 1. PRIMARY: GROQ (Optimized JSON formatting) ──────────────────────────
     if GROQ_API_KEY:
-        groq_models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "llama3-70b-8192", "llama3-8b-8192"]
+        groq_models = ["llama-3.1-8b-instant", "llama-3.3-70b-versatile", "llama3-8b-8192", "llama3-70b-8192"]
         headers = {
             "Authorization": f"Bearer {GROQ_API_KEY}",
             "Content-Type": "application/json"
@@ -442,6 +442,112 @@ async def get_trending_destinations(request: Request):
 
     return {"trending": []}
 
+# --- HIGH-SPEED PURE DYNAMIC THEME PARKS PILLAR ---
+async def build_dynamic_themeparks_pillar(client: httpx.AsyncClient, dest_name: str, coords: Coordinates):
+    prompt = f"""
+    List 5 real, notable theme parks, water parks, or adventure arenas in or near {dest_name}.
+    Output strictly JSON matching:
+    {{
+      "theme_parks": [
+        {{
+          "title": "Exact Park Name",
+          "category": "Theme Park",
+          "description": "Short accurate highlight of key rides or attractions",
+          "location": "District/Area in {dest_name}",
+          "rating": 4.5,
+          "ticket_price": "Real ticket price or admission details",
+          "best_time": "Real operational hours or season"
+        }}
+      ]
+    }}
+    Provide authentic details only.
+    """
+    try:
+        raw = await call_ai_with_rate_limit_fallback(client, prompt)
+        data = json.loads(raw)
+        parks_raw = data.get("theme_parks", [])[:5]
+    except Exception as e:
+        logger.error(f"Theme parks AI generation error: {e}")
+        return []
+
+    # Parallelize photo lookups with a fast timeout
+    async def fetch_photo_safe(name: str):
+        try:
+            return await asyncio.wait_for(fetch_dynamic_place_photo(client, f"{name} {dest_name}"), timeout=3.5)
+        except Exception:
+            return ""
+
+    photos = await asyncio.gather(*[fetch_photo_safe(p.get("title", "")) for p in parks_raw])
+
+    parks = []
+    for idx, (p, photo) in enumerate(zip(parks_raw, photos)):
+        parks.append({
+            "id": f"park-{idx+1}",
+            "title": p.get("title", ""),
+            "category": p.get("category", "Theme Park"),
+            "description": p.get("description", ""),
+            "location": p.get("location", dest_name),
+            "image": photo,
+            "rating": p.get("rating"),
+            "ticket_price": p.get("ticket_price", ""),
+            "best_time": p.get("best_time", ""),
+            "lat": coords.lat + (idx * 0.003),
+            "lng": coords.lng + (idx * 0.003)
+        })
+    return parks
+
+# --- HIGH-SPEED PURE DYNAMIC EVENTS PILLAR ---
+async def build_dynamic_events_pillar(client: httpx.AsyncClient, dest_name: str, coords: Coordinates):
+    prompt = f"""
+    List 5 real cultural events, seasonal festivals, or live music showcases in {dest_name}.
+    Output strictly JSON matching:
+    {{
+      "events": [
+        {{
+          "title": "Exact Event Name",
+          "category": "Cultural Festival",
+          "description": "Brief description of the event celebration",
+          "venue": "Specific venue or area in {dest_name}",
+          "dates": "Real recurring month or season",
+          "entry_fee": "Real entry policy or ticket cost"
+        }}
+      ]
+    }}
+    Provide authentic details only.
+    """
+    try:
+        raw = await call_ai_with_rate_limit_fallback(client, prompt)
+        data = json.loads(raw)
+        events_raw = data.get("events", [])[:5]
+    except Exception as e:
+        logger.error(f"Events AI generation error: {e}")
+        return []
+
+    # Parallelize photo lookups with a fast timeout
+    async def fetch_photo_safe(name: str):
+        try:
+            return await asyncio.wait_for(fetch_dynamic_place_photo(client, f"{name} {dest_name}"), timeout=3.5)
+        except Exception:
+            return ""
+
+    photos = await asyncio.gather(*[fetch_photo_safe(e.get("title", "")) for e in events_raw])
+
+    events = []
+    for idx, (e, photo) in enumerate(zip(events_raw, photos)):
+        events.append({
+            "id": f"event-{idx+1}",
+            "title": e.get("title", ""),
+            "category": e.get("category", "Cultural Festival"),
+            "description": e.get("description", ""),
+            "venue": e.get("venue", dest_name),
+            "dates": e.get("dates", ""),
+            "entry_fee": e.get("entry_fee", ""),
+            "image": photo,
+            "lat": coords.lat + (idx * 0.002),
+            "lng": coords.lng + (idx * 0.002)
+        })
+    return events
+
 @app.get("/api/pillar", tags=["Discovery"])
 async def get_single_pillar_data(request: Request, destination: str = Query(..., min_length=1), pillar: str = Query("attractions")):
     clean_dest = destination.split(",")[0].strip().title()
@@ -451,9 +557,22 @@ async def get_single_pillar_data(request: Request, destination: str = Query(...,
     if cache_key in dynamic_cache:
         return {pillar_clean: dynamic_cache[cache_key]}
 
+    client = request.app.state.client
+
+    if pillar_clean in ["theme_parks", "themeparks"]:
+        coords = await resolve_dynamic_coordinates(client, clean_dest)
+        resolved = await build_dynamic_themeparks_pillar(client, clean_dest, coords)
+        dynamic_cache[cache_key] = resolved
+        return {pillar_clean: resolved}
+
+    if pillar_clean == "events":
+        coords = await resolve_dynamic_coordinates(client, clean_dest)
+        resolved = await build_dynamic_events_pillar(client, clean_dest, coords)
+        dynamic_cache[cache_key] = resolved
+        return {pillar_clean: resolved}
+
     desc = PILLAR_DESCRIPTIONS.get(pillar_clean, "landmarks and venues")
     prompt = f'Return JSON: {{"{pillar_clean}": [{{"name": "Place", "location": "Area", "description": "1 short sentence"}}]}} for 15-20 real iconic {desc} in {clean_dest}.'
-    client = request.app.state.client
     try:
         raw = await call_ai_with_rate_limit_fallback(client, prompt)
         data = json.loads(raw)
@@ -464,7 +583,10 @@ async def get_single_pillar_data(request: Request, destination: str = Query(...,
             v_loc = item.get("location", clean_dest)
             query_str = f"{v_name}, {v_loc}, {clean_dest}".strip()
             nav_url = f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(query_str)}"
-            img_url = await fetch_dynamic_place_photo(client, f"{v_name} {clean_dest}")
+            try:
+                img_url = await asyncio.wait_for(fetch_dynamic_place_photo(client, f"{v_name} {clean_dest}"), timeout=3.5)
+            except Exception:
+                img_url = DEFAULT_FALLBACK_IMAGE
             return {
                 "id": f"{pillar_clean}_{idx+1}",
                 "title": v_name,
