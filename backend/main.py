@@ -325,13 +325,19 @@ PILLAR_DESCRIPTIONS = {
 # ─────────────────────────────────────────────
 
 async def call_ai_with_rate_limit_fallback(client: httpx.AsyncClient, prompt: str) -> str:
-    # 1. Try Groq Primary Models with Auto-Retry
+    groq_models = [
+        "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant",
+        "llama3-70b-8192"
+    ]
+    
+    # 1. Primary: Groq API with auto-retry
     if GROQ_API_KEY:
         headers = {
             "Authorization": f"Bearer {GROQ_API_KEY}",
             "Content-Type": "application/json"
         }
-        for model in ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]:
+        for model in groq_models:
             for attempt in range(2):
                 try:
                     payload = {
@@ -339,7 +345,7 @@ async def call_ai_with_rate_limit_fallback(client: httpx.AsyncClient, prompt: st
                         "messages": [
                             {
                                 "role": "system",
-                                "content": "You are a concise travel concierge. Return strictly valid JSON matching the requested schema."
+                                "content": "You are Voyanta's travel intelligence engine. Output strictly valid JSON matching the user schema."
                             },
                             {"role": "user", "content": prompt}
                         ],
@@ -350,7 +356,7 @@ async def call_ai_with_rate_limit_fallback(client: httpx.AsyncClient, prompt: st
                         "https://api.groq.com/openai/v1/chat/completions",
                         json=payload,
                         headers=headers,
-                        timeout=12.0
+                        timeout=14.0
                     )
                     if res.status_code == 200:
                         content = res.json()["choices"][0]["message"]["content"]
@@ -361,12 +367,12 @@ async def call_ai_with_rate_limit_fallback(client: httpx.AsyncClient, prompt: st
                         await asyncio.sleep(1.5)
                         continue
                     else:
-                        logger.error(f"Groq ({model}) failed [{res.status_code}]: {res.text}")
+                        logger.warning(f"Groq {model} returned HTTP {res.status_code}: {res.text}")
                         break
                 except Exception as e:
-                    logger.warning(f"Groq ({model}) connection attempt {attempt+1} error: {e}")
+                    logger.warning(f"Groq {model} attempt {attempt+1} failed: {e}")
 
-    # 2. Resilient Fallback: Google Gemini 1.5 Flash
+    # 2. Resilient Fallback: Google Gemini API
     if GEMINI_API_KEY:
         try:
             gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
@@ -374,7 +380,7 @@ async def call_ai_with_rate_limit_fallback(client: httpx.AsyncClient, prompt: st
                 "contents": [
                     {
                         "parts": [
-                            {"text": prompt + "\n\nOutput strictly valid JSON."}
+                            {"text": prompt + "\n\nCRITICAL: Return strictly a valid JSON object matching the schema."}
                         ]
                     }
                 ],
@@ -383,18 +389,17 @@ async def call_ai_with_rate_limit_fallback(client: httpx.AsyncClient, prompt: st
                     "responseMimeType": "application/json"
                 }
             }
-            res = await client.post(gemini_url, json=gemini_payload, timeout=12.0)
+            res = await client.post(gemini_url, json=gemini_payload, timeout=14.0)
             if res.status_code == 200:
                 raw_text = res.json()["candidates"][0]["content"]["parts"][0]["text"]
                 cleaned = raw_text.replace("```json", "").replace("```", "").strip()
-                logger.info("AI generation succeeded via Gemini 1.5 Flash fallback")
+                logger.info("AI generation succeeded via Gemini fallback")
                 return cleaned
             else:
-                logger.error(f"Gemini API failed [{res.status_code}]: {res.text}")
+                logger.error(f"Gemini API returned HTTP {res.status_code}: {res.text}")
         except Exception as e:
-            logger.error(f"Gemini fallback exception: {e}")
+            logger.error(f"Gemini fallback error: {e}")
 
-    logger.error("All AI providers exhausted.")
     raise HTTPException(status_code=503, detail="AI generation engine currently unavailable. Please verify API rate limits.")
 
 # ─────────────────────────────────────────────
@@ -555,20 +560,20 @@ async def create_dynamic_trip_plan(body: TripPlanRequest, request: Request):
     group_desc = body.travelers.group_type if body.travelers else "Solo"
     
     prompt = f"""
-    Create a detailed, non-repeating {num_days}-day travel itinerary for {dest_name}.
+    Create a {num_days}-day travel itinerary for {dest_name}.
     Pace: {body.pace or 'Balanced'}. Budget: {body.budget or 'Moderate'}. Group: {group_desc}.
     
-    Return strictly JSON matching this structure:
+    JSON Schema:
     {{
-      "summary": "1 sentence overview of the trip",
+      "summary": "1 sentence overview",
       "days": [
         {{
           "day": 1,
-          "theme": "Exploration Theme",
+          "theme": "Theme",
           "stops": [
             {{
-              "title": "Exact Real Landmark Name",
-              "location": "Locality or Area in {dest_name}",
+              "title": "Real Place Name",
+              "location": "Locality in {dest_name}",
               "category": "Sightseeing",
               "duration_minutes": 90,
               "best_time": "09:30 AM",
@@ -579,14 +584,14 @@ async def create_dynamic_trip_plan(body: TripPlanRequest, request: Request):
       ],
       "culinary_highlights": [
         {{
-          "title": "Famous Local Eatery",
-          "description": "Must try dish description",
-          "famous_for": "Signature Specialty",
+          "title": "Famous Eatery",
+          "description": "Must try dish",
+          "famous_for": "Specialty",
           "location": "Locality in {dest_name}"
         }}
       ]
     }}
-    Provide 3 distinct real-world stops per day. Do not use generic placeholders.
+    Provide 3 distinct real-world stops per day.
     """
     
     raw = await call_ai_with_rate_limit_fallback(client, prompt)
