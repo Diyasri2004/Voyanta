@@ -18,7 +18,8 @@ export async function POST(req: Request) {
       });
       if (res.ok) {
         const data = await res.json();
-        return NextResponse.json({ text: data.text, reply: data.text, tool_called: data.tool_called, result: data.result });
+        const text = data.reply || data.text || data.message || "";
+        return NextResponse.json({ text, reply: text, action: data.action || null, tool_called: data.tool_called, result: data.result });
       }
     } catch {
       // Fallback to Gemini JS client below

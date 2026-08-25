@@ -951,6 +951,7 @@ def extract_json_payload(text: str) -> Optional[Dict[str, Any]]:
 
 @app.post("/api/chat", tags=["Chat"])
 @app.post("/chat", tags=["Chat"])
+@app.post("/api/voya/chat", tags=["Chat"])
 async def handle_voya_chat(req: ChatRequest, request: Request):
     client = request.app.state.client
     

@@ -53,24 +53,32 @@ export default function Voya({ trip }: { trip: any }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: newMessages,
-          context: {
-            destination: trip?.destination,
-            budget: trip?.budget,
-            currency: currency,
-            itinerary: trip?.itinerary
-          }
+          message: userMsg,
+          destination: trip?.destination || '',
+          currency: currency || 'USD',
+          history: newMessages.map(m => ({ role: m.role, content: m.content })),
+          active_itinerary: trip?.itinerary || []
         })
       });
-      const data = await response.json();
-      
-      if (data.reply) {
-        setMessages(prev => [...prev, { role: "assistant", content: data.reply }]);
-      } else {
-        setMessages(prev => [...prev, { role: "assistant", content: "I'm having trouble connecting to my neural network. Try again later!" }]);
+
+      if (!response.ok) {
+        console.error(`HTTP error! status: ${response.status}`);
       }
+
+      const data = await response.json();
+      const aiReply = data.reply || data.response || data.message || data.text || "I'm here to help!";
+
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: aiReply,
+          action: data.action || null
+        }
+      ]);
     } catch (err) {
-      setMessages(prev => [...prev, { role: "assistant", content: "My connection dropped. Please try again." }]);
+      console.error("Voya Chat Fetch Error:", err);
+      setMessages(prev => [...prev, { role: "assistant", content: "Connection hiccup. Please try again." }]);
     } finally {
       setIsLoading(false);
     }

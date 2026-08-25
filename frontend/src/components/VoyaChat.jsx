@@ -34,30 +34,34 @@ export default function VoyaChat({ destination = "", currency = "USD", activeIti
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: userText,
-          destination: destination,
-          currency: currency,
+          destination: destination || '',
+          currency: currency || 'USD',
           history: newHistory.map(m => ({ role: m.role, content: m.content })),
-          active_itinerary: activeItinerary
+          active_itinerary: activeItinerary || []
         })
       });
 
-      const data = await response.json();
-      if (data.status === 'success') {
-        if (data.action?.action === 'INSERT_STOP' && data.action?.stop) {
-          onAddStop(data.action.stop);
-        }
-
-        setMessages(prev => [
-          ...prev,
-          { role: 'assistant', content: data.reply, action: data.action }
-        ]);
-      } else {
-        setMessages(prev => [
-          ...prev,
-          { role: 'assistant', content: data.reply || "I encountered an issue connecting to local services.", action: null }
-        ]);
+      if (!response.ok) {
+        console.error(`HTTP error! status: ${response.status}`);
       }
+
+      const data = await response.json();
+      const aiReply = data.reply || data.response || data.message || data.text || "I'm here to help!";
+
+      if (data.action?.action === 'INSERT_STOP' && data.action?.stop) {
+        onAddStop(data.action.stop);
+      }
+
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: aiReply,
+          action: data.action || null
+        }
+      ]);
     } catch (err) {
+      console.error("Voya Chat fetch error:", err);
       setMessages(prev => [
         ...prev,
         { role: 'assistant', content: "Network error reaching Voya services. Please try again.", action: null }
