@@ -297,12 +297,6 @@ export default function CommandCenter({
       <div className="flex flex-wrap items-center justify-between gap-3 p-4 w-full border-b border-white/10 shrink-0">
         <h2 className="font-syne font-bold text-lg text-white">{t.commandCenter}</h2>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold">
-            <span>🌤️ {weather?.temp_c ?? 28}°C</span>
-            <span className="text-gray-500">|</span>
-            <span className="text-gray-300">{weather?.condition ?? "Sunny"}</span>
-          </div>
-
           <button
             onClick={() => setIsDrawerOpen(true)}
             className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs font-medium hover:bg-emerald-500/30 transition-all"

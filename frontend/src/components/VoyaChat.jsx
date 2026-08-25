@@ -206,7 +206,7 @@ export default function VoyaChat({ destination = "", currency = "USD", activeIti
 
           <div className="flex-1 overflow-y-auto p-4 space-y-4 text-xs text-gray-200">
             {messages.map((m, idx) => (
-              <div key={idx} className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
+              <div key={idx} className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'} animate-fadeInUp`}>
                 <div
                   className={`max-w-[85%] rounded-2xl px-4 py-2.5 leading-relaxed ${
                     m.role === 'user'

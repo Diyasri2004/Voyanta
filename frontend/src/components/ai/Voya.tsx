@@ -228,7 +228,7 @@ export default function Voya({ trip }: { trip: any }) {
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3 hide-scrollbar">
           {messages.map((m: any, i: number) => (
-            <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+            <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"} animate-fadeInUp`}>
               <div className={`max-w-[85%] rounded-xl p-3 text-sm ${
                 m.role === "user" 
                   ? "bg-gradient-to-br from-[#ff007f] to-[#ff007f]/80 text-white rounded-br-sm shadow-[0_0_15px_rgba(255,0,127,0.3)]" 
