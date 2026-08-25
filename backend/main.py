@@ -408,35 +408,39 @@ PILLAR_DESCRIPTIONS = {
 # ─────────────────────────────────────────────
 
 async def call_ai_with_rate_limit_fallback(client: httpx.AsyncClient, prompt: str) -> str:
-    # ── TIER 1: GROQ (Llama-3.3-70b-versatile) ──────────────────────────────
+    # ── TIER 1: GROQ ────────────────────────────────────────────────────────
     if GROQ_API_KEY:
-        try:
-            g_payload = {
-                "model": GROQ_MODEL,
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": "You are Voyanta's AI concierge. Return clean output without conversational fluff or invalid markdown syntax unless requested."
-                    },
-                    {"role": "user", "content": prompt}
-                ],
-                "temperature": 0.3
-            }
-            headers = {
-                "Authorization": f"Bearer {GROQ_API_KEY}",
-                "Content-Type": "application/json"
-            }
-            res = await client.post("https://api.groq.com/openai/v1/chat/completions", json=g_payload, headers=headers, timeout=10.0)
-            if res.status_code == 200:
-                raw = res.json()["choices"][0]["message"]["content"]
-                cleaned = re.sub(r"^```(?:json)?\s*", "", raw.strip(), flags=re.MULTILINE)
-                cleaned = re.sub(r"\s*```$", "", cleaned, flags=re.MULTILINE).strip()
-                logger.info(f"⚡ Instant AI generation succeeded via Groq ({GROQ_MODEL})")
-                return cleaned
-            else:
-                logger.warning(f"Groq {GROQ_MODEL} status {res.status_code}: {res.text[:120]}")
-        except Exception as e:
-            logger.warning(f"Groq connection error: {e}")
+        groq_models = [GROQ_MODEL, "llama-3.3-70b-versatile", "llama-3.1-70b-versatile", "llama-3.1-8b-instant"]
+        seen_g = set()
+        groq_models = [m for m in groq_models if not (m in seen_g or seen_g.add(m))]
+        for g_model in groq_models:
+            try:
+                g_payload = {
+                    "model": g_model,
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": "You are Voyanta's AI concierge. Return clean output without conversational fluff or invalid markdown syntax unless requested."
+                        },
+                        {"role": "user", "content": prompt}
+                    ],
+                    "temperature": 0.3
+                }
+                headers = {
+                    "Authorization": f"Bearer {GROQ_API_KEY}",
+                    "Content-Type": "application/json"
+                }
+                res = await client.post("https://api.groq.com/openai/v1/chat/completions", json=g_payload, headers=headers, timeout=10.0)
+                if res.status_code == 200:
+                    raw = res.json()["choices"][0]["message"]["content"]
+                    cleaned = re.sub(r"^```(?:json)?\s*", "", raw.strip(), flags=re.MULTILINE)
+                    cleaned = re.sub(r"\s*```$", "", cleaned, flags=re.MULTILINE).strip()
+                    logger.info(f"⚡ Instant AI generation succeeded via Groq ({g_model})")
+                    return cleaned
+                else:
+                    logger.warning(f"Groq {g_model} status {res.status_code}: {res.text[:120]}")
+            except Exception as e:
+                logger.warning(f"Groq {g_model} connection error: {e}")
 
     # ── TIER 2: DIRECT OPENROUTER ───────────────────────────────────────────
     if OPENROUTER_API_KEY:
@@ -958,28 +962,28 @@ async def create_dynamic_trip_plan(body: TripPlanRequest, request: Request):
 # ─────────────────────────────────────────────
 
 def extract_json_payload(text: str) -> Optional[Dict[str, Any]]:
-    """Cleanly extracts JSON even if enclosed in markdown code fences or conversational text."""
     if not text:
         return None
     cleaned = text.strip()
-    # Remove markdown code blocks if present
+    
+    # Remove markdown code blocks if wrapped
     if "```" in cleaned:
         cleaned = re.sub(r'^```(?:json)?\s*', '', cleaned, flags=re.MULTILINE)
         cleaned = re.sub(r'\s*```$', '', cleaned, flags=re.MULTILINE).strip()
     
-    # Direct attempt
     try:
         return json.loads(cleaned)
     except Exception:
         pass
 
-    # Regex search for the outermost JSON object
-    match = re.search(r'(\{[\s\S]*\})', cleaned)
-    if match:
-        try:
-            return json.loads(match.group(1))
-        except Exception:
-            pass
+    # Extract JSON object regex pattern safely
+    try:
+        match = re.search(r'\{[\s\S]*\}', cleaned)
+        if match:
+            return json.loads(match.group(0))
+    except Exception:
+        pass
+
     return None
 
 @app.post("/api/chat", tags=["Chat"])
@@ -1030,7 +1034,7 @@ Respond with ONLY a single valid JSON object:
         reply_text = ""
         action_payload = None
 
-        if parsed and isinstance(parsed, dict):
+        if parsed and isinstance(parsed, dict) and ("reply" in parsed or "tool_call" in parsed or "response" in parsed):
             reply_text = parsed.get("reply", "") or parsed.get("response", "")
             tool_data = parsed.get("tool_call")
 
@@ -1041,13 +1045,11 @@ Respond with ONLY a single valid JSON object:
                     tool_args["destination"] = req.destination
                 action_payload = await execute_tool_call(tool_name, tool_args, client=client)
         else:
-            reply_text = raw_res.strip()
-
-        if not reply_text and isinstance(raw_res, str) and raw_res.strip():
+            # If response was plain text or malformed JSON, return raw string cleanly
             reply_text = raw_res.strip()
 
         if not reply_text:
-            reply_text = "I'm ready! Tell me what you'd like to discover or organize for your journey."
+            reply_text = "I'm here! What destination or plan would you like to explore?"
 
         return {
             "status": "success",
