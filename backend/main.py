@@ -1010,6 +1010,7 @@ INSTRUCTIONS:
         return {
             "status": "success",
             "reply": reply_text or "How can I assist your trip further?",
+            "response": reply_text or "How can I assist your trip further?",
             "action": action_payload
         }
 
@@ -1018,12 +1019,15 @@ INSTRUCTIONS:
         try:
             fallback_prompt = f"{system_prompt}\n\nUser Question: {req.message}\nProvide a direct, helpful, concise answer."
             raw_fallback = await call_ai_with_rate_limit_fallback(client, fallback_prompt)
-            return {"status": "success", "reply": raw_fallback.strip(), "action": None}
+            clean_fb = raw_fallback.strip()
+            return {"status": "success", "reply": clean_fb, "response": clean_fb, "action": None}
         except Exception as final_err:
             logger.error(f"Final chat failure: {final_err}")
+            msg = "I'm ready! Please ask your question again."
             return {
                 "status": "success",
-                "reply": "I'm ready! Please ask your question again.",
+                "reply": msg,
+                "response": msg,
                 "action": None
             }
 

@@ -84,21 +84,16 @@ export default function VoyaChat({ destination = "", currency = "USD", activeIti
       }
 
       const data = await response.json();
-      if (data.status === 'success') {
-        if (data.action?.action === 'INSERT_STOP' && data.action?.stop) {
-          onAddStop(data.action.stop);
-        }
+      const outputText = data.reply || data.response || data.message || "Here is what I found for you:";
 
-        setMessages(prev => [
-          ...prev,
-          { role: 'assistant', content: data.reply, action: data.action }
-        ]);
-      } else {
-        setMessages(prev => [
-          ...prev,
-          { role: 'assistant', content: data.reply || "I encountered an issue connecting to local services.", action: null }
-        ]);
+      if (data.action?.action === 'INSERT_STOP' && data.action?.stop) {
+        onAddStop(data.action.stop);
       }
+
+      setMessages(prev => [
+        ...prev,
+        { role: 'assistant', content: outputText, text: outputText, action: data.action || null }
+      ]);
     } catch (err) {
       setMessages(prev => [
         ...prev,

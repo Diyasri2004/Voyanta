@@ -56,7 +56,7 @@ export default function Voya({ trip }: { trip: any }) {
     const userMsg = presetMessage || input.trim();
     if (!userMsg || isLoading) return;
 
-    const newMessages = [...messages, { role: "user", content: userMsg }];
+    const newMessages = [...messages, { role: "user", content: userMsg, text: userMsg }];
     setMessages(newMessages);
     setInput("");
     setIsLoading(true);
@@ -69,7 +69,9 @@ export default function Voya({ trip }: { trip: any }) {
           message: userMsg,
           destination: trip?.destination || '',
           currency: currency || 'USD',
-          history: newMessages.map(m => ({ role: m.role, content: m.content })),
+          user_time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          user_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+          history: newMessages.map(m => ({ role: m.role, content: m.content || m.text })),
           active_itinerary: trip?.itinerary || []
         })
       });
@@ -79,19 +81,20 @@ export default function Voya({ trip }: { trip: any }) {
       }
 
       const data = await response.json();
-      const aiReply = data.reply || data.response || data.message || data.text || "I'm here to help!";
+      const outputText = data.reply || data.response || data.message || "Here is what I found for you:";
 
       setMessages(prev => [
         ...prev,
         {
           role: 'assistant',
-          content: aiReply,
+          content: outputText,
+          text: outputText,
           action: data.action || null
         }
       ]);
     } catch (err) {
       console.error("Voya Chat Fetch Error:", err);
-      setMessages(prev => [...prev, { role: "assistant", content: "Connection hiccup. Please try again." }]);
+      setMessages(prev => [...prev, { role: "assistant", content: "Connection hiccup. Please try again.", text: "Connection hiccup. Please try again." }]);
     } finally {
       setIsLoading(false);
     }
@@ -128,14 +131,45 @@ export default function Voya({ trip }: { trip: any }) {
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3 hide-scrollbar">
-          {messages.map((m, i) => (
+          {messages.map((m: any, i: number) => (
             <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
               <div className={`max-w-[85%] rounded-xl p-3 text-sm ${
                 m.role === "user" 
                   ? "bg-gradient-to-br from-[#ff007f] to-[#ff007f]/80 text-white rounded-br-sm shadow-[0_0_15px_rgba(255,0,127,0.3)]" 
                   : "bg-white/5 text-[#e2e8f0] border border-[#00f0ff]/20 rounded-bl-sm font-plus-jakarta shadow-[0_0_15px_rgba(0,240,255,0.05)]"
               }`}>
-                {m.content}
+                <p className="whitespace-pre-wrap">{m.content || m.text}</p>
+                {/* Action Badges */}
+                {m.action?.booking_platforms && (
+                  <div className="mt-2.5 pt-2 border-t border-white/10 space-y-1">
+                    <div className="text-[11px] font-semibold text-[#ff007f]">🏨 Stays:</div>
+                    <div className="grid grid-cols-2 gap-1 text-[10px]">
+                      {Object.entries(m.action.booking_platforms).map(([p, u]: any) => (
+                        <a key={p} href={u} target="_blank" rel="noreferrer" className="capitalize text-[#00f0ff] underline truncate">{p.replace('_', ' ')}</a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {m.action?.ticket_platforms && (
+                  <div className="mt-2.5 pt-2 border-t border-white/10 space-y-1">
+                    <div className="text-[11px] font-semibold text-[#39ff14]">🎟️ Experience Tickets:</div>
+                    <div className="grid grid-cols-2 gap-1 text-[10px]">
+                      {Object.entries(m.action.ticket_platforms).map(([p, u]: any) => (
+                        <a key={p} href={u} target="_blank" rel="noreferrer" className="capitalize text-[#00f0ff] underline truncate">{p}</a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {m.action?.ride_hailing && (
+                  <div className="mt-2.5 pt-2 border-t border-white/10 space-y-1">
+                    <div className="text-[11px] font-semibold text-[#00f0ff]">🚕 Cabs & Transit:</div>
+                    <div className="grid grid-cols-2 gap-1 text-[10px]">
+                      {Object.entries(m.action.ride_hailing).map(([p, u]: any) => (
+                        <a key={p} href={u} target="_blank" rel="noreferrer" className="capitalize text-[#00f0ff] underline truncate">{p.replace('_', ' ')}</a>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           ))}
