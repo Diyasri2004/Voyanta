@@ -726,194 +726,87 @@ async def generate_itinerary(req: Dict[str, Any], request: Request):
         "total_days": total_days,
         "slots": final_slots
     }
-    dest = destination.strip().title()
-    cat_title = category.replace("_", " ").title()
-    return [
-        {
-            "id": f"{category}_1",
-            "title": f"Iconic {dest} City Center",
-            "name": f"Iconic {dest} City Center",
-            "category": cat_title,
-            "description": f"Must-visit central landmark and vibrant cultural hub in {dest}.",
-            "location": f"Central {dest}",
-            "address": f"Central {dest}",
-            "rating": 4.8,
-            "image_url": "https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=800&q=80",
-            "image": "https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=800&q=80",
-            "maps_url": f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(dest + ' city center')}",
-            "navigation_url": f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(dest + ' city center')}"
-        },
-        {
-            "id": f"{category}_2",
-            "title": f"{dest} Historic Cultural District",
-            "name": f"{dest} Historic Cultural District",
-            "category": cat_title,
-            "description": f"Historic quarter featuring traditional architecture, local markets, and heritage sites in {dest}.",
-            "location": f"Old Quarter, {dest}",
-            "address": f"Old Quarter, {dest}",
-            "rating": 4.7,
-            "image_url": "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80",
-            "image": "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80",
-            "maps_url": f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(dest + ' historic district')}",
-            "navigation_url": f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(dest + ' historic district')}"
-        },
-        {
-            "id": f"{category}_3",
-            "title": f"{dest} Grand Promenade & Park",
-            "name": f"{dest} Grand Promenade & Park",
-            "category": cat_title,
-            "description": f"Scenic open green space and pedestrian walkway offering stunning panoramic views of {dest}.",
-            "location": f"Waterfront, {dest}",
-            "address": f"Waterfront, {dest}",
-            "rating": 4.9,
-            "image_url": "https://images.unsplash.com/photo-1519671482749-fd09be7ccebf?auto=format&fit=crop&w=800&q=80",
-            "image": "https://images.unsplash.com/photo-1519671482749-fd09be7ccebf?auto=format&fit=crop&w=800&q=80",
-            "maps_url": f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(dest + ' promenade')}",
-            "navigation_url": f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(dest + ' promenade')}"
-        }
-    ]
-
-@app.get("/api/places", tags=["Discovery"])
-@app.get("/places", tags=["Discovery"])
-async def get_places_for_destination(request: Request, destination: str = Query("Tokyo"), category: str = Query("attractions")):
-    client = request.app.state.client
-    dest_clean = destination.strip().title()
-    cat_clean = category.strip().lower()
-    cache_key = f"places:{dest_clean.lower()}:{cat_clean}"
-
-    if cache_key in dynamic_cache:
-        return {"status": "success", "places": dynamic_cache[cache_key], "results": dynamic_cache[cache_key]}
-
-    desc = PILLAR_DESCRIPTIONS.get(cat_clean, "attractions and spots")
-    prompt = f'Return JSON: {{"places": [{{"name": "Place Name", "location": "Neighborhood", "description": "Engaging 1-sentence description"}}]}} for 8 top real {desc} in {dest_clean}.'
-    
-    try:
-        raw = await asyncio.wait_for(call_ai_with_rate_limit_fallback(client, prompt), timeout=6.0)
-        data = json.loads(raw)
-        raw_places = data.get("places", [])
-    except Exception as e:
-        logger.warning(f"AI places fetching error/timeout: {e}; returning fallback places")
-        fallback_places = get_default_attractions_for_destination(dest_clean, cat_clean)
-        return {"status": "success", "places": fallback_places, "results": fallback_places}
-
-    async def build_place_card(idx: int, item: dict) -> dict:
-        p_name = clean_venue_title(item.get("name", f"Spot {idx+1}"), dest_clean)
-        p_loc = item.get("location", dest_clean)
-        query_str = f"{p_name}, {p_loc}, {dest_clean}".strip()
-        nav_url = f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(query_str)}"
-        try:
-            img_url = await asyncio.wait_for(
-                fetch_dynamic_place_photo(client, venue=p_name, destination=dest_clean, category=cat_clean),
-                timeout=3.0
-            )
-        except Exception:
-            img_url = "https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=800&q=80"
-        return {
-            "id": f"place_{cat_clean}_{idx+1}",
-            "title": p_name,
-            "name": p_name,
-            "category": cat_clean.replace("_", " ").title(),
-            "description": item.get("description", f"Famous point of interest in {dest_clean}."),
-            "address": p_loc,
-            "location": p_loc,
-            "maps_url": nav_url,
-            "navigation_url": nav_url,
-            "image_url": img_url,
-            "image": img_url,
-            "rating": 4.8
-        }
-
-    tasks = [build_place_card(idx, item) for idx, item in enumerate(raw_places[:10]) if item.get("name")]
-    if not tasks:
-        fallback_places = get_default_attractions_for_destination(dest_clean, cat_clean)
-        return {"status": "success", "places": fallback_places, "results": fallback_places}
-
-    resolved = await asyncio.gather(*tasks)
-    dynamic_cache[cache_key] = resolved
-    return {"status": "success", "places": resolved, "results": resolved}
-
 @app.get("/api/pillar", tags=["Discovery"])
-async def get_single_pillar_data(request: Request, destination: str = Query(..., min_length=1), pillar: str = Query("attractions")):
-    clean_dest = destination.split(",")[0].strip().title()
-    pillar_clean = pillar.strip().lower()
-    cache_key = f"{clean_dest}:{pillar_clean}"
+@app.get("/api/places", tags=["Discovery"])
+@app.get("/pillar", tags=["Discovery"])
+@app.get("/places", tags=["Discovery"])
+async def get_pillar_places(destination: str = Query("New York"), pillar: Optional[str] = Query(None), category: Optional[str] = Query(None), request: Request = None):
+    client = getattr(request.app.state, "client", None) if request else None
+    active_pillar = pillar or category or "attractions"
+    clean_dest = destination.split(",")[0].strip().title() if destination else "New York"
+    cache_key = f"pure_pillar:{clean_dest.lower()}:{active_pillar.lower()}"
 
     if cache_key in dynamic_cache:
-        return {pillar_clean: dynamic_cache[cache_key]}
+        cached_data = dynamic_cache[cache_key]
+        return {"status": "success", "places": cached_data, "results": cached_data, active_pillar: cached_data}
 
-    client = request.app.state.client
+    prompt = f"""You are a master local concierge for {clean_dest}.
+Category/Theme: {active_pillar}
 
-    if pillar_clean in ["theme_parks", "themeparks"]:
-        coords = await resolve_dynamic_coordinates(client, clean_dest)
-        resolved = await build_dynamic_themeparks_pillar(client, clean_dest, coords)
-        dynamic_cache[cache_key] = resolved
-        return {pillar_clean: resolved}
+Generate 6 authentic, world-famous or highly rated REAL venues, attractions, or activities specifically matching the '{active_pillar}' category in {clean_dest}.
+RULES:
+1. Every item MUST be an actual, named real-world location (e.g., for New York Attractions: 'Empire State Building', 'Central Park', 'Metropolitan Museum of Art'; for Culinary: 'Katz\\'s Delicatessen', 'Joe\\'s Pizza', 'Le Bernardin'; for Events: 'Broadway Shows at Times Square', 'Lincoln Center Performances').
+2. NEVER use generic titles like '{clean_dest} City Center' or '{clean_dest} Historic Quarter'.
+3. Provide real neighborhood names (e.g., 'Manhattan', 'Brooklyn', 'SoHo', 'Midtown').
 
-    if pillar_clean == "events":
-        coords = await resolve_dynamic_coordinates(client, clean_dest)
-        resolved = await build_dynamic_events_pillar(client, clean_dest, coords)
-        dynamic_cache[cache_key] = resolved
-        return {pillar_clean: resolved}
-
-    desc = PILLAR_DESCRIPTIONS.get(pillar_clean, "landmarks and venues")
-    prompt = f"""You are a local insider guide for {clean_dest}.
-Generate 8 top-rated, specific, real-world venues or activities for the '{pillar_clean}' category in {clean_dest}.
-Rules:
-- NO generic placeholders like '{clean_dest} City Center' or '{clean_dest} Promenade'.
-- Use actual, famous names (e.g. for Culinary: 'Time Out Market', 'Cervejaria Ramiro', 'Pastéis de Belém').
-
-Return ONLY a JSON array:
+Return ONLY a valid JSON array:
 [
   {{
     "title": "Exact Real Venue Name",
-    "description": "Engaging description with local tips.",
-    "location": "District/Neighborhood",
-    "category": "{pillar_clean}",
+    "description": "Engaging 1-2 sentence description explaining what makes this venue unique.",
+    "location": "Neighborhood / District Name",
+    "category": "{active_pillar}",
     "image_query": "Exact Venue Name {clean_dest}"
   }}
 ]"""
-    try:
-        raw = await asyncio.wait_for(call_ai_with_rate_limit_fallback(client, prompt), timeout=6.0)
-        data = json.loads(raw)
-        items = data.get(pillar_clean, [])
 
-        async def process_item(idx: int, item: dict) -> dict:
-            v_name = clean_venue_title(item.get("name", ""), clean_dest)
-            v_loc = item.get("location", clean_dest)
-            query_str = f"{v_name}, {v_loc}, {clean_dest}".strip()
-            nav_url = f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(query_str)}"
-            try:
-                img_url = await asyncio.wait_for(fetch_dynamic_place_photo(client, venue=v_name, destination=clean_dest, category=pillar_clean), timeout=3.5)
-            except Exception:
-                img_url = ""
+    try:
+        raw_res = await call_ai_with_rate_limit_fallback(client, prompt)
+        parsed = extract_json_payload(raw_res)
+
+        places = []
+        if isinstance(parsed, list):
+            places = parsed
+        elif isinstance(parsed, dict) and "places" in parsed:
+            places = parsed["places"]
+        elif isinstance(parsed, dict) and active_pillar in parsed:
+            places = parsed[active_pillar]
+
+        # Fetch dynamic context-accurate photos per venue
+        async def enrich_card(idx: int, p: dict) -> dict:
+            title = p.get("title") or p.get("name") or f"Venue {idx+1}"
+            title_clean = clean_venue_title(title, clean_dest)
+            location_clean = p.get("location") or p.get("address") or clean_dest
+            query = p.get("image_query") or f"{title_clean} {clean_dest}"
+            nav_url = f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(title_clean + ' ' + location_clean + ' ' + clean_dest)}"
+            
+            img = await fetch_dynamic_venue_image(query, clean_dest, client=client)
             return {
-                "id": f"{pillar_clean}_{idx+1}",
-                "title": v_name,
-                "name": v_name,
-                "category": pillar_clean.replace("_", " ").title(),
-                "description": item.get("description", f"Verified venue in {clean_dest}."),
-                "address": v_loc,
-                "location": v_loc,
+                "id": f"{active_pillar}_{idx+1}",
+                "title": title_clean,
+                "name": title_clean,
+                "category": active_pillar.replace("_", " ").title(),
+                "description": p.get("description", f"Authentic venue in {clean_dest}."),
+                "location": location_clean,
+                "address": location_clean,
                 "maps_url": nav_url,
                 "navigation_url": nav_url,
-                "image_url": img_url,
-                "image": img_url,
+                "image_url": img,
+                "image": img,
+                "rating": 4.8
             }
 
-        tasks = [process_item(idx, item) for idx, item in enumerate(items) if item.get("name")]
-        if not tasks:
-            fallback_cards = get_default_attractions_for_destination(clean_dest, pillar_clean)
-            dynamic_cache[cache_key] = fallback_cards
-            return {pillar_clean: fallback_cards}
+        enriched = await asyncio.gather(*[enrich_card(idx, p) for idx, p in enumerate(places[:6]) if isinstance(p, dict)], return_exceptions=True)
+        valid_places = [p for p in enriched if isinstance(p, dict)]
 
-        resolved = await asyncio.gather(*tasks)
-        dynamic_cache[cache_key] = resolved
-        return {pillar_clean: resolved}
+        if valid_places:
+            dynamic_cache[cache_key] = valid_places
+
+        return {"status": "success", "places": valid_places, "results": valid_places, active_pillar: valid_places}
+
     except Exception as e:
-        logger.error(f"Pillar generation error / timeout: {e}; returning fallback cards")
-        fallback_cards = get_default_attractions_for_destination(clean_dest, pillar_clean)
-        dynamic_cache[cache_key] = fallback_cards
-        return {pillar_clean: fallback_cards}
+        logger.error(f"Pillar dynamic fetch error: {e}")
+        return {"status": "error", "places": [], "results": [], active_pillar: []}
 
 pillar_cache = dynamic_cache
 

@@ -94,52 +94,6 @@ export default function CommandCenter({
     }
   }, [destination]);
 
-  const getFallbackPlaces = (pillarName: string, dest: string): PillarItemData[] => {
-    const cleanDest = dest || "Destination";
-    const catTitle = pillarName.replace("_", " ").toUpperCase();
-    return [
-      {
-        id: `${pillarName}-fallback-1`,
-        title: `${cleanDest} Iconic Landmark`,
-        name: `${cleanDest} Iconic Landmark`,
-        category: catTitle,
-        description: `Must-visit iconic landmark and historic point of interest in ${cleanDest}.`,
-        address: `Central ${cleanDest}`,
-        location: `Central ${cleanDest}`,
-        maps_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cleanDest + ' attraction')}`,
-        navigation_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cleanDest + ' attraction')}`,
-        image_url: "https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=800&q=80",
-        image: "https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=800&q=80",
-      },
-      {
-        id: `${pillarName}-fallback-2`,
-        title: `${cleanDest} Cultural Heritage District`,
-        name: `${cleanDest} Cultural Heritage District`,
-        category: catTitle,
-        description: `Vibrant historic quarter featuring local culture, architecture, and dining in ${cleanDest}.`,
-        address: `Old Quarter, ${cleanDest}`,
-        location: `Old Quarter, ${cleanDest}`,
-        maps_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cleanDest + ' historic district')}`,
-        navigation_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cleanDest + ' historic district')}`,
-        image_url: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80",
-        image: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80",
-      },
-      {
-        id: `${pillarName}-fallback-3`,
-        title: `${cleanDest} Waterfront & Park`,
-        name: `${cleanDest} Waterfront & Park`,
-        category: catTitle,
-        description: `Scenic open space offering panoramic city views and relaxed atmospheres in ${cleanDest}.`,
-        address: `Waterfront, ${cleanDest}`,
-        location: `Waterfront, ${cleanDest}`,
-        maps_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cleanDest + ' waterfront')}`,
-        navigation_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cleanDest + ' waterfront')}`,
-        image_url: "https://images.unsplash.com/photo-1519671482749-fd09be7ccebf?auto=format&fit=crop&w=800&q=80",
-        image: "https://images.unsplash.com/photo-1519671482749-fd09be7ccebf?auto=format&fit=crop&w=800&q=80",
-      }
-    ];
-  };
-
   const fetchPillarData = async (pillarName: string) => {
     if (!destination || destination === "Destination") return;
     if (fetchedRef.current.has(pillarName)) return;
@@ -155,28 +109,20 @@ export default function CommandCenter({
       });
       if (res.ok) {
         const data = await res.json();
-        if (data && data[pillarName] && Array.isArray(data[pillarName]) && data[pillarName].length > 0) {
+        const items = data.places || data.results || data[pillarName] || [];
+        if (Array.isArray(items) && items.length > 0) {
           setPillarCache((prev) => {
-            const updated = { ...prev, [pillarName]: data[pillarName] };
+            const updated = { ...prev, [pillarName]: items };
             try {
-              sessionStorage.setItem(`voyanta_${destination}_${pillarName}`, JSON.stringify(data[pillarName]));
+              sessionStorage.setItem(`voyanta_${destination}_${pillarName}`, JSON.stringify(items));
             } catch (_) {}
             return updated;
           });
-        } else {
-          // Provide fallback cards to prevent infinite skeleton freeze
-          const fallbacks = getFallbackPlaces(pillarName, destination);
-          setPillarCache((prev) => ({ ...prev, [pillarName]: fallbacks }));
         }
-      } else {
-        const fallbacks = getFallbackPlaces(pillarName, destination);
-        setPillarCache((prev) => ({ ...prev, [pillarName]: fallbacks }));
       }
     } catch (err) {
       console.error(`Error fetching pillar ${pillarName}:`, err);
-      // Provide fallback cards to prevent infinite skeleton freeze
-      const fallbacks = getFallbackPlaces(pillarName, destination);
-      setPillarCache((prev) => ({ ...prev, [pillarName]: fallbacks }));
+      fetchedRef.current.delete(pillarName);
     } finally {
       clearTimeout(timeoutId);
       setLoadingPillars((prev) => ({ ...prev, [pillarName]: false }));
