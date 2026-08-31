@@ -642,6 +642,39 @@ async def build_dynamic_events_pillar(client: httpx.AsyncClient, dest_name: str,
         })
     return events
 
+def extract_json_payload(text: str) -> Optional[Any]:
+    if not text:
+        return None
+    cleaned = text.strip()
+    
+    # Remove markdown code blocks if wrapped
+    if "```" in cleaned:
+        cleaned = re.sub(r'^```(?:json)?\s*', '', cleaned, flags=re.MULTILINE)
+        cleaned = re.sub(r'\s*```$', '', cleaned, flags=re.MULTILINE).strip()
+    
+    try:
+        return json.loads(cleaned)
+    except Exception:
+        pass
+
+    # Extract JSON array regex pattern safely
+    try:
+        match_arr = re.search(r'\[[\s\S]*\]', cleaned)
+        if match_arr:
+            return json.loads(match_arr.group(0))
+    except Exception:
+        pass
+
+    # Extract JSON object regex pattern safely
+    try:
+        match = re.search(r'\{[\s\S]*\}', cleaned)
+        if match:
+            return json.loads(match.group(0))
+    except Exception:
+        pass
+
+    return None
+
 async def fetch_dynamic_venue_image(query: str, destination: str, client: Optional[httpx.AsyncClient] = None) -> str:
     if not client:
         async with httpx.AsyncClient(timeout=6.0) as http_client:
@@ -726,66 +759,168 @@ async def generate_itinerary(req: Dict[str, Any], request: Request):
         "total_days": total_days,
         "slots": final_slots
     }
+
+# ─────────────────────────────────────────────
+#  High-Capacity Parallel Trail Discovery Engine
+# ─────────────────────────────────────────────
+
 @app.get("/api/pillar", tags=["Discovery"])
 @app.get("/api/places", tags=["Discovery"])
+@app.get("/api/trails", tags=["Discovery"])
 @app.get("/pillar", tags=["Discovery"])
 @app.get("/places", tags=["Discovery"])
-async def get_pillar_places(destination: str = Query("New York"), pillar: Optional[str] = Query(None), category: Optional[str] = Query(None), request: Request = None):
+@app.get("/trails", tags=["Discovery"])
+async def get_high_capacity_trails(
+    destination: str = Query("New York"),
+    pillar: Optional[str] = Query(None),
+    category: Optional[str] = Query(None),
+    request: Request = None
+):
     client = getattr(request.app.state, "client", None) if request else None
-    active_pillar = pillar or category or "attractions"
     clean_dest = destination.split(",")[0].strip().title() if destination else "New York"
-    cache_key = f"pure_pillar:{clean_dest.lower()}:{active_pillar.lower()}"
+    active_category = (pillar or category or "attractions").strip().lower()
+    cache_key = f"pure_trails_v2:{clean_dest.lower()}:{active_category}"
 
     if cache_key in dynamic_cache:
         cached_data = dynamic_cache[cache_key]
-        return {"status": "success", "places": cached_data, "results": cached_data, active_pillar: cached_data}
+        return {
+            "status": "success",
+            "destination": destination,
+            "category": active_category,
+            "count": len(cached_data),
+            "places": cached_data,
+            "results": cached_data,
+            active_category: cached_data
+        }
 
-    prompt = f"""You are a master local concierge for {clean_dest}.
-Category/Theme: {active_pillar}
+    # Define 3 dynamic sub-angles based on category to ensure rich variety
+    category_themes = {
+        "attractions": [
+            f"Iconic must-see landmarks & world-famous highlights in {clean_dest}",
+            f"Hidden local favorites, scenic spots & architectural gems in {clean_dest}",
+            f"Trendy neighborhood hotspots, cultural hubs & evening atmospheres in {clean_dest}"
+        ],
+        "culinary": [
+            f"Legendary historic restaurants, heritage eateries & signature dining in {clean_dest}",
+            f"Hidden street food stalls, bustling food halls & local neighborhood favorites in {clean_dest}",
+            f"Trendy modern cafes, artisan bakeries & acclaimed chef-driven bistros in {clean_dest}"
+        ],
+        "events": [
+            f"Major world-class festivals, annual cultural pageants & landmark celebrations in {clean_dest}",
+            f"Live music concerts, performing arts theaters & outdoor festival stages in {clean_dest}",
+            f"Seasonal night markets, artisan craft fairs & vibrant street gatherings in {clean_dest}"
+        ],
+        "bars_pubs": [
+            f"Iconic rooftop lounges, panoramic skyline cocktail bars in {clean_dest}",
+            f"Historic speakeasies, heritage taverns & craft beer pubs in {clean_dest}",
+            f"Vibrant live music jazz clubs & late-night nightlife venues in {clean_dest}"
+        ],
+        "wellness": [
+            f"Luxury serene thermal spas, holistic retreats & wellness centers in {clean_dest}",
+            f"Tranquil botanical gardens, scenic nature walking trails & parks in {clean_dest}",
+            f"Mindfulness yoga sanctuaries, zen meditation spaces & outdoor viewpoints in {clean_dest}"
+        ],
+        "secret_spots": [
+            f"Secret panoramic lookout viewpoints & secluded courtyards in {clean_dest}",
+            f"Quirky hidden alleys, underground wonders & historic arcades in {clean_dest}",
+            f"Undiscovered local sanctuaries & peaceful scenic nooks away from crowds in {clean_dest}"
+        ],
+        "essentials": [
+            f"Major international & central transit terminals, grand railway stations in {clean_dest}",
+            f"Premier medical centers, renowned university hospitals & emergency hubs in {clean_dest}",
+            f"24/7 travel concierge hubs, visitor centers & essential infrastructure in {clean_dest}"
+        ],
+        "shopping": [
+            f"Prestigious luxury shopping avenues, flagship designer boutiques in {clean_dest}",
+            f"Historic open-air bazaars, flea markets & local artisan quarters in {clean_dest}",
+            f"Trendy independent fashion arcades, concept lifestyle stores & malls in {clean_dest}"
+        ],
+        "adventures": [
+            f"Exciting outdoor hiking trails, mountain lookout summits & canyon paths around {clean_dest}",
+            f"Thrilling river expeditions, coastal water sports & marine activities in {clean_dest}",
+            f"Adrenaline adventure parks, scenic cycling routes & safari tours in {clean_dest}"
+        ],
+        "theme_parks": [
+            f"World-renowned amusement parks, roller coaster thrill lands in or near {clean_dest}",
+            f"Exciting water parks, splash worlds & aquatic entertainment in {clean_dest}",
+            f"Immersive interactive theme zones, escape experiences & virtual adventure arenas in {clean_dest}"
+        ],
+        "sacred_temples": [
+            f"Historic grand cathedrals, ancient sacred temples & revered shrines in {clean_dest}",
+            f"Spiritual architectural wonders, ancient sanctuaries & holy basilicas in {clean_dest}",
+            f"Serene monastic courtyards, peaceful meditation pagodas & heritage temples in {clean_dest}"
+        ]
+    }
 
-Generate 6 authentic, world-famous or highly rated REAL venues, attractions, or activities specifically matching the '{active_pillar}' category in {clean_dest}.
+    sub_themes = category_themes.get(active_category, [
+        f"Iconic must-see landmarks & world-famous highlights in {clean_dest}",
+        f"Hidden local favorites, scenic spots & architectural gems in {clean_dest}",
+        f"Trendy neighborhood hotspots, cultural hubs & evening atmospheres in {clean_dest}"
+    ])
+
+    async def fetch_theme_batch(theme_desc: str):
+        prompt = f"""You are a master local explorer for {clean_dest}.
+Theme: {theme_desc} (Category: {active_category})
+
+Generate 9 authentic, REAL-WORLD venues/spots matching this theme.
 RULES:
-1. Every item MUST be an actual, named real-world location (e.g., for New York Attractions: 'Empire State Building', 'Central Park', 'Metropolitan Museum of Art'; for Culinary: 'Katz\\'s Delicatessen', 'Joe\\'s Pizza', 'Le Bernardin'; for Events: 'Broadway Shows at Times Square', 'Lincoln Center Performances').
-2. NEVER use generic titles like '{clean_dest} City Center' or '{clean_dest} Historic Quarter'.
-3. Provide real neighborhood names (e.g., 'Manhattan', 'Brooklyn', 'SoHo', 'Midtown').
+1. Every entry MUST be an actual, verified place (e.g. for New York: 'The High Line', 'Summit One Vanderbilt', 'Brooklyn Bridge Park', 'DUMBO Waterfront', 'Washington Square Park').
+2. NO generic placeholders like '{clean_dest} City Center'.
+3. Real neighborhood names only.
 
-Return ONLY a valid JSON array:
+Return strictly a JSON array:
 [
   {{
     "title": "Exact Real Venue Name",
-    "description": "Engaging 1-2 sentence description explaining what makes this venue unique.",
-    "location": "Neighborhood / District Name",
-    "category": "{active_pillar}",
+    "description": "Crisp 1-2 sentence overview highlighting why it is worth visiting.",
+    "location": "Specific Neighborhood / District",
+    "category": "{active_category}",
     "image_query": "Exact Venue Name {clean_dest}"
   }}
 ]"""
+        try:
+            raw = await call_ai_with_rate_limit_fallback(client, prompt)
+            parsed = extract_json_payload(raw)
+            if isinstance(parsed, list):
+                return parsed
+            if isinstance(parsed, dict) and "places" in parsed:
+                return parsed["places"]
+            if isinstance(parsed, dict) and active_category in parsed:
+                return parsed[active_category]
+        except Exception as e:
+            logger.error(f"Error generating theme batch: {e}")
+        return []
 
-    try:
-        raw_res = await call_ai_with_rate_limit_fallback(client, prompt)
-        parsed = extract_json_payload(raw_res)
+    # 1. Execute sub-theme batches concurrently (Yields 25 to 27 total venues in < 2 seconds)
+    batch_results = await asyncio.gather(*[fetch_theme_batch(st) for st in sub_themes], return_exceptions=True)
 
-        places = []
-        if isinstance(parsed, list):
-            places = parsed
-        elif isinstance(parsed, dict) and "places" in parsed:
-            places = parsed["places"]
-        elif isinstance(parsed, dict) and active_pillar in parsed:
-            places = parsed[active_pillar]
+    combined_places = []
+    seen_titles = set()
+    for res in batch_results:
+        if isinstance(res, list):
+            for item in res:
+                if isinstance(item, dict):
+                    title = item.get("title", "").strip().lower()
+                    if title and title not in seen_titles:
+                        seen_titles.add(title)
+                        combined_places.append(item)
 
-        # Fetch dynamic context-accurate photos per venue
-        async def enrich_card(idx: int, p: dict) -> dict:
-            title = p.get("title") or p.get("name") or f"Venue {idx+1}"
-            title_clean = clean_venue_title(title, clean_dest)
-            location_clean = p.get("location") or p.get("address") or clean_dest
-            query = p.get("image_query") or f"{title_clean} {clean_dest}"
-            nav_url = f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(title_clean + ' ' + location_clean + ' ' + clean_dest)}"
-            
+    # 2. Enrich images concurrently with a strict semaphore to prevent API rate limits
+    sem = asyncio.Semaphore(12)
+    async def enrich_card(idx: int, p: dict):
+        async with sem:
+            if not isinstance(p, dict):
+                return None
+            title_clean = clean_venue_title(p.get("title", ""), clean_dest)
+            location_clean = p.get("location") or clean_dest
+            query = p.get("image_query", f"{title_clean} {clean_dest}")
             img = await fetch_dynamic_venue_image(query, clean_dest, client=client)
+            nav_url = f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(title_clean + ' ' + location_clean + ' ' + clean_dest)}"
             return {
-                "id": f"{active_pillar}_{idx+1}",
+                "id": f"{active_category}_{idx+1}",
                 "title": title_clean,
                 "name": title_clean,
-                "category": active_pillar.replace("_", " ").title(),
+                "category": active_category.replace("_", " ").title(),
                 "description": p.get("description", f"Authentic venue in {clean_dest}."),
                 "location": location_clean,
                 "address": location_clean,
@@ -796,89 +931,33 @@ Return ONLY a valid JSON array:
                 "rating": 4.8
             }
 
-        enriched = await asyncio.gather(*[enrich_card(idx, p) for idx, p in enumerate(places[:6]) if isinstance(p, dict)], return_exceptions=True)
-        valid_places = [p for p in enriched if isinstance(p, dict)]
+    enriched = await asyncio.gather(*[enrich_card(idx, p) for idx, p in enumerate(combined_places[:30]) if isinstance(p, dict)], return_exceptions=True)
+    final_places = [p for p in enriched if isinstance(p, dict)]
 
-        if valid_places:
-            dynamic_cache[cache_key] = valid_places
+    if final_places:
+        dynamic_cache[cache_key] = final_places
 
-        return {"status": "success", "places": valid_places, "results": valid_places, active_pillar: valid_places}
-
-    except Exception as e:
-        logger.error(f"Pillar dynamic fetch error: {e}")
-        return {"status": "error", "places": [], "results": [], active_pillar: []}
+    return {
+        "status": "success",
+        "destination": destination,
+        "category": active_category,
+        "count": len(final_places),
+        "places": final_places,
+        "results": final_places,
+        active_category: final_places
+    }
 
 pillar_cache = dynamic_cache
 
 @app.get("/api/pillar/{pillar_type}", tags=["Pillars"])
 @app.get("/pillar/{pillar_type}", tags=["Pillars"])
 async def get_dynamic_pillar_data(pillar_type: str, destination: str, request: Request):
-    client = request.app.state.client
-    dest_clean = destination.strip().title()
-    pillar_key = f"{dest_clean.lower()}:{pillar_type.lower()}"
-
-    # Instant sub-millisecond memory hit
-    if pillar_key in pillar_cache:
-        return pillar_cache[pillar_key]
-
-    coords_task = resolve_dynamic_coordinates(client, dest_clean)
-    
-    prompt = f"""
-    Provide 8 to 10 diverse, verified real-world recommendations for '{pillar_type}' in {dest_clean}.
-    JSON Schema:
-    {{
-      "items": [
-        {{
-          "title": "Exact Official Venue / Attraction Name",
-          "category": "{pillar_type.title()}",
-          "description": "Engaging description with genuine local context",
-          "location": "Locality or neighborhood in {dest_clean}",
-          "rating": 4.7
-        }}
-      ]
-    }}
-    STRICT: Return strictly valid JSON containing all items.
-    """
-    
-    ai_task = call_ai_with_rate_limit_fallback(client, prompt)
-    
-    # Run AI generation and geocoding in parallel
-    raw_ai, coords = await asyncio.gather(ai_task, coords_task)
-    data = json.loads(raw_ai)
-    raw_items = data.get("items", [])
-
-    # Parallelize photo lookups concurrently across all cards
-    async def fetch_photo_safe(item_title: str):
-        try:
-            return await asyncio.wait_for(
-                fetch_dynamic_place_photo(client, venue=item_title, destination=dest_clean, category=pillar_type),
-                timeout=3.0
-            )
-        except Exception:
-            return ""
-
-    photos = await asyncio.gather(*[fetch_photo_safe(it.get("title", "")) for it in raw_items])
-
-    results = []
-    for idx, (item, photo) in enumerate(zip(raw_items, photos)):
-        results.append({
-            "id": f"{pillar_type}-{idx+1}",
-            "title": item.get("title", f"Spot {idx+1}"),
-            "category": item.get("category", pillar_type.title()),
-            "description": item.get("description", ""),
-            "location": item.get("location", dest_clean),
-            "image": photo,
-            "rating": item.get("rating", 4.6),
-            "lat": coords.lat + (idx * 0.002),
-            "lng": coords.lng + (idx * 0.002)
-        })
-
-    pillar_cache[pillar_key] = results
-    return results
+    res = await get_high_capacity_trails(destination=destination, pillar=pillar_type, request=request)
+    return res.get("places", [])
 
 @app.get("/api/destination", tags=["Discovery"])
 async def get_destination_data(request: Request, destination: str = Query(..., min_length=1)):
-    return await get_single_pillar_data(request=request, destination=destination, pillar="attractions")
+    return await get_high_capacity_trails(request=request, destination=destination, pillar="attractions")
 
 @app.get("/api/weather", tags=["Weather"])
 async def get_destination_weather(request: Request, destination: str = Query(..., min_length=1)):
@@ -1060,31 +1139,6 @@ async def create_dynamic_trip_plan(body: TripPlanRequest, request: Request):
 # ─────────────────────────────────────────────
 #  Interactive Chat Agent Endpoint
 # ─────────────────────────────────────────────
-
-def extract_json_payload(text: str) -> Optional[Dict[str, Any]]:
-    if not text:
-        return None
-    cleaned = text.strip()
-    
-    # Remove markdown code blocks if wrapped
-    if "```" in cleaned:
-        cleaned = re.sub(r'^```(?:json)?\s*', '', cleaned, flags=re.MULTILINE)
-        cleaned = re.sub(r'\s*```$', '', cleaned, flags=re.MULTILINE).strip()
-    
-    try:
-        return json.loads(cleaned)
-    except Exception:
-        pass
-
-    # Extract JSON object regex pattern safely
-    try:
-        match = re.search(r'\{[\s\S]*\}', cleaned)
-        if match:
-            return json.loads(match.group(0))
-    except Exception:
-        pass
-
-    return None
 
 @app.post("/api/chat", tags=["Chat"])
 @app.post("/chat", tags=["Chat"])

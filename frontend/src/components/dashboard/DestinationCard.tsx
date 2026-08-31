@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { MapPin, Navigation, Plus, Heart } from "lucide-react";
+import { Navigation, Plus, Heart, Check } from "lucide-react";
 
 export interface DestinationCardProps {
   item?: {
@@ -17,6 +17,7 @@ export interface DestinationCardProps {
     image_url?: string;
     image?: string;
   };
+  index?: number;
   destination?: string;
   onLike?: () => void;
   isLiked?: boolean;
@@ -26,67 +27,57 @@ export interface DestinationCardProps {
 
 export const DestinationCard = ({
   item = {},
+  index = 0,
   destination = "",
   onAddToPlan,
   isLiked = false,
   onLike,
   isAdded = false,
 }: DestinationCardProps) => {
-  const name = item.name || item.title || "Landmark";
+  const title = item.title || item.name || "Landmark";
   const locationText = item.location || item.address || (destination ? `${destination} Area` : "Local Area");
   const categoryText = item.category || "ATTRACTION";
-  const imageUrl =
-    item.image_url ||
-    item.image ||
-    "";
+  const imageUrl = item.image || item.image_url || "/fallback-travel.jpg";
 
   const navUrl =
     item.navigation_url ||
     item.maps_url ||
     `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-      `${name}, ${locationText || ""}, ${destination}`
+      `${title}, ${locationText || ""}, ${destination}`
     )}`;
 
   return (
-    <div className="group relative bg-zinc-900/90 border border-zinc-800/80 hover:border-cyan-500/40 rounded-2xl overflow-hidden flex flex-col h-[380px] min-h-[380px] transition-all duration-300 hover:shadow-xl hover:shadow-cyan-500/10">
+    <div
+      style={{
+        animation: "fadeInUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards",
+        animationDelay: `${Math.min(index * 0.04, 0.6)}s`,
+        opacity: 0,
+      }}
+      className="group relative flex flex-col rounded-2xl bg-neutral-900/80 border border-white/10 overflow-hidden shadow-lg transition-transform duration-300 hover:-translate-y-1 hover:border-pink-500/40 min-h-[380px]"
+    >
       {/* Background Image Container */}
-      <div className="relative h-48 w-full aspect-video shrink-0 overflow-hidden bg-zinc-950">
-        {imageUrl ? (
-          <img
-            src={imageUrl}
-            alt={name}
-            loading="lazy"
-            decoding="async"
-            {...({ fetchPriority: "low" } as any)}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-            onError={(e) => {
-              const target = e.target as HTMLImageElement;
-              target.onerror = null;
-              target.style.display = "none";
-            }}
-          />
-        ) : null}
-        <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/30 to-transparent" />
+      <div className="relative h-48 w-full overflow-hidden bg-neutral-800 shrink-0">
+        <img
+          src={imageUrl}
+          alt={title}
+          loading="lazy"
+          decoding="async"
+          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+          onError={(e) => {
+            const target = e.target as HTMLImageElement;
+            target.onerror = null;
+            target.src = "https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=800&q=80";
+          }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-neutral-950/80 via-transparent to-transparent pointer-events-none" />
 
-        {/* Top Badges */}
+        {/* Category Badge */}
+        <span className="absolute top-3 left-3 px-2.5 py-1 rounded-full text-xs font-semibold bg-black/60 backdrop-blur-md text-pink-400 border border-white/10 uppercase tracking-wider">
+          {categoryText}
+        </span>
+
+        {/* Action icons top-right */}
         <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10">
-          {onAddToPlan && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                onAddToPlan(item);
-              }}
-              className={`p-1.5 rounded-full backdrop-blur-md transition-all active:scale-95 shadow-md ${
-                isAdded ? "bg-cyan-500 text-white" : "bg-black/40 text-zinc-300 hover:bg-black/70"
-              }`}
-              title="Add to Itinerary Plan"
-            >
-              <Plus className="w-4 h-4" />
-            </button>
-          )}
-
           {onLike && (
             <button
               type="button"
@@ -95,7 +86,8 @@ export const DestinationCard = ({
                 e.stopPropagation();
                 onLike();
               }}
-              className="p-1.5 rounded-full bg-black/40 text-zinc-300 hover:bg-white/30 backdrop-blur-md transition-all active:scale-95 shadow-md"
+              className="p-1.5 rounded-full bg-black/50 text-zinc-300 hover:bg-black/80 backdrop-blur-md transition-all active:scale-95 border border-white/10"
+              title="Like venue"
             >
               <Heart
                 className={`w-4 h-4 transition-all ${
@@ -107,39 +99,60 @@ export const DestinationCard = ({
         </div>
       </div>
 
-      {/* Card Content & Footer */}
-      <div className="p-4 flex flex-col justify-between flex-1">
+      {/* Card Content */}
+      <div className="p-4 flex flex-col flex-1 justify-between">
         <div>
-          <p className="text-[10px] uppercase tracking-wider text-cyan-400 font-semibold mb-1">
-            {categoryText}
-          </p>
-          <h3 className="font-semibold text-base text-zinc-100 line-clamp-1 group-hover:text-cyan-400 transition-colors">
-            {name}
-          </h3>
-          <p className="text-xs text-zinc-400 mt-1 line-clamp-2 leading-relaxed">
-            {item.description || `Verified ${categoryText.toLowerCase()} venue in ${destination}.`}
+          <h4 className="text-base font-bold text-white line-clamp-1 group-hover:text-pink-400 transition-colors">
+            {title}
+          </h4>
+          <p className="mt-1.5 text-xs text-neutral-400 line-clamp-2 leading-relaxed">
+            {item.description || `Verified authentic ${categoryText.toLowerCase()} spot in ${destination}.`}
           </p>
         </div>
 
-        {/* Footer Container */}
-        <div className="pt-3 mt-2 border-t border-zinc-800/80 flex items-center justify-between gap-2 w-full">
-          <div className="flex items-center gap-1.5 text-xs text-zinc-400 min-w-0 flex-1">
-            <MapPin className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
-            <span className="truncate text-[11px] text-zinc-400 block">
-              {locationText}
-            </span>
+        {/* Footer with Location & Buttons */}
+        <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-xs text-neutral-400 gap-2">
+          <span className="truncate max-w-[130px] flex items-center gap-1 text-neutral-400" title={locationText}>
+            📍 {locationText}
+          </span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <a
+              href={navUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/15 text-neutral-300 transition-colors font-medium text-xs flex items-center gap-1 border border-white/10"
+              title="View on Maps"
+            >
+              <Navigation className="w-3 h-3" />
+              <span>Map</span>
+            </a>
+            {onAddToPlan && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onAddToPlan(item);
+                }}
+                className={`px-3 py-1 rounded-lg transition-colors font-medium text-xs flex items-center gap-1 ${
+                  isAdded
+                    ? "bg-pink-600 text-white"
+                    : "bg-white/10 hover:bg-pink-600 hover:text-white text-gray-200"
+                }`}
+              >
+                {isAdded ? (
+                  <>
+                    <Check className="w-3 h-3" /> Added
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-3 h-3" /> Add
+                  </>
+                )}
+              </button>
+            )}
           </div>
-
-          <a
-            href={navUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className="shrink-0 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-medium hover:bg-cyan-500/20 transition-all flex items-center gap-1"
-          >
-            <Navigation className="w-3 h-3 shrink-0" />
-            <span>Navigate</span>
-          </a>
         </div>
       </div>
     </div>

@@ -17,20 +17,21 @@ export function DestinationGrid({
   likedIds = {},
   onToggleLike,
 }: DestinationGridProps) {
-  const itemsToRender = items; // DO NOT use .slice()
+  const itemsToRender = items || [];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 p-4">
-      {itemsToRender.map((item, idx) => {
-        const itemId = item.id || `grid-card-${idx}`;
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 p-4">
+      {itemsToRender.map((place, idx) => {
+        const itemId = place.id || `grid-card-${idx}`;
         return (
           <DestinationCard
             key={itemId}
-            item={item}
+            item={place}
+            index={idx}
             destination={destination}
             isLiked={!!likedIds[itemId]}
             onLike={onToggleLike ? () => onToggleLike(itemId) : undefined}
-            onAddToPlan={onAddToPlan ? () => onAddToPlan(item) : undefined}
+            onAddToPlan={onAddToPlan ? () => onAddToPlan(place) : undefined}
           />
         );
       })}
