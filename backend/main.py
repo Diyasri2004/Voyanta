@@ -5,6 +5,8 @@ import httpx
 import re
 import urllib.parse
 import asyncio
+import time
+from collections import OrderedDict
 from datetime import date
 from uuid import UUID
 from contextlib import asynccontextmanager
@@ -22,7 +24,31 @@ from chat_agent import get_voya_system_prompt, get_chat_agent_tools, execute_too
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("voyanta")
 
-# 24-hour dynamic in-memory cache
+# In-Memory High-Speed LRU Cache for Sub-Millisecond Hits
+class FastTTLCache:
+    def __init__(self, maxsize=150, ttl=3600):
+        self.cache = OrderedDict()
+        self.maxsize = maxsize
+        self.ttl = ttl
+
+    def get(self, key):
+        if key not in self.cache:
+            return None
+        val, exp = self.cache[key]
+        if time.time() > exp:
+            del self.cache[key]
+            return None
+        self.cache.move_to_end(key)
+        return val
+
+    def set(self, key, value):
+        if key in self.cache:
+            self.cache.move_to_end(key)
+        self.cache[key] = (value, time.time() + self.ttl)
+        if len(self.cache) > self.maxsize:
+            self.cache.popitem(last=False)
+
+response_cache = FastTTLCache(maxsize=200, ttl=86400)
 dynamic_cache = TTLCache(maxsize=2000, ttl=86400)
 
 # Environment Variables
@@ -675,17 +701,77 @@ def extract_json_payload(text: str) -> Optional[Any]:
 
     return None
 
+CATEGORY_IMAGE_FALLBACKS = {
+    "attractions": [
+        "https://images.unsplash.com/photo-1506973035872-a4ec16b8e8d9?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?auto=format&fit=crop&w=800&q=80"
+    ],
+    "culinary": [
+        "https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1552611052-33e04de081de?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1565299585323-38d6b0865b47?auto=format&fit=crop&w=800&q=80"
+    ],
+    "bars_pubs": [
+        "https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1572116469696-31de0f17cc34?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1543007630-9710e4a00a20?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1566417713940-fe7c737a9ef2?auto=format&fit=crop&w=800&q=80"
+    ],
+    "wellness": [
+        "https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1519710164239-da123dc03ef4?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&w=800&q=80"
+    ],
+    "secret_spots": [
+        "https://images.unsplash.com/photo-1533105079780-92b9be482077?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1516483638261-f4dbaf036963?auto=format&fit=crop&w=800&q=80"
+    ],
+    "shopping": [
+        "https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1528698827591-e19ccd7bc23d?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=800&q=80"
+    ],
+    "adventures": [
+        "https://images.unsplash.com/photo-1533240332313-0db49b459ad6?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1501555088652-021faa106b9b?auto=format&fit=crop&w=800&q=80"
+    ],
+    "theme_parks": [
+        "https://images.unsplash.com/photo-1513889961551-628c1e5e2ee9?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1561571994-3c61c554181a?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1508873696983-2df5293cb32f?auto=format&fit=crop&w=800&q=80"
+    ],
+    "sacred_temples": [
+        "https://images.unsplash.com/photo-1548013146-72479768bada?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1564507592333-c60657eea523?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1503899036084-c55cdd92da26?auto=format&fit=crop&w=800&q=80"
+    ],
+    "events": [
+        "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=800&q=80"
+    ],
+    "essentials": [
+        "https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1519501025264-65ba15a82390?auto=format&fit=crop&w=800&q=80"
+    ]
+}
+
+def get_fast_dynamic_image_url(query: str, destination: str, category: str = "", idx: int = 0) -> str:
+    cat_key = category.lower().replace(" ", "_")
+    pool = CATEGORY_IMAGE_FALLBACKS.get(cat_key, CATEGORY_IMAGE_FALLBACKS["attractions"])
+    return pool[idx % len(pool)]
+
 async def fetch_dynamic_venue_image(query: str, destination: str, client: Optional[httpx.AsyncClient] = None) -> str:
-    if not client:
-        async with httpx.AsyncClient(timeout=6.0) as http_client:
-            try:
-                return await fetch_dynamic_place_photo(http_client, venue=query, destination=destination)
-            except Exception:
-                return "https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=800&q=80"
-    try:
-        return await fetch_dynamic_place_photo(client, venue=query, destination=destination)
-    except Exception:
-        return "https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=800&q=80"
+    return get_fast_dynamic_image_url(query, destination, "attractions", 0)
 
 async def generate_itinerary_segment(destination: str, start_day: int, end_day: int, client: httpx.AsyncClient) -> List[Dict[str, Any]]:
     prompt = f"""You are a master local travel curator.
@@ -709,14 +795,14 @@ Output strictly a JSON array of slot objects:
 ]"""
 
     try:
-        raw = await call_ai_with_rate_limit_fallback(client, prompt)
+        raw = await asyncio.wait_for(call_ai_with_rate_limit_fallback(client, prompt), timeout=3.5)
         parsed = extract_json_payload(raw)
         if isinstance(parsed, list):
             return parsed
         if isinstance(parsed, dict) and "slots" in parsed:
             return parsed["slots"]
     except Exception as e:
-        logger.error(f"Error generating days {start_day}-{end_day}: {e}")
+        logger.warning(f"Error generating days {start_day}-{end_day}: {e}")
     return []
 
 @app.post("/api/itinerary/generate", tags=["Trips"])
@@ -725,8 +811,13 @@ async def generate_itinerary(req: Dict[str, Any], request: Request):
     client = request.app.state.client
     destination = (req.get("destination") or req.get("location") or "Lisbon").strip().title()
     total_days = min(max(int(req.get("days") or 3), 1), 30)
+    cache_key = f"itinerary_{destination.lower()}_{total_days}"
 
-    # 1. Chunk execution into 5-day parallel batches to beat server timeouts
+    cached_data = response_cache.get(cache_key)
+    if cached_data:
+        return cached_data
+
+    # 1. Chunk execution into 5-day parallel batches with strict timeout
     chunk_size = 5
     tasks = []
     for start in range(1, total_days + 1, chunk_size):
@@ -740,25 +831,24 @@ async def generate_itinerary(req: Dict[str, Any], request: Request):
         if isinstance(res, list):
             all_slots.extend(res)
 
-    # 2. Enrich slot images concurrently with a strict concurrency semaphore
-    sem = asyncio.Semaphore(10)
-    async def enrich_slot(slot):
-        async with sem:
-            if not isinstance(slot, dict):
-                return slot
+    for idx, slot in enumerate(all_slots):
+        if isinstance(slot, dict):
             title = slot.get("title", destination)
-            slot["image"] = await fetch_dynamic_venue_image(f"{title} {destination}", destination, client=client)
-            return slot
+            cat = slot.get("category", "attractions")
+            slot["image"] = get_fast_dynamic_image_url(title, destination, cat, idx)
 
-    enriched_slots = await asyncio.gather(*[enrich_slot(s) for s in all_slots], return_exceptions=True)
-    final_slots = [s for s in enriched_slots if isinstance(s, dict)]
+    final_slots = [s for s in all_slots if isinstance(s, dict)]
 
-    return {
+    payload = {
         "status": "success",
         "destination": destination,
         "total_days": total_days,
         "slots": final_slots
     }
+    if final_slots:
+        response_cache.set(cache_key, payload)
+
+    return payload
 
 # ─────────────────────────────────────────────
 #  High-Capacity Parallel Trail Discovery Engine
@@ -776,22 +866,15 @@ async def get_high_capacity_trails(
     category: Optional[str] = Query(None),
     request: Request = None
 ):
-    client = getattr(request.app.state, "client", None) if request else None
     clean_dest = destination.split(",")[0].strip().title() if destination else "New York"
     active_category = (pillar or category or "attractions").strip().lower()
-    cache_key = f"pure_trails_v2:{clean_dest.lower()}:{active_category}"
+    cache_key = f"trails_{clean_dest}_{active_category}".lower()
 
-    if cache_key in dynamic_cache:
-        cached_data = dynamic_cache[cache_key]
-        return {
-            "status": "success",
-            "destination": destination,
-            "category": active_category,
-            "count": len(cached_data),
-            "places": cached_data,
-            "results": cached_data,
-            active_category: cached_data
-        }
+    cached_data = response_cache.get(cache_key)
+    if cached_data:
+        return cached_data
+
+    client = getattr(request.app.state, "client", None) if request else None
 
     # Define 3 dynamic sub-angles based on category to ensure rich variety
     category_themes = {
@@ -859,27 +942,21 @@ async def get_high_capacity_trails(
     ])
 
     async def fetch_theme_batch(theme_desc: str):
-        prompt = f"""You are a master local explorer for {clean_dest}.
+        prompt = f"""Local guide for {clean_dest}.
 Theme: {theme_desc} (Category: {active_category})
 
-Generate 9 authentic, REAL-WORLD venues/spots matching this theme.
-RULES:
-1. Every entry MUST be an actual, verified place (e.g. for New York: 'The High Line', 'Summit One Vanderbilt', 'Brooklyn Bridge Park', 'DUMBO Waterfront', 'Washington Square Park').
-2. NO generic placeholders like '{clean_dest} City Center'.
-3. Real neighborhood names only.
-
+Generate 9 authentic, verified real-world places. No generic titles.
 Return strictly a JSON array:
 [
   {{
     "title": "Exact Real Venue Name",
-    "description": "Crisp 1-2 sentence overview highlighting why it is worth visiting.",
-    "location": "Specific Neighborhood / District",
-    "category": "{active_category}",
-    "image_query": "Exact Venue Name {clean_dest}"
+    "description": "1 concise sentence overview.",
+    "location": "District / Neighborhood",
+    "category": "{active_category}"
   }}
 ]"""
         try:
-            raw = await call_ai_with_rate_limit_fallback(client, prompt)
+            raw = await asyncio.wait_for(call_ai_with_rate_limit_fallback(client, prompt), timeout=3.5)
             parsed = extract_json_payload(raw)
             if isinstance(parsed, list):
                 return parsed
@@ -888,64 +965,59 @@ Return strictly a JSON array:
             if isinstance(parsed, dict) and active_category in parsed:
                 return parsed[active_category]
         except Exception as e:
-            logger.error(f"Error generating theme batch: {e}")
+            logger.warning(f"Theme batch error: {e}")
         return []
 
-    # 1. Execute sub-theme batches concurrently (Yields 25 to 27 total venues in < 2 seconds)
+    # 1. Fetch 3 sub-batches in parallel with strict 3.5s timeout
     batch_results = await asyncio.gather(*[fetch_theme_batch(st) for st in sub_themes], return_exceptions=True)
 
-    combined_places = []
+    places = []
     seen_titles = set()
+    card_idx = 1
     for res in batch_results:
         if isinstance(res, list):
             for item in res:
                 if isinstance(item, dict):
-                    title = item.get("title", "").strip().lower()
-                    if title and title not in seen_titles:
-                        seen_titles.add(title)
-                        combined_places.append(item)
+                    t = item.get("title", "").strip()
+                    if t and t.lower() not in seen_titles:
+                        seen_titles.add(t.lower())
+                        title_clean = clean_venue_title(t, clean_dest)
+                        location_clean = item.get("location") or clean_dest
+                        nav_url = f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(title_clean + ' ' + location_clean + ' ' + clean_dest)}"
+                        image_url = get_fast_dynamic_image_url(title_clean, clean_dest, active_category, card_idx)
 
-    # 2. Enrich images concurrently with a strict semaphore to prevent API rate limits
-    sem = asyncio.Semaphore(12)
-    async def enrich_card(idx: int, p: dict):
-        async with sem:
-            if not isinstance(p, dict):
-                return None
-            title_clean = clean_venue_title(p.get("title", ""), clean_dest)
-            location_clean = p.get("location") or clean_dest
-            query = p.get("image_query", f"{title_clean} {clean_dest}")
-            img = await fetch_dynamic_venue_image(query, clean_dest, client=client)
-            nav_url = f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(title_clean + ' ' + location_clean + ' ' + clean_dest)}"
-            return {
-                "id": f"{active_category}_{idx+1}",
-                "title": title_clean,
-                "name": title_clean,
-                "category": active_category.replace("_", " ").title(),
-                "description": p.get("description", f"Authentic venue in {clean_dest}."),
-                "location": location_clean,
-                "address": location_clean,
-                "maps_url": nav_url,
-                "navigation_url": nav_url,
-                "image_url": img,
-                "image": img,
-                "rating": 4.8
-            }
+                        card = {
+                            "id": f"{active_category}_{card_idx}",
+                            "title": title_clean,
+                            "name": title_clean,
+                            "category": active_category.replace("_", " ").title(),
+                            "description": item.get("description", f"Verified authentic {active_category} venue in {clean_dest}."),
+                            "location": location_clean,
+                            "address": location_clean,
+                            "maps_url": nav_url,
+                            "navigation_url": nav_url,
+                            "image_url": image_url,
+                            "image": image_url,
+                            "rating": 4.8
+                        }
+                        places.append(card)
+                        card_idx += 1
 
-    enriched = await asyncio.gather(*[enrich_card(idx, p) for idx, p in enumerate(combined_places[:30]) if isinstance(p, dict)], return_exceptions=True)
-    final_places = [p for p in enriched if isinstance(p, dict)]
-
-    if final_places:
-        dynamic_cache[cache_key] = final_places
-
-    return {
+    response_payload = {
         "status": "success",
         "destination": destination,
         "category": active_category,
-        "count": len(final_places),
-        "places": final_places,
-        "results": final_places,
-        active_category: final_places
+        "count": len(places),
+        "places": places,
+        "results": places,
+        active_category: places
     }
+
+    if places:
+        response_cache.set(cache_key, response_payload)
+        dynamic_cache[f"pure_trails_v2:{clean_dest.lower()}:{active_category}"] = places
+
+    return response_payload
 
 pillar_cache = dynamic_cache
 
