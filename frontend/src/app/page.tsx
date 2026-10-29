@@ -400,7 +400,8 @@ export default function Page() {
       }
     } catch (err) {
       setTrip(null);
-      setError(err instanceof Error ? err.message : "Something went wrong.");
+      const msg = err instanceof Error ? err.message : "";
+      setError(!msg || msg.trimStart().startsWith("<") ? "The Voyanta server is unavailable right now. Please try again shortly." : msg);
     } finally {
       setLoading(false);
     }
@@ -446,6 +447,8 @@ export default function Page() {
         dangerouslySetInnerHTML={{
           __html: `
             @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Syne:wght@400;600;700;800&display=swap');
+            html, body { max-width: 100%; overflow-x: hidden; }
+            input[type="date"] { min-width: 0; -webkit-appearance: none; appearance: none; }
             body {
               background: #05070A;
               margin: 0;
@@ -479,12 +482,12 @@ export default function Page() {
         }}
       />
 
-      <div className="relative min-h-screen h-screen max-h-screen overflow-hidden bg-[#05070A] font-manrope text-white selection:bg-[#ff007f] selection:text-white flex flex-col justify-between">
+      <div className="relative min-h-screen md:h-screen md:max-h-screen md:overflow-hidden bg-[#05070A] font-manrope text-white selection:bg-[#ff007f] selection:text-white flex flex-col justify-between">
         <div className="fixed inset-0 pointer-events-none bg-[radial-gradient(circle_at_top,rgba(148,163,184,0.14),transparent_42%),linear-gradient(180deg,#05070A_0%,#04060A_100%)]" />
         <div className="fixed inset-0 pointer-events-none bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.16] mix-blend-overlay" />
 
-        <header className="sticky top-0 z-40 border-b border-white/[0.05] bg-[#05070A]/85 backdrop-blur-2xl shrink-0">
-          <div className="mx-auto flex max-w-[1600px] flex-col md:flex-row md:items-center gap-4 px-6 py-3.5 md:px-10">
+        <header className="relative md:sticky top-0 z-40 border-b border-white/[0.05] bg-[#05070A]/85 backdrop-blur-2xl shrink-0">
+          <div className="mx-auto flex max-w-[1600px] flex-col md:flex-row md:items-center gap-4 px-4 py-3.5 sm:px-6 md:px-10">
             <button
               type="button"
               onClick={() => setTrip(null)}
@@ -549,7 +552,7 @@ export default function Page() {
               <div className="ml-auto" />
             )}
 
-            <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full md:w-auto justify-between md:justify-end">
               {/* Language Selector */}
               <div className="flex items-center gap-1.5 rounded-full border border-[#00f0ff]/40 bg-[#03050a]/80 px-3 py-1.5 shadow-[0_0_12px_rgba(0,240,255,0.2)]">
                 <span className="text-xs font-bold text-[#00f0ff]">🌐</span>
@@ -599,14 +602,14 @@ export default function Page() {
           </div>
         </header>
 
-        <main className="relative z-10 mx-auto w-full max-w-[1600px] px-6 py-4 md:px-10 flex-1 flex flex-col justify-center overflow-y-auto">
+        <main className="relative z-10 mx-auto w-full max-w-[1600px] px-4 sm:px-6 py-4 md:px-10 flex-1 flex flex-col justify-center md:overflow-y-auto">
           {error ? (
             <div className="mx-auto my-auto max-w-2xl rounded-3xl border border-[#00f0ff]/40 bg-[#03050a]/90 p-8 text-center backdrop-blur-md shadow-[0_0_40px_rgba(0,240,255,0.15)]">
               <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#111827] border border-[#ff007f]/40 shadow-[0_0_20px_rgba(255,0,127,0.2)]">
                 <Navigation className="h-6 w-6 text-[#ff007f]" strokeWidth={2} />
               </div>
               <h3 className="mb-2 font-syne text-xl font-bold text-white">{t.connectionInterrupted}</h3>
-              <p className="mb-6 text-sm text-[#94A3B8]">{error}</p>
+              <p className="mb-6 text-sm text-[#94A3B8] break-words">{error}</p>
               <button
                 onClick={() => handleSubmit()}
                 className="rounded-full bg-[#00f0ff]/10 px-6 py-2.5 text-sm font-bold text-[#00f0ff] transition-all hover:bg-[#00f0ff]/20 hover:shadow-[0_0_20px_rgba(0,240,255,0.3)] border border-[#00f0ff]/30"
@@ -628,7 +631,7 @@ export default function Page() {
 
           {!loading && !trip && !error ? (
             <div className="flex my-auto items-center justify-center px-4 py-2">
-              <div className="w-full max-w-[780px] rounded-[2rem] border border-white/[0.07] bg-[#0B0F18]/80 px-6 py-6 md:px-10 md:py-8 text-center backdrop-blur-2xl shadow-[0_0_80px_rgba(0,0,0,0.6)]">
+              <div className="w-full max-w-[780px] rounded-[2rem] border border-white/[0.07] bg-[#0B0F18]/80 px-4 py-6 sm:px-6 md:px-10 md:py-8 text-center backdrop-blur-2xl shadow-[0_0_80px_rgba(0,0,0,0.6)]">
 
                 {/* Icon */}
                 <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#111827] border border-blue-500/20 shadow-[0_0_28px_rgba(59,130,246,0.25)]">
@@ -636,7 +639,7 @@ export default function Page() {
                 </div>
 
                 {/* Title */}
-                <h1 className="font-syne text-2xl md:text-[2.2rem] font-extrabold leading-tight tracking-tight text-white">
+                <h1 className="font-syne text-xl sm:text-2xl md:text-[2.2rem] font-extrabold leading-tight tracking-tight text-white">
                   {t.heroTitle}
                 </h1>
 
@@ -659,7 +662,7 @@ export default function Page() {
                     <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mr-1">Trending:</span>
                     
                     {loadingTrending && (
-                      <div className="flex gap-2 animate-pulse">
+                      <div className="flex flex-wrap gap-2 animate-pulse">
                         {[1, 2, 3, 4, 5].map((i) => (
                           <div key={i} className="h-7 w-20 rounded-full bg-zinc-800/80" />
                         ))}
@@ -730,7 +733,7 @@ export default function Page() {
                       </button>
 
                       {isTravelersOpen && (
-                        <div className="absolute top-full mt-2 right-0 w-80 bg-[#03050a]/95 backdrop-blur-2xl border border-[#00f0ff]/40 rounded-3xl p-5 z-50 shadow-[0_10px_40px_rgba(0,240,255,0.25)] text-left">
+                        <div className="absolute top-full mt-2 right-0 w-[min(20rem,calc(100vw-2rem))] bg-[#03050a]/95 backdrop-blur-2xl border border-[#00f0ff]/40 rounded-3xl p-5 z-50 shadow-[0_10px_40px_rgba(0,240,255,0.25)] text-left">
                           <p className="text-[11px] font-bold uppercase tracking-wider text-[#00f0ff] mb-3">{t.groupType}</p>
                           <div className="flex flex-wrap gap-2 mb-5">
                             {(['Solo', 'Couple', 'Family', 'Friends', 'Business'] as const).map((type) => (

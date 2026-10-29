@@ -17,12 +17,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import asyncpg
 from cachetools import TTLCache
+from dotenv import load_dotenv
 
 from models import EventFestival
 from chat_agent import get_voya_system_prompt, get_chat_agent_tools, execute_tool_call
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("voyanta")
+
+load_dotenv()
 
 # In-Memory High-Speed LRU Cache for Sub-Millisecond Hits
 class FastTTLCache:
@@ -434,13 +437,36 @@ PILLAR_DESCRIPTIONS = {
 # ─────────────────────────────────────────────
 
 async def call_ai_with_rate_limit_fallback(client: httpx.AsyncClient, prompt: str) -> str:
+    # ── TIER 3: GROQ FALLBACK (llama-3.1-8b-instant) ─────────────────────────
+    groq_key = GROQ_API_KEY or os.getenv("GROQ_API_KEY", "").strip()
+    if groq_key:
+        try:
+            g_payload = {
+                "model": "openai/gpt-oss-20b",
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.3
+            }
+            headers = {
+                "Authorization": f"Bearer {groq_key}",
+                "Content-Type": "application/json"
+            }
+            res = await client.post("https://api.groq.com/openai/v1/chat/completions", json=g_payload, headers=headers, timeout=6.0)
+            if res.status_code == 200:
+                raw = res.json()["choices"][0]["message"]["content"]
+                cleaned = re.sub(r"^```(?:json)?\s*", "", raw.strip(), flags=re.MULTILINE)
+                cleaned = re.sub(r"\s*```$", "", cleaned, flags=re.MULTILINE).strip()
+                logger.info("⚡ Fallback AI generation succeeded via Groq (openai/gpt-oss-20b)")
+                return cleaned
+        except Exception as e:
+            logger.warning(f"Groq fallback error: {e}")
+
     # ── TIER 1: GEMINI DIRECT ─────────────────────────────────────────────
     gemini_key = GEMINI_API_KEY or os.getenv("GEMINI_API_KEY", "").strip()
     if gemini_key:
         g_models = [
-            "gemini-1.5-flash",
-            "gemini-2.0-flash",
-            "gemini-1.5-flash-latest"
+            "gemini-3.1-flash-lite",
+            "gemini-flash-latest",
+            "gemini-3-flash-preview"
         ]
         for g_model in g_models:
             try:
@@ -495,29 +521,6 @@ async def call_ai_with_rate_limit_fallback(client: httpx.AsyncClient, prompt: st
                     logger.warning(f"OpenRouter {model} status {res.status_code}: {res.text[:120]}")
             except Exception as e:
                 logger.warning(f"OpenRouter {model} connection error: {e}")
-
-    # ── TIER 3: GROQ FALLBACK (llama-3.1-8b-instant) ─────────────────────────
-    groq_key = GROQ_API_KEY or os.getenv("GROQ_API_KEY", "").strip()
-    if groq_key:
-        try:
-            g_payload = {
-                "model": "llama-3.1-8b-instant",
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.3
-            }
-            headers = {
-                "Authorization": f"Bearer {groq_key}",
-                "Content-Type": "application/json"
-            }
-            res = await client.post("https://api.groq.com/openai/v1/chat/completions", json=g_payload, headers=headers, timeout=6.0)
-            if res.status_code == 200:
-                raw = res.json()["choices"][0]["message"]["content"]
-                cleaned = re.sub(r"^```(?:json)?\s*", "", raw.strip(), flags=re.MULTILINE)
-                cleaned = re.sub(r"\s*```$", "", cleaned, flags=re.MULTILINE).strip()
-                logger.info("⚡ Fallback AI generation succeeded via Groq (llama-3.1-8b-instant)")
-                return cleaned
-        except Exception as e:
-            logger.warning(f"Groq fallback error: {e}")
 
     return '{"tool_call": null, "reply": "I am ready! Tell me about your destination or plan."}'
 
