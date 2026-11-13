@@ -437,28 +437,32 @@ PILLAR_DESCRIPTIONS = {
 # ─────────────────────────────────────────────
 
 async def call_ai_with_rate_limit_fallback(client: httpx.AsyncClient, prompt: str) -> str:
-    # ── TIER 3: GROQ FALLBACK (llama-3.1-8b-instant) ─────────────────────────
+    # ── TIER 3: GROQ (tries each model; moves on when one is rate limited) ───
     groq_key = GROQ_API_KEY or os.getenv("GROQ_API_KEY", "").strip()
     if groq_key:
-        try:
-            g_payload = {
-                "model": "openai/gpt-oss-20b",
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.3
-            }
-            headers = {
-                "Authorization": f"Bearer {groq_key}",
-                "Content-Type": "application/json"
-            }
-            res = await client.post("https://api.groq.com/openai/v1/chat/completions", json=g_payload, headers=headers, timeout=6.0)
-            if res.status_code == 200:
-                raw = res.json()["choices"][0]["message"]["content"]
-                cleaned = re.sub(r"^```(?:json)?\s*", "", raw.strip(), flags=re.MULTILINE)
-                cleaned = re.sub(r"\s*```$", "", cleaned, flags=re.MULTILINE).strip()
-                logger.info("⚡ Fallback AI generation succeeded via Groq (openai/gpt-oss-20b)")
-                return cleaned
-        except Exception as e:
-            logger.warning(f"Groq fallback error: {e}")
+        headers = {
+            "Authorization": f"Bearer {groq_key}",
+            "Content-Type": "application/json"
+        }
+        for groq_model in ("openai/gpt-oss-20b", "openai/gpt-oss-120b", "qwen/qwen3.8-27b"):
+            try:
+                g_payload = {
+                    "model": groq_model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.3
+                }
+                if groq_model.startswith("openai/gpt-oss"):
+                    g_payload["reasoning_effort"] = "low"
+                res = await client.post("https://api.groq.com/openai/v1/chat/completions", json=g_payload, headers=headers, timeout=6.0)
+                if res.status_code == 200:
+                    raw = res.json()["choices"][0]["message"]["content"]
+                    cleaned = re.sub(r"^```(?:json)?\s*", "", raw.strip(), flags=re.MULTILINE)
+                    cleaned = re.sub(r"\s*```$", "", cleaned, flags=re.MULTILINE).strip()
+                    logger.info(f"⚡ Fallback AI generation succeeded via Groq ({groq_model})")
+                    return cleaned
+                logger.warning(f"Groq {groq_model} status {res.status_code}")
+            except Exception as e:
+                logger.warning(f"Groq {groq_model} error: {e}")
 
     # ── TIER 1: GEMINI DIRECT ─────────────────────────────────────────────
     gemini_key = GEMINI_API_KEY or os.getenv("GEMINI_API_KEY", "").strip()
