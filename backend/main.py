@@ -1596,6 +1596,62 @@ def _describe_weather_code(code: int) -> tuple:
 
 weather_cache = TTLCache(maxsize=500, ttl=1800)
 
+def _met_symbol_to_wmo(symbol: str) -> int:
+    """MET Norway symbol_code (e.g. 'lightrainshowers_day') -> nearest WMO weather code."""
+    sym = (symbol or "").split("_")[0]
+    if "thunder" in sym:
+        return 95
+    if "snow" in sym:
+        return 85 if "showers" in sym else 73
+    if "sleet" in sym:
+        return 67
+    if "rain" in sym:
+        if "showers" in sym:
+            return 80
+        return 65 if "heavy" in sym else 61 if "light" in sym else 63
+    if sym == "fog":
+        return 45
+    return {"clearsky": 0, "fair": 1, "partlycloudy": 2, "cloudy": 3}.get(sym, 3)
+
+async def _met_no_forecast(client: httpx.AsyncClient, lat: float, lng: float) -> Optional[Dict[str, Any]]:
+    """Backup weather source (api.met.no) used when Open-Meteo refuses requests from the hosting provider."""
+    try:
+        res = await client.get("https://api.met.no/weatherapi/locationforecast/2.0/compact",
+                               params={"lat": round(lat, 4), "lon": round(lng, 4)},
+                               headers={"User-Agent": "VoyantaTravelApp/1.0 github.com/Diyasri2004/Voyanta"}, timeout=8.0)
+        if res.status_code != 200:
+            logger.warning(f"MET Norway weather status {res.status_code}")
+            return None
+        series = res.json().get("properties", {}).get("timeseries", [])
+        if not series:
+            return None
+        first = series[0]["data"]
+        det = first["instant"]["details"]
+        sym = (first.get("next_1_hours") or first.get("next_6_hours") or {}).get("summary", {}).get("symbol_code", "")
+        by_day: Dict[str, Dict[str, Any]] = {}
+        for item in series:
+            day = item["time"][:10]
+            t = item["data"]["instant"]["details"].get("air_temperature")
+            if t is None:
+                continue
+            slot = by_day.setdefault(day, {"temps": [], "symbols": []})
+            slot["temps"].append(t)
+            code = (item["data"].get("next_6_hours") or item["data"].get("next_1_hours") or {}).get("summary", {}).get("symbol_code")
+            if code and "12:00" <= item["time"][11:16] <= "15:00":
+                slot["symbols"].append(code)
+        days = sorted(by_day)
+        return {
+            "current": {"temperature_2m": det.get("air_temperature", 0), "apparent_temperature": det.get("air_temperature", 0),
+                        "relative_humidity_2m": det.get("relative_humidity"), "weather_code": _met_symbol_to_wmo(sym)},
+            "daily": {"time": days,
+                      "weather_code": [_met_symbol_to_wmo((by_day[d]["symbols"] or [""])[0]) for d in days],
+                      "temperature_2m_max": [max(by_day[d]["temps"]) for d in days],
+                      "temperature_2m_min": [min(by_day[d]["temps"]) for d in days]},
+        }
+    except Exception as e:
+        logger.warning(f"MET Norway weather error: {e}")
+        return None
+
 @app.get("/api/weather", tags=["Weather"])
 async def get_destination_weather(
     request: Request,
@@ -1621,9 +1677,14 @@ async def get_destination_weather(
                 timeout=6.0)
             if res.status_code == 200:
                 data = res.json()
-                weather_cache[cache_key] = data
+            else:
+                logger.warning(f"Open-Meteo weather status {res.status_code}")
         except Exception as e:
-            logger.warning(f"Weather lookup failed: {e}")
+            logger.warning(f"Open-Meteo weather failed: {e}")
+        if not data or "current" not in data:
+            data = await _met_no_forecast(client, coords.lat, coords.lng)
+        if data and "current" in data:
+            weather_cache[cache_key] = data
     if not data or "current" not in data:
         raise HTTPException(status_code=503, detail="Weather is unavailable right now.")
 
