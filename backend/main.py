@@ -290,12 +290,36 @@ async def resolve_dynamic_coordinates(client: httpx.AsyncClient, destination: st
     if cache_key in dynamic_cache:
         return dynamic_cache[cache_key]
 
-    clean = destination.split(",")[0].strip()
+    parts = [x.strip() for x in destination.split(",") if x.strip()]
+    clean = parts[0] if parts else destination.strip()
+    hint = " ".join(parts[1:]).lower()
+
+    # TomTom first: it understands regions/states ("Kerala") and picks the well-known "Kochi"/"Paris"
+    if TOMTOM_API_KEY:
+        try:
+            res = await client.get(f"{TOMTOM_BASE}/search/2/geocode/{urllib.parse.quote(destination.strip())}.json",
+                                   params={"key": TOMTOM_API_KEY, "limit": 1}, timeout=2.5)
+            if res.status_code == 200:
+                results = res.json().get("results", [])
+                if results:
+                    pos = results[0].get("position", {})
+                    coords = Coordinates(lat=float(pos.get("lat", 0.0)), lng=float(pos.get("lon", 0.0)))
+                    dynamic_cache[cache_key] = coords
+                    return coords
+        except Exception as e:
+            logger.warning(f"TomTom geocode error for {destination}: {e}")
+
     try:
-        geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={urllib.parse.quote(clean)}&count=1"
-        res = await client.get(geo_url, timeout=2.0)
+        geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={urllib.parse.quote(clean)}&count=10"
+        res = await client.get(geo_url, timeout=2.5)
         if res.status_code == 200 and res.json().get("results"):
-            item = res.json()["results"][0]
+            candidates = res.json()["results"]
+            if hint:
+                narrowed = [c for c in candidates if any(
+                    h and h in hint for h in [str(c.get("country", "")).lower(), str(c.get("admin1", "")).lower(), str(c.get("country_code", "")).lower()])]
+                candidates = narrowed or candidates
+            # Same name exists in many places (Kochi in Kerala vs Japan): prefer the best-known one
+            item = max(candidates, key=lambda c: c.get("population") or 0)
             coords = Coordinates(lat=float(item["latitude"]), lng=float(item["longitude"]))
             dynamic_cache[cache_key] = coords
             return coords
@@ -1021,8 +1045,8 @@ async def fetch_google_events(client: httpx.AsyncClient, destination: str) -> Li
         logger.warning(f"SerpApi error: {e}")
         return []
 
-async def build_real_events(client: httpx.AsyncClient, clean_dest: str, trip_start: Optional[date] = None, trip_end: Optional[date] = None) -> List[Dict[str, Any]]:
-    coords = await resolve_dynamic_coordinates(client, clean_dest)
+async def build_real_events(client: httpx.AsyncClient, clean_dest: str, trip_start: Optional[date] = None, trip_end: Optional[date] = None, geo_query: str = "") -> List[Dict[str, Any]]:
+    coords = await resolve_dynamic_coordinates(client, geo_query or clean_dest)
     today = date.today()
     far = max(today.toordinal() + 180, (trip_end.toordinal() + 60) if trip_end else 0)
     horizon = date.fromordinal(min(far, today.toordinal() + 365))
@@ -1099,6 +1123,272 @@ async def build_real_events(client: httpx.AsyncClient, clean_dest: str, trip_sta
     return list(await asyncio.gather(*[finish(i, e) for i, e in enumerate(merged)]))
 
 # ─────────────────────────────────────────────
+#  Real Places Engine (TomTom POI + OpenStreetMap). No AI-invented venues.
+# ─────────────────────────────────────────────
+
+REAL_POI_PILLARS = {
+    "attractions": {
+        "queries": ["tourist attraction", "museum", "monument", "park", "beach"],
+        "include": ["tourist attraction", "museum", "monument", "historic", "park", "beach", "fort", "palace", "lighthouse",
+                    "garden", "zoo", "aquarium", "waterfall", "cultural", "gallery", "heritage", "landmark"],
+        "exclude_name": ["hotel", "resort", "lodge", "homestay", "hostel"],
+        "osm": ['["tourism"~"attraction|museum|gallery|zoo|aquarium"]', '["historic"~"monument|castle|fort|memorial|ruins|archaeological_site"]'],
+        "wiki": True,
+    },
+    "culinary": {
+        "queries": ["restaurant", "cafe", "bakery", "local food restaurant"],
+        "include": ["restaurant", "cafe", "bakery", "coffee", "food", "tea", "indian", "fast food", "dining", "ice cream"],
+        "exclude_name": ["hotel", "bar & grill", "wine shop", "liquor"],
+        "osm": ['["amenity"~"restaurant|cafe|fast_food"]'],
+    },
+    "bars_pubs": {
+        "queries": ["bar", "pub", "brewery", "nightclub", "lounge"],
+        "include": ["bar", "pub", "nightclub", "brewery", "wine", "cocktail", "nightlife", "lounge bar", "sky lounge"],
+        "exclude_name": ["yoga", "wellness", "spa", "cooking", "flights", "packages", "ayurved", "travel", "tours", "academy", "school", "beauty", "salon", "hair", "clinic"],
+        "osm": ['["amenity"~"bar|pub|nightclub|biergarten"]'],
+    },
+    "wellness": {
+        "queries": ["spa", "yoga", "meditation center", "ayurveda", "wellness center"],
+        "include": ["spa", "yoga", "massage", "sauna", "wellness", "meditation", "ayurved", "leisure center", "health"],
+        "exclude_name": ["hospital", "pharmacy"],
+        "exclude_cat": ["hospital"],
+        "osm": ['["leisure"~"spa|sauna"]', '["shop"="massage"]', '["amenity"="spa"]'],
+    },
+    "secret_spots": {
+        "queries": ["viewpoint", "scenic lookout", "waterfall", "garden", "lake"],
+        "include": ["scenic", "viewpoint", "lookout", "waterfall", "garden", "nature", "lake", "island", "tourist attraction", "park"],
+        "exclude_name": ["hotel", "resort", "restaurant", "hospital", "clinic", "school", "college", "apartment", "residency"],
+        "exclude_cat": ["hotel", "hospital", "medical", "restaurant", "shop"],
+        "osm": ['["tourism"="viewpoint"]', '["natural"~"waterfall|peak|beach|spring"]'],
+        "wiki": True,
+    },
+    "essentials": {
+        "queries": ["hospital", "railway station", "airport", "pharmacy", "police station", "bus station"],
+        "include": ["hospital", "railway", "airport", "pharmacy", "police", "bus", "station", "medical", "transport", "emergency"],
+        "exclude_name": [],
+        "osm": ['["amenity"~"hospital|pharmacy|police|bus_station"]', '["railway"="station"]', '["aeroway"="aerodrome"]'],
+    },
+    "shopping": {
+        "queries": ["shopping mall", "market", "bazaar", "handicraft shop"],
+        "include": ["shopping", "mall", "market", "shop", "handicraft", "department", "store", "bazaar"],
+        "exclude_name": [],
+        "osm": ['["shop"~"mall|department_store|gift|handicraft"]', '["amenity"="marketplace"]'],
+    },
+    "adventures": {
+        "queries": ["adventure sports", "trekking", "water sports", "national park", "wildlife sanctuary"],
+        "include": ["adventure", "trekking", "water sport", "national park", "wildlife", "camp", "nature", "reserve", "park", "boating", "kayak", "rafting", "diving", "paragliding", "sanctuary"],
+        "exclude_name": ["hotel", "restaurant", "shop", "store", "logistic", "private limited", "pvt", "ltd", "equipment", "traders", "mart"],
+        "exclude_cat": ["shop", "company", "transport", "insurance", "hotel"],
+        "osm": ['["leisure"~"nature_reserve|water_park"]', '["tourism"="camp_site"]', '["boundary"="national_park"]'],
+        "wiki": True,
+    },
+    "theme_parks": {
+        "queries": ["amusement park", "water park", "theme park"],
+        "include": ["amusement", "water park", "theme", "leisure", "fun"],
+        "exclude_name": ["hotel"],
+        "osm": ['["tourism"="theme_park"]', '["leisure"="water_park"]'],
+        "wiki": True,
+    },
+    "sacred_temples": {
+        "queries": ["temple", "church", "mosque", "shrine", "gurudwara"],
+        "include": ["place of worship", "temple", "church", "mosque", "shrine", "religious", "cathedral", "gurudwara"],
+        "exclude_name": ["hotel"],
+        "osm": ['["amenity"="place_of_worship"]'],
+        "wiki": True,
+    },
+}
+
+_tomtom_sem = asyncio.Semaphore(3)
+
+async def _tomtom_pois(client: httpx.AsyncClient, query: str, coords: Coordinates, radius: int = 30000) -> List[Dict[str, Any]]:
+    if not TOMTOM_API_KEY:
+        return []
+    try:
+        res = None
+        for attempt in range(3):
+            async with _tomtom_sem:
+                res = await client.get(
+                    f"{TOMTOM_BASE}/search/2/poiSearch/{urllib.parse.quote(query)}.json",
+                    params={"key": TOMTOM_API_KEY, "lat": coords.lat, "lon": coords.lng, "radius": radius, "limit": 30, "language": "en-GB"},
+                    timeout=6.0)
+            if res.status_code != 429:
+                break
+            await asyncio.sleep(0.6 * (attempt + 1))
+        if res.status_code != 200:
+            logger.warning(f"TomTom POI '{query}' status {res.status_code}")
+            return []
+        out = []
+        for r in res.json().get("results", []):
+            poi, addr, pos = r.get("poi", {}), r.get("address", {}), r.get("position", {})
+            name = (poi.get("name") or "").strip()
+            if not name or "lat" not in pos:
+                continue
+            out.append({
+                "name": name,
+                "cats": [c for c in poi.get("categories", []) if c],
+                "address": addr.get("freeformAddress", ""),
+                "area": addr.get("municipalitySubdivision") or addr.get("municipality") or "",
+                "lat": pos["lat"], "lng": pos["lon"],
+                "url": poi.get("url", ""), "phone": poi.get("phone", ""),
+            })
+        return out
+    except Exception as e:
+        logger.warning(f"TomTom POI '{query}' error: {e}")
+        return []
+
+async def _osm_pois(client: httpx.AsyncClient, pillar: str, coords: Coordinates, radius: int = 20000) -> List[Dict[str, Any]]:
+    """OpenStreetMap (Overpass) backup when TomTom has too little."""
+    filters = REAL_POI_PILLARS[pillar].get("osm", [])
+    if not filters:
+        return []
+    body = "".join(f'nwr{f}["name"](around:{radius},{coords.lat},{coords.lng});' for f in filters)
+    query = f"[out:json][timeout:8];({body});out center 60;"
+    for endpoint in ("https://overpass-api.de/api/interpreter",):
+        try:
+            res = await client.post(endpoint, data={"data": query}, headers={"User-Agent": "VoyantaTravelApp/1.0 (travel@voyanta.app)"}, timeout=9.0)
+            if res.status_code != 200:
+                continue
+            out = []
+            for el in res.json().get("elements", []):
+                t = el.get("tags", {})
+                lat = el.get("lat") or el.get("center", {}).get("lat")
+                lng = el.get("lon") or el.get("center", {}).get("lon")
+                if not t.get("name") or lat is None:
+                    continue
+                kind = t.get("tourism") or t.get("amenity") or t.get("historic") or t.get("natural") or t.get("leisure") or t.get("shop") or ""
+                addr = ", ".join(x for x in [t.get("addr:street"), t.get("addr:city")] if x)
+                out.append({"name": t["name"], "cats": [kind.replace("_", " ")] if kind else [], "address": addr,
+                            "area": t.get("addr:suburb") or t.get("addr:city") or "", "lat": lat, "lng": lng,
+                            "url": t.get("website", ""), "phone": t.get("phone", "")})
+            return out
+        except Exception as e:
+            logger.warning(f"Overpass error: {e}")
+    return []
+
+def _poi_matches(poi: Dict[str, Any], cfg: Dict[str, Any]) -> bool:
+    name = poi["name"].lower()
+    cats = " ".join(poi["cats"]).lower()
+    if any(re.search(r"\b" + re.escape(x), name) for x in cfg["exclude_name"]):
+        return False
+    if any(x in cats for x in cfg.get("exclude_cat", [])):
+        return False
+    hay = cats + " " + name
+    return any(re.search(r"\b" + re.escape(t) + r"(?:s|es)?\b", hay) for t in cfg["include"])
+
+async def _wiki_info(client: httpx.AsyncClient, name: str, destination: str) -> Dict[str, str]:
+    """Verified Wikipedia intro + lead image for a named place (article title must share a distinctive word)."""
+    key = f"wikiinfo:{name.lower()}|{destination.lower()}"
+    if key in dynamic_cache:
+        return dynamic_cache[key]
+    info = {"image": "", "extract": ""}
+    tokens = _photo_tokens(name)
+    try:
+        res = await client.get(
+            "https://en.wikipedia.org/w/api.php",
+            params={"action": "query", "format": "json", "generator": "search", "gsrsearch": f"{name} {destination}", "gsrlimit": 3,
+                    "prop": "extracts|pageimages", "exintro": 1, "explaintext": 1, "exsentences": 2, "exlimit": 3,
+                    "piprop": "thumbnail", "pithumbsize": 900},
+            headers={"User-Agent": "VoyantaTravelApp/1.0 (travel@voyanta.app)"}, timeout=3.0)
+        if res.status_code == 200:
+            pages = sorted(res.json().get("query", {}).get("pages", {}).values(), key=lambda pg: pg.get("index", 99))
+            for page in pages:
+                title_tokens = _photo_tokens(page.get("title", ""))
+                if not tokens or not title_tokens:
+                    continue
+                # Article must be the place itself: its title words all appear in the name, or most name words appear in the title
+                if not (title_tokens <= tokens or len(title_tokens & tokens) / len(tokens) >= 0.67):
+                    continue
+                extract = (page.get("extract") or "").strip()
+                src = page.get("thumbnail", {}).get("source", "")
+                if src and any(h in src.lower() for h in _BAD_IMAGE_HINTS):
+                    src = ""
+                if extract and "may refer to" not in extract.lower():
+                    info = {"image": src, "extract": extract[:260].rsplit(" ", 1)[0] + ("…" if len(extract) > 260 else "")}
+                    break
+    except Exception:
+        pass
+    dynamic_cache[key] = info
+    return info
+
+def _describe_poi(poi: Dict[str, Any], dest: str) -> str:
+    seen, labels = set(), []
+    for c in poi["cats"]:
+        c = c.strip().lower()
+        if c and c not in seen and c not in {"building", "important tourist attraction", "national", "special", "public authority"}:
+            seen.add(c)
+            labels.append(c)
+    if not labels and poi["cats"]:
+        labels = [poi["cats"][0].lower()]
+    if len(labels) >= 2 and labels[1] in ("restaurant", "cafe", "bar", "pub", "bakery"):
+        label = f"{labels[0]} {labels[1]}"
+    else:
+        label = " · ".join(labels[:2])
+    label = (label or "place").capitalize()
+    where = poi["area"] or dest
+    return f"{label} in {where}."
+
+async def build_real_places(client: httpx.AsyncClient, clean_dest: str, pillar: str, geo_query: str = "") -> List[Dict[str, Any]]:
+    cfg = REAL_POI_PILLARS[pillar]
+    coords = await resolve_dynamic_coordinates(client, geo_query or clean_dest)
+
+    per_query = await asyncio.gather(*[_tomtom_pois(client, q, coords) for q in cfg["queries"]])
+    pois: List[Dict[str, Any]] = []
+    seen = set()
+
+    def take(lists):
+        # Round-robin so one query (e.g. 'park') cannot crowd out the rest
+        for i in range(max((len(l) for l in lists), default=0)):
+            for l in lists:
+                if i < len(l):
+                    poi = l[i]
+                    key = re.sub(r"[^a-z0-9]", "", poi["name"].lower())
+                    if key and key not in seen and _poi_matches(poi, cfg):
+                        seen.add(key)
+                        pois.append(poi)
+
+    take(per_query)
+    if len(pois) < 8:
+        take([await _osm_pois(client, pillar, coords)])
+    pois = pois[:27]
+
+    async def card(idx: int, poi: Dict[str, Any]) -> Dict[str, Any]:
+        name = poi["name"]
+        info = {"image": "", "extract": ""}
+        if cfg.get("wiki"):
+            info = await _wiki_info(client, name, clean_dest)
+        image = info["image"]
+        if not image:
+            try:
+                image = await asyncio.wait_for(fetch_dynamic_place_photo(client, venue=name, destination=clean_dest, category=pillar), timeout=6.0)
+            except Exception:
+                image = ""
+            if not image:
+                image = await fetch_destination_photo(client, clean_dest)
+        nav = f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(name + ' ' + (poi['address'] or clean_dest))}"
+        website = poi["url"]
+        if website and not website.startswith("http"):
+            website = "https://" + website
+        return {
+            "id": f"{pillar}_{idx + 1}",
+            "title": name,
+            "name": name,
+            "category": pillar.replace("_", " ").title(),
+            "description": info["extract"] or _describe_poi(poi, clean_dest),
+            "location": poi["area"] or clean_dest,
+            "address": poi["address"] or poi["area"] or clean_dest,
+            "maps_url": nav,
+            "navigation_url": nav,
+            "image_url": image,
+            "image": image,
+            "lat": poi["lat"],
+            "lng": poi["lng"],
+            "website": website,
+            "phone": poi["phone"],
+        }
+
+    return list(await asyncio.gather(*[card(i, p) for i, p in enumerate(pois)]))
+
+# ─────────────────────────────────────────────
 #  High-Capacity Parallel Trail Discovery Engine
 # ─────────────────────────────────────────────
 
@@ -1122,7 +1412,7 @@ async def get_high_capacity_trails(
     trip_end = _parse_event_day(end_date) if isinstance(end_date, str) else None
     if trip_start and (not trip_end or trip_end < trip_start):
         trip_end = trip_start
-    cache_key = f"trails_{clean_dest}_{active_category}".lower()
+    cache_key = f"trails_{destination.strip()}_{active_category}".lower()
     if active_category == "events" and trip_start:
         cache_key += f"_{trip_start}_{trip_end}"
 
@@ -1133,7 +1423,7 @@ async def get_high_capacity_trails(
     client = getattr(request.app.state, "client", None) if request else None
 
     if active_category == "events":
-        events = await build_real_events(client, clean_dest, trip_start, trip_end)
+        events = await build_real_events(client, clean_dest, trip_start, trip_end, geo_query=destination)
         payload = {
             "status": "success",
             "destination": destination,
@@ -1146,6 +1436,22 @@ async def get_high_capacity_trails(
             "sources": [n for n, k in (("Ticketmaster", TICKETMASTER_API_KEY), ("Google Events", SERPAPI_KEY)) if k],
         }
         if events:
+            response_cache.set(cache_key, payload)
+        return payload
+
+    if active_category in REAL_POI_PILLARS:
+        places = await build_real_places(client, clean_dest, active_category, geo_query=destination)
+        payload = {
+            "status": "success",
+            "destination": destination,
+            "category": active_category,
+            "count": len(places),
+            "places": places,
+            "results": places,
+            active_category: places,
+            "sources": ["TomTom", "OpenStreetMap"],
+        }
+        if places:
             response_cache.set(cache_key, payload)
         return payload
 
