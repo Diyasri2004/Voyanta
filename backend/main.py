@@ -23,6 +23,7 @@ from dotenv import load_dotenv
 
 from models import EventFestival
 from chat_agent import get_voya_system_prompt, get_chat_agent_tools, execute_tool_call
+from hot_places import hot_places, HOT_PILLARS
 from cache_store import cache_get, cache_set, backend_name as cache_backend
 from voya_engine import Deps, RateLimiter, run_chat, _name_score
 
@@ -1077,43 +1078,20 @@ async def build_real_events(client: httpx.AsyncClient, clean_dest: str, trip_sta
 #  Real Places Engine (TomTom POI + OpenStreetMap). No AI-invented venues.
 # ─────────────────────────────────────────────
 
-async def _gemini_trending(client: httpx.AsyncClient, dest: str, focus: str = "") -> List[Dict[str, Any]]:
-    """Currently-buzzing places for 18-28 year olds, from Gemini with live Google Search grounding.
-    Returns [{name, area, why}]. Empty when no key or on any failure, so callers fall back to map categories."""
-    key = GEMINI_API_KEY or os.getenv("GEMINI_API_KEY", "").strip()
-    if not key or client is None:
+async def _hot(client: httpx.AsyncClient, dest: str, pillar: str, focus: str = "", trace: Optional[list] = None) -> List[Dict[str, Any]]:
+    """Currently-popular places for any city (see hot_places.py). Shared 24h cache; [] on any failure."""
+    if client is None:
         return []
-    cache_key = f"trending_names:{dest.lower()}:{(focus or '').lower()}"
-    hit = await cache_get(cache_key)
-    if hit:
-        return hit
-    year = date.today().year
-    prompt = (
-        f"Use Google Search. List the 10 most talked-about places in {dest} right now ({year}) that people aged 18-28 actually hang out at: "
-        f"specialty cafes, rooftop and aesthetic spots, gaming/bowling/entertainment zones, live music, dessert and brunch places, thrift and streetwear, nightlife. "
-        f"{('Focus on: ' + focus + '. ') if focus else ''}"
-        "Exclude old-fashioned tourist sights (parks, museums, monuments, temples), hotels and chains with no local buzz. "
-        'Return ONLY a JSON array, no prose: [{"name": "exact place name", "area": "neighbourhood in the city", "why": "one punchy sentence on why it is hot right now"}]'
-    )
-    for model in ("gemini-flash-latest", "gemini-2.5-flash"):
-        try:
-            r = await client.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}",
-                json={"contents": [{"parts": [{"text": prompt}]}], "tools": [{"google_search": {}}]},
-                timeout=18.0)
-            if r.status_code != 200:
-                continue
-            parts = (r.json().get("candidates") or [{}])[0].get("content", {}).get("parts", [])
-            data = extract_json_payload("".join(p.get("text", "") for p in parts))
-            if isinstance(data, list):
-                out = [{"name": str(d.get("name", "")).strip(), "area": str(d.get("area", "")).strip(), "why": str(d.get("why", "")).strip()[:220]}
-                       for d in data if isinstance(d, dict) and d.get("name")][:12]
-                if out:
-                    await cache_set(cache_key, out, ttl=86400)
-                    return out
-        except Exception as e:
-            logger.warning(f"Gemini trending ({model}) failed: {e}")
-    return []
+    ck = f"hot2:{dest.lower()}:{pillar}:{focus.lower()}"
+    if trace is None:
+        hit = await cache_get(ck)
+        if hit:
+            return hit
+    key = GEMINI_API_KEY or os.getenv("GEMINI_API_KEY", "").strip()
+    out = await hot_places(client, dest, pillar, key, lambda pr: call_ai_with_rate_limit_fallback(client, pr), extract_json_payload, focus, trace)
+    if out and trace is None:
+        await cache_set(ck, out, ttl=86400)
+    return out
 
 
 REAL_POI_PILLARS = {
@@ -1121,7 +1099,7 @@ REAL_POI_PILLARS = {
         "queries": ["specialty coffee cafe", "rooftop restaurant", "gaming zone", "bowling", "escape room", "live music venue", "dessert cafe", "brunch cafe"],
         "include": ["cafe", "coffee", "restaurant", "bar", "lounge", "rooftop", "gaming", "game", "bowling", "escape", "karting", "club", "music",
                     "entertainment", "dessert", "ice cream", "bakery", "brunch", "arcade", "amusement"],
-        "exclude_name": ["hotel", "lodge", "hospital", "school", "college", "clinic", "temple", "mandir", "museum"],
+        "exclude_name": ["hotel", "lodge", "hospital", "school", "college", "clinic", "temple", "mandir", "museum", "academy", "institute", "classes", "coaching", "university"],
         "osm": ['["amenity"~"cafe|nightclub|bar"]', '["leisure"~"bowling_alley|amusement_arcade|escape_game"]'],
     },
     "attractions": {
@@ -1427,8 +1405,8 @@ async def build_real_places(client: httpx.AsyncClient, clean_dest: str, pillar: 
                         seen.add(key)
                         pois.append(poi)
 
-    if pillar == "trending":
-        hot = await _gemini_trending(client, clean_dest)
+    if pillar in HOT_PILLARS:
+        hot = await _hot(client, clean_dest, pillar)
         resolved = await asyncio.gather(*[_tomtom_pois(client, h["name"], coords, radius=40000) for h in hot[:10]], return_exceptions=True)
         front: List[Dict[str, Any]] = []
         for h, res in zip(hot[:10], resolved):
@@ -1438,7 +1416,7 @@ async def build_real_places(client: httpx.AsyncClient, clean_dest: str, pillar: 
                 if ranked and _name_score(h["name"], ranked[0]["name"]) >= 0.5:
                     best = dict(ranked[0])
             if best is None:
-                best = {"name": h["name"], "cats": ["trending"], "address": h["area"], "area": h["area"], "lat": None, "lng": None, "url": "", "phone": ""}
+                best = {"name": h["name"], "cats": [pillar.replace("_", " ")], "address": h["area"], "area": h["area"], "lat": None, "lng": None, "url": "", "phone": ""}
             best["why"] = h["why"]
             key = re.sub(r"[^a-z0-9]", "", best["name"].lower())
             if key and key not in seen:
@@ -1494,7 +1472,7 @@ async def build_real_places(client: httpx.AsyncClient, clean_dest: str, pillar: 
 #  High-Capacity Parallel Trail Discovery Engine
 # ─────────────────────────────────────────────
 
-WARM_PILLARS = ["trending", "attractions", "culinary", "bars_pubs", "shopping"]
+WARM_PILLARS = ["trending", "attractions", "culinary", "bars_pubs"]
 WARM_DEFAULT_CITIES = "Lucknow,Delhi,Mumbai,Bengaluru,Goa,Jaipur,Hyderabad,Kolkata,Chennai,Pune,Udaipur,Varanasi,Dubai,Bangkok,Singapore,Paris,London,Tokyo,Bali,New York"
 
 
@@ -1523,6 +1501,24 @@ async def warm_popular_cities(request: Request, token: str = Query(""), cities: 
     return {"status": "started", "cities": len(names), "cache": cache_backend()}
 
 
+@app.get("/api/admin/diag", tags=["Admin"])
+async def diagnose_live_sources(request: Request, token: str = Query(""), city: str = Query("Lucknow")):
+    """Shows which live sources work right now (no secrets are returned). Needs the WARM_TOKEN."""
+    expected = os.getenv("WARM_TOKEN", "").strip()
+    if not expected or token != expected:
+        return JSONResponse(status_code=403, content={"status": "forbidden"})
+    client = request.app.state.client
+    trace: list = []
+    found = await _hot(client, city.strip().title(), "trending", "", trace)
+    return {
+        "keys_present": {"gemini": bool(GEMINI_API_KEY), "tomtom": bool(TOMTOM_API_KEY), "groq": bool(GROQ_API_KEY), "openrouter": bool(OPENROUTER_API_KEY),
+                         "ticketmaster": bool(TICKETMASTER_API_KEY), "serpapi": bool(SERPAPI_KEY)},
+        "cache": cache_backend(),
+        "steps": trace,
+        "sample_found": [f["name"] for f in found][:10],
+    }
+
+
 @app.get("/api/pillar", tags=["Discovery"])
 @app.get("/api/places", tags=["Discovery"])
 @app.get("/api/trails", tags=["Discovery"])
@@ -1543,7 +1539,7 @@ async def get_high_capacity_trails(
     trip_end = _parse_event_day(end_date) if isinstance(end_date, str) else None
     if trip_start and (not trip_end or trip_end < trip_start):
         trip_end = trip_start
-    cache_key = f"trails2_{destination.strip()}_{active_category}".lower()
+    cache_key = f"trails3_{destination.strip()}_{active_category}".lower()
     if active_category == "events" and trip_start:
         cache_key += f"_{trip_start}_{trip_end}"
 
@@ -2187,7 +2183,7 @@ async def handle_voya_chat(req: ChatRequest, request: Request):
         parse_day=_parse_event_day,
         client=client,
         geocode=_geocode,
-        trending=lambda d, q: _gemini_trending(client, d.split(",")[0].strip().title(), q),
+        trending=lambda d, q: _hot(client, d.split(",")[0].strip().title(), "trending", q),
     )
     in_india = False
     if dest:
