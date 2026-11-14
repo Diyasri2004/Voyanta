@@ -1568,32 +1568,92 @@ async def get_dynamic_pillar_data(pillar_type: str, destination: str, request: R
 async def get_destination_data(request: Request, destination: str = Query(..., min_length=1)):
     return await get_high_capacity_trails(request=request, destination=destination, pillar="attractions")
 
-@app.get("/api/weather", tags=["Weather"])
-async def get_destination_weather(request: Request, destination: str = Query(..., min_length=1)):
-    clean_dest = destination.split(",")[0].strip()
-    cache_key = f"weather:{clean_dest.lower()}"
-    if cache_key in dynamic_cache:
-        return dynamic_cache[cache_key]
+# WMO weather codes (the standard Open-Meteo uses) -> label and emoji
+def _describe_weather_code(code: int) -> tuple:
+    if code == 0:
+        return "Clear sky", "☀️"
+    if code == 1:
+        return "Mainly clear", "🌤️"
+    if code == 2:
+        return "Partly cloudy", "⛅"
+    if code == 3:
+        return "Overcast", "☁️"
+    if code in (45, 48):
+        return "Foggy", "🌫️"
+    if 51 <= code <= 57:
+        return "Drizzle", "🌦️"
+    if 61 <= code <= 67:
+        return "Rain", "🌧️"
+    if 71 <= code <= 77:
+        return "Snow", "❄️"
+    if 80 <= code <= 82:
+        return "Rain showers", "🌦️"
+    if code in (85, 86):
+        return "Snow showers", "🌨️"
+    if code >= 95:
+        return "Thunderstorm", "⛈️"
+    return "Cloudy", "☁️"
 
+weather_cache = TTLCache(maxsize=500, ttl=1800)
+
+@app.get("/api/weather", tags=["Weather"])
+async def get_destination_weather(
+    request: Request,
+    destination: str = Query(..., min_length=1),
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
+):
+    """Live weather from Open-Meteo: current conditions plus the forecast for the trip dates (16-day horizon)."""
     client = request.app.state.client
-    coords = await resolve_dynamic_coordinates(client, clean_dest)
+    coords = await resolve_dynamic_coordinates(client, destination.strip())
     if coords is UNRESOLVED_COORDS:
         raise HTTPException(status_code=404, detail="Destination not found.")
-    try:
-        weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={coords.lat}&longitude={coords.lng}&current_weather=true"
-        w_res = await client.get(weather_url, timeout=2.0)
-        if w_res.status_code == 200:
-            cw = w_res.json().get("current_weather", {})
-            temp = round(cw.get("temperature", 24))
-            wcode = cw.get("weathercode", 0)
-            condition = "Sunny" if wcode <= 3 else "Rainy" if wcode in [51, 53, 55, 61, 63, 65, 80, 81, 82] else "Cloudy"
-            res_data = {"temp": temp, "temp_c": temp, "condition": condition, "icon": "01d"}
-            dynamic_cache[cache_key] = res_data
-            return res_data
-    except Exception as e:
-        logger.warning(f"Weather lookup failed: {e}")
 
-    raise HTTPException(status_code=503, detail="Weather is unavailable right now.")
+    cache_key = f"{round(coords.lat, 2)},{round(coords.lng, 2)}"
+    data = weather_cache.get(cache_key)
+    if data is None:
+        try:
+            res = await client.get(
+                "https://api.open-meteo.com/v1/forecast",
+                params={"latitude": coords.lat, "longitude": coords.lng, "timezone": "auto", "forecast_days": 16,
+                        "current": "temperature_2m,apparent_temperature,relative_humidity_2m,weather_code",
+                        "daily": "weather_code,temperature_2m_max,temperature_2m_min"},
+                timeout=6.0)
+            if res.status_code == 200:
+                data = res.json()
+                weather_cache[cache_key] = data
+        except Exception as e:
+            logger.warning(f"Weather lookup failed: {e}")
+    if not data or "current" not in data:
+        raise HTTPException(status_code=503, detail="Weather is unavailable right now.")
+
+    cur = data["current"]
+    condition, emoji = _describe_weather_code(int(cur.get("weather_code", 0)))
+    temp = round(cur.get("temperature_2m", 0))
+
+    start, end = _parse_event_day(start_date or ""), _parse_event_day(end_date or "")
+    if start and not end:
+        end = start
+    daily = []
+    d = data.get("daily", {})
+    for i, day_str in enumerate(d.get("time", [])):
+        day = _parse_event_day(day_str)
+        if not day or (start and day < start) or (end and day > end) or (not start and i >= 5):
+            continue
+        label, icon = _describe_weather_code(int(d["weather_code"][i]))
+        daily.append({"date": day_str, "max_c": round(d["temperature_2m_max"][i]), "min_c": round(d["temperature_2m_min"][i]),
+                      "condition": label, "emoji": icon})
+
+    return {
+        "temp": temp,
+        "temp_c": temp,
+        "feels_like_c": round(cur.get("apparent_temperature", temp)),
+        "humidity": cur.get("relative_humidity_2m"),
+        "condition": condition,
+        "emoji": emoji,
+        "daily": daily,
+        "forecast_available": bool(daily),
+    }
 
 async def _tomtom_place_suggestions(client: httpx.AsyncClient, query: str) -> List[Dict[str, Any]]:
     if not TOMTOM_API_KEY:

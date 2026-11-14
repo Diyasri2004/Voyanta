@@ -3,6 +3,7 @@
 import { useMemo, useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import CyberDashboard from "@/components/dashboard/CyberDashboard";
+import WeatherBadge from "@/components/dashboard/WeatherBadge";
 import VoyAI from "@/components/ai/Voya";
 import CityHeroImage from "@/components/CityHeroImage";
 import { TravelerWaitIndicator } from "@/components/ui/traveler-wait-indicator";
@@ -591,6 +592,10 @@ export default function Page() {
                   <option value="SGD" className="bg-[#04060d] text-white">SGD (S$)</option>
                 </select>
               </div>
+
+              {trip && (
+                <WeatherBadge destination={trip.destination} startDate={trip.start_date} endDate={trip.end_date} />
+              )}
 
               {trip && (
                 <button
