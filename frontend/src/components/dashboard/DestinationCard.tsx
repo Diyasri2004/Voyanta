@@ -17,6 +17,8 @@ export interface DestinationCardProps {
     image_url?: string;
     image?: string;
     event_date?: string;
+    in_trip?: boolean;
+    event_note?: string;
     url?: string;
     source?: string;
     price_range?: string;
@@ -107,6 +109,11 @@ export const DestinationCard = ({
         <div>
           {item.event_date && (
             <p className="mb-1 text-[11px] font-semibold text-emerald-400 line-clamp-1">📅 {item.event_date}</p>
+          )}
+          {item.event_note && (
+            <p className={`mb-1 text-[10px] font-bold uppercase tracking-wide line-clamp-1 ${item.in_trip ? "text-emerald-300" : "text-amber-300"}`}>
+              {item.in_trip ? "✅ " : "⏳ "}{item.event_note}
+            </p>
           )}
           <h4 className="text-base font-bold text-white line-clamp-1 group-hover:text-pink-400 transition-colors">
             {title}

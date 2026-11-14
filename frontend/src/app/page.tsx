@@ -109,6 +109,8 @@ interface TripPlan {
   itinerary: TripStop[];
   routes: TripRoute[];
   culinary_highlights: CulinaryHighlight[];
+  start_date?: string;
+  end_date?: string;
 }
 
 const cn = (...classes: Array<string | false | null | undefined>) =>
@@ -393,7 +395,7 @@ export default function Page() {
         throw new Error(payload?.detail ?? "Unable to build trip plan.");
       }
 
-      setTrip(payload);
+      setTrip({ ...payload, start_date: date, end_date: addDays(date, Math.max(days - 1, 0)) });
       setActiveDay(1);
       if (typeof window !== "undefined") {
         window.history.pushState({ step: "dashboard" }, "");

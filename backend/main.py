@@ -1021,11 +1021,14 @@ async def fetch_google_events(client: httpx.AsyncClient, destination: str) -> Li
         logger.warning(f"SerpApi error: {e}")
         return []
 
-async def build_real_events(client: httpx.AsyncClient, clean_dest: str) -> List[Dict[str, Any]]:
+async def build_real_events(client: httpx.AsyncClient, clean_dest: str, trip_start: Optional[date] = None, trip_end: Optional[date] = None) -> List[Dict[str, Any]]:
     coords = await resolve_dynamic_coordinates(client, clean_dest)
-    tm, ge = await asyncio.gather(fetch_ticketmaster_events(client, coords), fetch_google_events(client, clean_dest))
     today = date.today()
-    horizon = date.fromordinal(today.toordinal() + 180)
+    far = max(today.toordinal() + 180, (trip_end.toordinal() + 60) if trip_end else 0)
+    horizon = date.fromordinal(min(far, today.toordinal() + 365))
+    tm, ge = await asyncio.gather(
+        fetch_ticketmaster_events(client, coords, days_ahead=(horizon - today).days),
+        fetch_google_events(client, clean_dest))
 
     merged, seen = [], set()
     for ev in tm + ge:
@@ -1038,7 +1041,27 @@ async def build_real_events(client: httpx.AsyncClient, clean_dest: str) -> List[
             continue
         seen.add(key)
         merged.append(ev)
-    merged.sort(key=lambda e: (e["day"] is None, e["day"] or today))
+    window = (trip_start, trip_end) if trip_start and trip_end else None
+
+    def classify(ev: Dict[str, Any]):
+        """In-trip events first, then the nearest ones before/after the trip, then undated ones."""
+        day = ev.get("day")
+        if not day:
+            ev["in_trip"], ev["note"] = False, ""
+            return (2, 0, today)
+        if not window:
+            ev["in_trip"], ev["note"] = False, ""
+            return (0, 0, day)
+        ts, te = window
+        if ts <= day <= te:
+            ev["in_trip"], ev["note"] = True, "Happening during your trip"
+            return (0, 0, day)
+        gap = (ts - day).days if day < ts else (day - te).days
+        ev["in_trip"] = False
+        ev["note"] = f"Not during your trip \u00b7 {gap} day{'s' if gap != 1 else ''} {'before' if day < ts else 'after'}"
+        return (1, gap, day)
+
+    merged.sort(key=classify)
     merged = merged[:30]
 
     async def finish(idx: int, ev: Dict[str, Any]) -> Dict[str, Any]:
@@ -1066,6 +1089,8 @@ async def build_real_events(client: httpx.AsyncClient, clean_dest: str) -> List[
             "image": image,
             "event_date": ev.get("when", ""),
             "event_start": ev["day"].isoformat() if ev.get("day") else "",
+            "in_trip": bool(ev.get("in_trip")),
+            "event_note": ev.get("note", ""),
             "url": ev.get("url", ""),
             "source": ev.get("source", ""),
             "price_range": ev.get("price", ""),
@@ -1087,11 +1112,19 @@ async def get_high_capacity_trails(
     destination: str = Query("New York"),
     pillar: Optional[str] = Query(None),
     category: Optional[str] = Query(None),
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
     request: Request = None
 ):
     clean_dest = destination.split(",")[0].strip().title() if destination else "New York"
     active_category = (pillar or category or "attractions").strip().lower()
+    trip_start = _parse_event_day(start_date) if isinstance(start_date, str) else None
+    trip_end = _parse_event_day(end_date) if isinstance(end_date, str) else None
+    if trip_start and (not trip_end or trip_end < trip_start):
+        trip_end = trip_start
     cache_key = f"trails_{clean_dest}_{active_category}".lower()
+    if active_category == "events" and trip_start:
+        cache_key += f"_{trip_start}_{trip_end}"
 
     cached_data = response_cache.get(cache_key)
     if cached_data:
@@ -1100,7 +1133,7 @@ async def get_high_capacity_trails(
     client = getattr(request.app.state, "client", None) if request else None
 
     if active_category == "events":
-        events = await build_real_events(client, clean_dest)
+        events = await build_real_events(client, clean_dest, trip_start, trip_end)
         payload = {
             "status": "success",
             "destination": destination,
@@ -1109,6 +1142,7 @@ async def get_high_capacity_trails(
             "places": events,
             "results": events,
             "events": events,
+            "during_trip": sum(1 for e in events if e.get("in_trip")),
             "sources": [n for n, k in (("Ticketmaster", TICKETMASTER_API_KEY), ("Google Events", SERPAPI_KEY)) if k],
         }
         if events:

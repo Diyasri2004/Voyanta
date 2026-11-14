@@ -84,6 +84,10 @@ export default function CommandCenter({
   ];
 
   const destination = trip?.destination || "Destination";
+  const tripStart: string = trip?.start_date || "";
+  const tripEnd: string = trip?.end_date || "";
+  const cacheKeyFor = (p: string) =>
+    p === "events" ? `voyanta_${destination}_events_${tripStart}_${tripEnd}` : `voyanta_${destination}_${p}`;
 
   useEffect(() => {
     if (destination && destination !== "Destination") {
@@ -104,7 +108,8 @@ export default function CommandCenter({
     const timeoutId = setTimeout(() => controller.abort(), 8000);
 
     try {
-      const res = await fetch(`/api/pillar?destination=${encodeURIComponent(destination)}&pillar=${encodeURIComponent(pillarName)}`, {
+      const dateParams = pillarName === "events" && tripStart ? `&start_date=${tripStart}&end_date=${tripEnd}` : "";
+      const res = await fetch(`/api/pillar?destination=${encodeURIComponent(destination)}&pillar=${encodeURIComponent(pillarName)}${dateParams}`, {
         signal: controller.signal
       });
       if (res.ok) {
@@ -114,7 +119,7 @@ export default function CommandCenter({
           setPillarCache((prev) => {
             const updated = { ...prev, [pillarName]: items };
             try {
-              sessionStorage.setItem(`voyanta_${destination}_${pillarName}`, JSON.stringify(items));
+              sessionStorage.setItem(cacheKeyFor(pillarName), JSON.stringify(items));
             } catch (_) {}
             return updated;
           });
@@ -137,7 +142,7 @@ export default function CommandCenter({
 
     ALL_PILLARS.forEach((p) => {
       try {
-        const saved = sessionStorage.getItem(`voyanta_${destination}_${p}`);
+        const saved = sessionStorage.getItem(cacheKeyFor(p));
         if (saved) {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed) && parsed.length > 0) {
@@ -149,7 +154,7 @@ export default function CommandCenter({
     });
 
     fetchPillarData(currentTab);
-  }, [destination]);
+  }, [destination, tripStart, tripEnd]);
 
   // 2. Fetch active pillar on tab change if not already loaded
   useEffect(() => {
@@ -288,7 +293,7 @@ export default function CommandCenter({
           emptyMessage={
             fetchedRef.current.has(currentTab) && !loadingPillars[currentTab]
               ? currentTab === "events"
-                ? `No upcoming events found in ${destination} right now.`
+                ? `No upcoming events found in ${destination} right now. Try again later or check other dates.`
                 : `No results found for ${destination} right now. Please try again shortly.`
               : undefined
           }
