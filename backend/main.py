@@ -23,6 +23,7 @@ from dotenv import load_dotenv
 
 from models import EventFestival
 from chat_agent import get_voya_system_prompt, get_chat_agent_tools, execute_tool_call
+from cache_store import cache_get, cache_set, backend_name as cache_backend
 from voya_engine import Deps, RateLimiter, run_chat, _name_score
 
 logging.basicConfig(level=logging.INFO)
@@ -623,6 +624,7 @@ async def root():
         "status": "online",
         "service": "Voyanta Pure AI Engine",
         "ai_active": bool(OPENROUTER_API_KEY or GROQ_API_KEY or GEMINI_API_KEY),
+        "cache": cache_backend(),
         "geocoding": "Dynamic Open-Meteo & TomTom"
     }
 
@@ -1082,8 +1084,9 @@ async def _gemini_trending(client: httpx.AsyncClient, dest: str, focus: str = ""
     if not key or client is None:
         return []
     cache_key = f"trending_names:{dest.lower()}:{(focus or '').lower()}"
-    if cache_key in dynamic_cache:
-        return dynamic_cache[cache_key]
+    hit = await cache_get(cache_key)
+    if hit:
+        return hit
     year = date.today().year
     prompt = (
         f"Use Google Search. List the 10 most talked-about places in {dest} right now ({year}) that people aged 18-28 actually hang out at: "
@@ -1106,7 +1109,7 @@ async def _gemini_trending(client: httpx.AsyncClient, dest: str, focus: str = ""
                 out = [{"name": str(d.get("name", "")).strip(), "area": str(d.get("area", "")).strip(), "why": str(d.get("why", "")).strip()[:220]}
                        for d in data if isinstance(d, dict) and d.get("name")][:12]
                 if out:
-                    dynamic_cache[cache_key] = out
+                    await cache_set(cache_key, out, ttl=86400)
                     return out
         except Exception as e:
             logger.warning(f"Gemini trending ({model}) failed: {e}")
@@ -1195,6 +1198,20 @@ REAL_POI_PILLARS = {
 _tomtom_sem = asyncio.Semaphore(3)
 
 async def _tomtom_pois(client: httpx.AsyncClient, query: str, coords: Coordinates, radius: int = 30000) -> List[Dict[str, Any]]:
+    """TomTom POI search, cached 12h and shared by all users (saves quota)."""
+    if not TOMTOM_API_KEY:
+        return []
+    ck = f"tt:{query.lower()}:{round(coords.lat, 2)}:{round(coords.lng, 2)}:{radius}"
+    hit = await cache_get(ck)
+    if hit is not None:
+        return hit
+    out = await _tomtom_pois_live(client, query, coords, radius)
+    if out:
+        await cache_set(ck, out, ttl=43200)
+    return out
+
+
+async def _tomtom_pois_live(client: httpx.AsyncClient, query: str, coords: Coordinates, radius: int = 30000) -> List[Dict[str, Any]]:
     if not TOMTOM_API_KEY:
         return []
     try:
@@ -1407,6 +1424,35 @@ async def build_real_places(client: httpx.AsyncClient, clean_dest: str, pillar: 
 #  High-Capacity Parallel Trail Discovery Engine
 # ─────────────────────────────────────────────
 
+WARM_PILLARS = ["trending", "attractions", "culinary", "bars_pubs", "shopping"]
+WARM_DEFAULT_CITIES = "Lucknow,Delhi,Mumbai,Bengaluru,Goa,Jaipur,Hyderabad,Kolkata,Chennai,Pune,Udaipur,Varanasi,Dubai,Bangkok,Singapore,Paris,London,Tokyo,Bali,New York"
+
+
+@app.get("/api/admin/warm", tags=["Admin"])
+async def warm_popular_cities(request: Request, token: str = Query(""), cities: str = Query("")):
+    """Pre-loads the shared cache for popular cities. Call daily from a free cron (e.g. cron-job.org).
+    Protected by WARM_TOKEN; it is disabled while that variable is unset."""
+    expected = os.getenv("WARM_TOKEN", "").strip()
+    if not expected or token != expected:
+        return JSONResponse(status_code=403, content={"status": "forbidden"})
+    names = [c.strip() for c in (cities or os.getenv("WARM_CITIES", WARM_DEFAULT_CITIES)).split(",") if c.strip()][:40]
+
+    async def job():
+        done = 0
+        for city in names:
+            for p in WARM_PILLARS:
+                try:
+                    await get_high_capacity_trails(destination=city, pillar=p, request=request)
+                    done += 1
+                except Exception as e:
+                    logger.warning(f"warm {city}/{p} failed: {e}")
+                await asyncio.sleep(1.2)  # stay gentle with the data providers
+        logger.info(f"Cache warm-up finished: {done} pillar loads for {len(names)} cities")
+
+    asyncio.create_task(job())
+    return {"status": "started", "cities": len(names), "cache": cache_backend()}
+
+
 @app.get("/api/pillar", tags=["Discovery"])
 @app.get("/api/places", tags=["Discovery"])
 @app.get("/api/trails", tags=["Discovery"])
@@ -1434,6 +1480,11 @@ async def get_high_capacity_trails(
     cached_data = response_cache.get(cache_key)
     if cached_data:
         return cached_data
+    if active_category != "events":
+        shared = await cache_get(cache_key)
+        if shared:
+            response_cache.set(cache_key, shared)
+            return shared
 
     client = getattr(request.app.state, "client", None) if request else None
 
@@ -1468,6 +1519,7 @@ async def get_high_capacity_trails(
         }
         if places:
             response_cache.set(cache_key, payload)
+            await cache_set(cache_key, payload, ttl=43200)
         return payload
 
     # Define 3 dynamic sub-angles based on category to ensure rich variety
