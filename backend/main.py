@@ -316,91 +316,136 @@ async def resolve_dynamic_coordinates(client: httpx.AsyncClient, destination: st
 
     return Coordinates(lat=20.0, lng=0.0)
 
-async def fetch_dynamic_place_photo(client: httpx.AsyncClient, venue: str = "", destination: str = "", category: str = "") -> str:
-    # 1. Clean dynamic inputs at runtime
-    v_clean = re.sub(r'[\(\)\[\],|]', ' ', venue or "").strip()
-    d_clean = destination.split(",")[0].strip() if destination else ""
-    c_clean = re.sub(r'[\(\)\[\],|]', ' ', category or "").strip().lower()
+_PHOTO_STOPWORDS = {
+    "the", "and", "for", "with", "from", "near", "city", "park", "old", "new", "day", "night",
+    "festival", "temple", "market", "beach", "fort", "museum", "restaurant", "cafe", "bar",
+    "tea", "garden", "gardens", "estate", "estates", "house", "hall", "street", "food", "junction",
+    "lake", "falls", "waterfall", "waterfalls", "national", "sanctuary", "wildlife", "palace", "hotel",
+    "grand", "canteen", "snacks", "stall", "boat", "race", "club", "lounge", "pub", "shop", "store",
+    "international", "annual", "cultural", "music", "dance", "show", "fair",
+}
+_photo_sem = asyncio.Semaphore(10)
+_BAD_IMAGE_HINTS = (".svg", "flag", "locator", "_map", "map_of", "location_in", "logo", "icon", "coat_of_arms", "seal_of")
 
-    # 2. Derive dynamic contextual keyword based on category
-    context_suffix = ""
-    if any(k in c_clean for k in ["culinary", "food", "restaurant", "cafe", "dining", "bakery", "dhaba"]):
-        context_suffix = "food dish"
-    elif any(k in c_clean for k in ["wellness", "spa", "meditation", "massage", "yoga", "retreat"]):
-        context_suffix = "spa wellness resort"
-    elif any(k in c_clean for k in ["bar", "pub", "nightlife", "cocktail", "lounge"]):
-        context_suffix = "cocktail bar lounge"
-    elif any(k in c_clean for k in ["theme", "park", "water", "amusement"]):
-        context_suffix = "theme park rides"
-    elif any(k in c_clean for k in ["temple", "shrine", "church", "mosque", "monastery"]):
-        context_suffix = "temple shrine architecture"
-    elif any(k in c_clean for k in ["adventure", "trekking", "hiking", "safari"]):
-        context_suffix = "outdoor adventure nature"
-    elif any(k in c_clean for k in ["shopping", "market", "bazaar", "mall"]):
-        context_suffix = "shopping street market"
-    elif any(k in c_clean for k in ["secret", "hidden", "viewpoint"]):
-        context_suffix = "scenic view landscape"
-    elif any(k in c_clean for k in ["event", "festival", "concert"]):
-        context_suffix = "festival celebration event"
-    else:
-        context_suffix = "travel landmark scenery"
+def _photo_tokens(text: str) -> set:
+    return {w for w in re.findall(r"[a-z0-9]+", (text or "").lower()) if len(w) >= 3 and w not in _PHOTO_STOPWORDS}
 
-    # 3. Build cascading dynamic search queries
-    search_queries = []
-    if v_clean and d_clean:
-        search_queries.append(f"{v_clean} {context_suffix}".strip())
-        search_queries.append(f"{v_clean} {d_clean}".strip())
-        search_queries.append(f"{d_clean} {context_suffix}".strip())
-    elif v_clean:
-        search_queries.append(f"{v_clean} {context_suffix}".strip())
-        search_queries.append(v_clean)
-    elif d_clean:
-        search_queries.append(f"{d_clean} {context_suffix}".strip())
+async def _wiki_photo(client: httpx.AsyncClient, query: str, must_match: set) -> str:
+    """Wikipedia lead image of the best-matching article; the article title must share a word with the place."""
+    try:
+        res = await client.get(
+            "https://en.wikipedia.org/w/api.php",
+            params={"action": "query", "format": "json", "prop": "pageimages", "piprop": "thumbnail",
+                    "pithumbsize": 900, "generator": "search", "gsrsearch": query, "gsrlimit": 5},
+            headers={"User-Agent": "VoyantaTravelApp/1.0 (travel@voyanta.app)"}, timeout=2.5)
+        if res.status_code != 200:
+            return ""
+        pages = sorted(res.json().get("query", {}).get("pages", {}).values(), key=lambda pg: pg.get("index", 99))
+        for page in pages:
+            src = page.get("thumbnail", {}).get("source", "")
+            if not src or any(h in src.lower() for h in _BAD_IMAGE_HINTS):
+                continue
+            if must_match and not (_photo_tokens(page.get("title", "")) & must_match):
+                continue
+            return src
+    except Exception:
+        pass
+    return ""
 
-    # 4. Search Pexels API
+async def _stock_photo(client: httpx.AsyncClient, query: str, v_tokens: set, d_tokens: set) -> str:
+    """Pexels, then Unsplash; a result is only accepted if its description names the place or the destination."""
+    def pick(items):
+        best = ""
+        for desc, url in items:
+            desc = (desc or "").lower()
+            if v_tokens and any(t in desc for t in v_tokens):
+                return url
+            if not best and d_tokens and any(t in desc for t in d_tokens):
+                best = url
+        return best
+
     if PEXELS_API_KEY:
-        for q in search_queries:
-            encoded = urllib.parse.quote(q)
-            try:
-                p_url = f"https://api.pexels.com/v1/search?query={encoded}&orientation=landscape&per_page=1"
-                res = await client.get(p_url, headers={"Authorization": PEXELS_API_KEY}, timeout=2.5)
-                if res.status_code == 200:
-                    photos = res.json().get("photos", [])
-                    if photos and len(photos) > 0:
-                        return photos[0]["src"]["large2x"]
-            except Exception:
-                pass
-
-    # 5. Search Unsplash API
-    if UNSPLASH_ACCESS_KEY:
-        for q in search_queries:
-            encoded = urllib.parse.quote(q)
-            try:
-                u_url = f"https://api.unsplash.com/search/photos?query={encoded}&orientation=landscape&per_page=1&client_id={UNSPLASH_ACCESS_KEY}"
-                res = await client.get(u_url, timeout=2.5)
-                if res.status_code == 200:
-                    results = res.json().get("results", [])
-                    if results and len(results) > 0:
-                        return results[0]["urls"]["regular"]
-            except Exception:
-                pass
-
-    # 6. Search Wikipedia Thumbnail API (Filter SVG/PNG maps and icons)
-    wiki_headers = {"User-Agent": "VoyantaTravelApp/1.0 (travel@voyanta.app)"}
-    if v_clean:
         try:
-            wiki_url = f"https://en.wikipedia.org/w/api.php?action=query&format=json&prop=pageimages&pithumbsize=1000&generator=search&gsrsearch={urllib.parse.quote(v_clean)}&gsrlimit=1"
-            res = await client.get(wiki_url, headers=wiki_headers, timeout=2.0)
+            res = await client.get("https://api.pexels.com/v1/search",
+                                   params={"query": query, "orientation": "landscape", "per_page": 8},
+                                   headers={"Authorization": PEXELS_API_KEY}, timeout=2.5)
             if res.status_code == 200:
-                pages = res.json().get("query", {}).get("pages", {})
-                for _, page in pages.items():
-                    src = page.get("thumbnail", {}).get("source", "")
-                    if src and not any(ext in src.lower() for ext in [".svg", "flag", "locator_map", "_map", "location_in"]):
-                        return src
+                found = pick([(p.get("alt"), p["src"]["large"]) for p in res.json().get("photos", [])])
+                if found:
+                    return found
         except Exception:
             pass
-
+    if UNSPLASH_ACCESS_KEY:
+        try:
+            res = await client.get("https://api.unsplash.com/search/photos",
+                                   params={"query": query, "orientation": "landscape", "per_page": 8, "client_id": UNSPLASH_ACCESS_KEY},
+                                   timeout=2.5)
+            if res.status_code == 200:
+                found = pick([(f"{r.get('alt_description') or ''} {r.get('description') or ''}", r["urls"]["regular"])
+                              for r in res.json().get("results", [])])
+                if found:
+                    return found
+        except Exception:
+            pass
     return ""
+
+async def fetch_destination_photo(client: httpx.AsyncClient, destination: str) -> str:
+    d_clean = destination.split(",")[0].strip() if destination else ""
+    if not d_clean:
+        return ""
+    key = f"destphoto:{d_clean.lower()}"
+    if key in dynamic_cache:
+        return dynamic_cache[key]
+    d_tokens = _photo_tokens(d_clean)
+    url = await _wiki_photo(client, d_clean, d_tokens) or await _stock_photo(client, f"{d_clean} travel", set(), d_tokens)
+    if url:
+        dynamic_cache[key] = url
+    return url
+
+async def fetch_dynamic_place_photo(client: httpx.AsyncClient, venue: str = "", destination: str = "", category: str = "") -> str:
+    """Photo of the actual place in the actual destination. Never returns an unrelated stock image."""
+    v_clean = re.sub(r"[\(\)\[\],|]", " ", venue or "").strip()
+    d_clean = destination.split(",")[0].strip() if destination else ""
+    c_clean = re.sub(r"[\(\)\[\],|]", " ", category or "").strip().lower()
+
+    if not v_clean:
+        return await fetch_destination_photo(client, d_clean)
+
+    key = f"photo:{v_clean.lower()}|{d_clean.lower()}"
+    if key in dynamic_cache:
+        return dynamic_cache[key]
+
+    v_tokens = _photo_tokens(v_clean)
+    d_tokens = _photo_tokens(d_clean)
+    query = f"{v_clean} {d_clean}".strip()
+
+    # Wikipedia only suits landmarks and events; for eateries and bars it tends to return people or unrelated pages
+    is_business = any(k in c_clean for k in ["culinary", "food", "restaurant", "cafe", "dining", "bar", "pub", "nightlife", "lounge"])
+    async with _photo_sem:
+        url = "" if is_business else await _wiki_photo(client, query, v_tokens)
+        if not url:
+            url = await _stock_photo(client, query, v_tokens, d_tokens)
+    if not url:
+        # Same destination, on-topic scene: only accepted when the photo mentions the destination
+        topic = ""
+        if any(k in c_clean for k in ["culinary", "food", "restaurant", "cafe", "dining"]):
+            topic = "food"
+        elif any(k in c_clean for k in ["festival", "event", "concert", "dance", "cultural"]):
+            topic = "festival"
+        elif any(k in c_clean for k in ["temple", "shrine", "church", "mosque"]):
+            topic = "temple"
+        elif any(k in c_clean for k in ["shopping", "market"]):
+            topic = "market"
+        elif any(k in c_clean for k in ["bar", "pub", "nightlife"]):
+            topic = "nightlife"
+        if topic and d_clean:
+            async with _photo_sem:
+                url = await _stock_photo(client, f"{d_clean} {topic}", set(), d_tokens)
+    if not url:
+        url = await fetch_destination_photo(client, d_clean)
+    if url:
+        dynamic_cache[key] = url
+    return url
 
 def clean_venue_title(title: str, destination: str = "") -> str:
     if not title:
@@ -842,9 +887,19 @@ async def generate_itinerary(req: Dict[str, Any], request: Request):
         if isinstance(slot, dict):
             title = slot.get("title", destination)
             cat = slot.get("category", "attractions")
-            slot["image"] = get_fast_dynamic_image_url(title, destination, cat, idx)
+            slot["image"] = ""
 
     final_slots = [s for s in all_slots if isinstance(s, dict)]
+
+    async def attach_slot_photo(slot):
+        try:
+            slot["image"] = await asyncio.wait_for(
+                fetch_dynamic_place_photo(client, venue=slot.get("title", ""), destination=destination, category=slot.get("category", "")),
+                timeout=6.0)
+        except Exception:
+            slot["image"] = await fetch_destination_photo(client, destination)
+
+    await asyncio.gather(*[attach_slot_photo(sl) for sl in final_slots])
 
     payload = {
         "status": "success",
@@ -991,7 +1046,7 @@ Return strictly a JSON array:
                         title_clean = clean_venue_title(t, clean_dest)
                         location_clean = item.get("location") or clean_dest
                         nav_url = f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(title_clean + ' ' + location_clean + ' ' + clean_dest)}"
-                        image_url = get_fast_dynamic_image_url(title_clean, clean_dest, active_category, card_idx)
+                        image_url = ""
 
                         card = {
                             "id": f"{active_category}_{card_idx}",
@@ -1009,6 +1064,20 @@ Return strictly a JSON array:
                         }
                         places.append(card)
                         card_idx += 1
+
+    async def attach_photo(card):
+        try:
+            url = await asyncio.wait_for(
+                fetch_dynamic_place_photo(client, venue=card["title"], destination=clean_dest, category=active_category),
+                timeout=6.0)
+        except Exception:
+            url = ""
+        if not url:
+            url = await fetch_destination_photo(client, clean_dest)
+        card["image_url"] = url
+        card["image"] = url
+
+    await asyncio.gather(*[attach_photo(c) for c in places])
 
     response_payload = {
         "status": "success",
