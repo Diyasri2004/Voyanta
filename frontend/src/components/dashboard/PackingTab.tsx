@@ -31,11 +31,11 @@ export default function PackingTab({ trip }: { trip: any }) {
       {/* Progress Bar */}
       <div className="bg-white/5 border border-white/10 p-4 rounded-xl">
         <div className="flex justify-between items-center mb-2">
-          <span className="text-xs font-bold uppercase tracking-widest text-[#00f0ff]">Readiness</span>
-          <span className="text-[#00f0ff] font-syne font-bold">{progress}%</span>
+          <span className="text-xs font-bold uppercase tracking-widest text-[#7fd6ff]">Readiness</span>
+          <span className="text-[#7fd6ff] font-syne font-bold">{progress}%</span>
         </div>
         <div className="w-full bg-black/50 rounded-full h-2">
-          <div className="bg-[#00f0ff] h-2 rounded-full transition-all duration-500 shadow-[0_0_10px_rgba(0,240,255,0.8)]" style={{ width: `${progress}%` }} />
+          <div className="bg-[#7fd6ff] h-2 rounded-full transition-all duration-500 shadow-[0_0_10px_rgba(127,214,255,0.8)]" style={{ width: `${progress}%` }} />
         </div>
       </div>
 
@@ -44,9 +44,9 @@ export default function PackingTab({ trip }: { trip: any }) {
           value={newItem}
           onChange={(e) => setNewItem(e.target.value)}
           placeholder="Add gear..."
-          className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#39ff14]/50 focus:shadow-[0_0_10px_rgba(57,255,20,0.2)] transition-all"
+          className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#fcd34d]/50 focus:shadow-[0_0_10px_rgba(252,211,77,0.2)] transition-all"
         />
-        <button type="submit" className="bg-[#39ff14]/20 text-[#39ff14] p-2 rounded-lg hover:bg-[#39ff14]/30">
+        <button type="submit" className="bg-[#fcd34d]/20 text-[#fcd34d] p-2 rounded-lg hover:bg-[#fcd34d]/30">
           <Plus className="h-5 w-5" />
         </button>
       </form>
@@ -58,12 +58,12 @@ export default function PackingTab({ trip }: { trip: any }) {
             onClick={() => toggleItem(item.id)}
             className={`flex items-center gap-3 p-3 rounded-lg border text-left transition-all ${
               item.packed 
-                ? "bg-[#39ff14]/10 border-[#39ff14]/30 text-[#39ff14]" 
+                ? "bg-[#fcd34d]/10 border-[#fcd34d]/30 text-[#fcd34d]" 
                 : "bg-white/5 border-white/10 text-white hover:bg-white/10"
             }`}
           >
             <div className={`w-5 h-5 rounded flex items-center justify-center border ${
-              item.packed ? "bg-[#39ff14] border-[#39ff14] text-black" : "border-white/30"
+              item.packed ? "bg-[#fcd34d] border-[#fcd34d] text-black" : "border-white/30"
             }`}>
               {item.packed && <Check className="h-3 w-3" />}
             </div>

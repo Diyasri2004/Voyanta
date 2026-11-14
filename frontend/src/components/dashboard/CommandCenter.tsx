@@ -17,6 +17,7 @@ import {
   Palmtree,
   Landmark,
 } from "lucide-react";
+import { motion } from "framer-motion";
 import { getTranslation, LanguageName } from "@/lib/i18n";
 
 export const PILLARS = [
@@ -245,23 +246,38 @@ export default function CommandCenter({
 
   return (
     <div className="flex flex-col h-full relative">
-      <div className="flex flex-wrap items-center justify-between gap-3 p-4 w-full border-b border-white/10 shrink-0">
-        <h2 className="font-syne font-bold text-lg text-white">{t.commandCenter}</h2>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setIsDrawerOpen(true)}
-            className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs font-medium hover:bg-emerald-500/30 transition-all"
-          >
-            <span>📋 Itinerary Plan</span>
-            <span className="px-1.5 py-0.5 rounded-full bg-emerald-500 text-black text-[10px] font-bold">
-              {planItems.length}
-            </span>
-          </button>
+      {/* Masthead: the destination, set like the landing page */}
+      <div className="flex shrink-0 flex-wrap items-end justify-between gap-4 px-2 pb-5 pt-3 md:px-4">
+        <div className="min-w-0">
+          <p className="mb-1 text-xs font-medium tracking-wide text-[#ffc36b]/80">
+            {t.commandCenter}
+            {tripStart && tripEnd ? `  ·  ${tripStart} → ${tripEnd}` : ""}
+          </p>
+          <h2 className="font-display truncate text-5xl leading-[0.95] text-[#f6efe2] md:text-7xl">
+            {destination.split(",")[0]}
+          </h2>
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-[#aab3c5]">
+            {destination.includes(",") && <span>{destination.split(",").slice(1).join(",").trim()}</span>}
+            {weather && (
+              <span className="glass rounded-full px-3 py-1 font-medium text-[#e8edf7]">
+                {Math.round(weather.temp_c)}°C · {weather.condition}
+              </span>
+            )}
+          </div>
         </div>
+        <button
+          onClick={() => setIsDrawerOpen(true)}
+          className="btn-glow flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold"
+        >
+          <span>Itinerary plan</span>
+          <span className="rounded-full bg-[#1b1206] px-2 py-0.5 text-[11px] font-bold text-[#ffc36b]">
+            {planItems.length}
+          </span>
+        </button>
       </div>
 
-      {/* Tab Navigation */}
-      <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-2 w-full border-b border-white/10 p-2 shrink-0">
+      {/* Tab dock */}
+      <div className="no-scrollbar mx-2 mb-2 flex shrink-0 items-center gap-1 overflow-x-auto rounded-2xl border border-white/[0.07] bg-white/[0.03] p-1.5 backdrop-blur-xl md:mx-4">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = currentTab === tab.id;
@@ -269,21 +285,32 @@ export default function CommandCenter({
             <button
               key={tab.id}
               onClick={() => handleTabChange(tab.id)}
-              className={`flex flex-col items-center gap-1 rounded-xl px-3 py-2 text-[11px] font-bold whitespace-nowrap transition-all ${
-                isActive
-                  ? "bg-[#ff007f]/20 text-[#ff007f] border border-[#ff007f]/50 shadow-[0_0_15px_rgba(255,0,127,0.3)]"
-                  : "text-[#94A3B8] hover:bg-white/5 hover:text-white"
+              className={`relative flex items-center gap-2 whitespace-nowrap rounded-xl px-3.5 py-2.5 text-xs font-semibold transition-colors ${
+                isActive ? "text-[#1b1206]" : "text-[#9aa5bb] hover:text-white"
               }`}
             >
-              <Icon className="h-4 w-4" />
-              {tab.label}
+              {isActive && (
+                <motion.span
+                  layoutId="tab-pill"
+                  className="absolute inset-0 rounded-xl bg-[linear-gradient(115deg,#ffe2ae,#ffc36b_55%,#ff9d5c)] shadow-[0_8px_28px_-8px_rgba(255,176,80,0.7)]"
+                  transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                />
+              )}
+              <Icon className="relative h-4 w-4" />
+              <span className="relative">{tab.label}</span>
             </button>
           );
         })}
       </div>
 
       {/* Tab Content */}
-      <div className="flex-1 overflow-y-auto p-4 hide-scrollbar relative">
+      <div className="flex-1 overflow-y-auto p-2 md:p-4 hide-scrollbar relative">
+        <motion.div
+          key={currentTab}
+          initial={{ opacity: 0, y: 14, rotateX: -6 }}
+          animate={{ opacity: 1, y: 0, rotateX: 0 }}
+          transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+        >
         <PillarTab
           items={getPillarItems(currentTab)}
           destination={destination}
@@ -298,6 +325,7 @@ export default function CommandCenter({
               : undefined
           }
         />
+        </motion.div>
       </div>
 
       {/* Plan Builder Drawer Slide-over */}

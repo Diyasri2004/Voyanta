@@ -35,15 +35,15 @@ export default function LeafletMap({ trip }: { trip: any }) {
       
       {stops.map((stop: any, idx: number) => (
         <Marker key={idx} position={[stop.lat, stop.lng]} icon={customIcon}>
-          <Popup className="font-plus-jakarta bg-[#03050a] text-[#00f0ff] border border-[#00f0ff]">
-            <strong className="text-[#39ff14]">{stop.title}</strong><br />
+          <Popup className="font-plus-jakarta bg-[#04060d] text-[#7fd6ff] border border-[#7fd6ff]">
+            <strong className="text-[#fcd34d]">{stop.title}</strong><br />
             {stop.time} - {stop.location}
           </Popup>
         </Marker>
       ))}
 
       {coords.length > 1 && (
-        <Polyline positions={coords} color="#ff007f" weight={3} dashArray="5, 10" />
+        <Polyline positions={coords} color="#ffc36b" weight={3} dashArray="5, 10" />
       )}
     </MapContainer>
   );

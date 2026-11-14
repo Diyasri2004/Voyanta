@@ -35,7 +35,7 @@ export function CulinaryCard({
     )}`;
 
   return (
-    <div className="relative flex flex-col justify-between p-5 rounded-2xl bg-zinc-900/90 border border-zinc-800 hover:border-pink-500/30 transition-all duration-300 min-h-[220px]">
+    <div className="relative flex flex-col justify-between p-5 rounded-2xl bg-zinc-900/90 border border-zinc-800 hover:border-amber-500/30 transition-all duration-300 min-h-[220px]">
       <div className="space-y-2">
         <h3 className="text-lg font-bold text-white tracking-wide">{name}</h3>
         {specialty && (
@@ -66,7 +66,7 @@ export function CulinaryCard({
             href={mapsUrl}
             target="_blank"
             rel="noreferrer"
-            className="shrink-0 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-medium hover:bg-cyan-500/20 transition-all flex items-center gap-1"
+            className="shrink-0 px-3 py-1 rounded-full bg-sky-500/10 border border-sky-500/30 text-sky-400 text-xs font-medium hover:bg-sky-500/20 transition-all flex items-center gap-1"
           >
             <span>Navigate</span>
           </a>

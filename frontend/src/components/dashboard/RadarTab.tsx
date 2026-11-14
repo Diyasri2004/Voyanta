@@ -101,26 +101,26 @@ export default function RadarTab({ trip, setTrip }: { trip: any; setTrip: any })
     <div className="flex flex-col gap-4">
       {/* Toast alert */}
       {toastMessage && (
-        <div className="bg-[#00f0ff]/20 border border-[#00f0ff] text-[#00f0ff] text-xs font-bold p-3 rounded-xl shadow-[0_0_15px_rgba(0,240,255,0.4)] animate-pulse">
+        <div className="bg-[#7fd6ff]/20 border border-[#7fd6ff] text-[#7fd6ff] text-xs font-bold p-3 rounded-xl shadow-[0_0_15px_rgba(127,214,255,0.4)] animate-pulse">
           {toastMessage}
         </div>
       )}
 
       {/* Radar Status Header */}
-      <div className="bg-[#00f0ff]/10 border border-[#00f0ff]/30 p-4 rounded-xl flex items-center justify-between">
+      <div className="bg-[#7fd6ff]/10 border border-[#7fd6ff]/30 p-4 rounded-xl flex items-center justify-between">
         <div>
-          <h3 className="text-[#00f0ff] font-syne font-bold text-lg flex items-center gap-2">
-            <RadarIcon className={`h-5 w-5 ${isScanning ? "animate-spin text-[#39ff14]" : "animate-pulse"}`} />
+          <h3 className="text-[#7fd6ff] font-syne font-bold text-lg flex items-center gap-2">
+            <RadarIcon className={`h-5 w-5 ${isScanning ? "animate-spin text-[#fcd34d]" : "animate-pulse"}`} />
             Live Radar: {trip?.destination || "Active City"}
           </h3>
-          <p className="text-xs text-[#00f0ff]/80 mt-1">
+          <p className="text-xs text-[#7fd6ff]/80 mt-1">
             {isScanning ? "Scanning frequencies for local pop-ups..." : "Active - Detecting hidden gems & real-time spots"}
           </p>
         </div>
         <button
           onClick={handleRescan}
           disabled={isScanning}
-          className="flex items-center gap-1.5 bg-[#00f0ff]/20 hover:bg-[#00f0ff]/40 text-[#00f0ff] text-xs font-bold px-3 py-2 rounded-xl transition-all border border-[#00f0ff]/40 cursor-pointer disabled:opacity-50"
+          className="flex items-center gap-1.5 bg-[#7fd6ff]/20 hover:bg-[#7fd6ff]/40 text-[#7fd6ff] text-xs font-bold px-3 py-2 rounded-xl transition-all border border-[#7fd6ff]/40 cursor-pointer disabled:opacity-50"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${isScanning ? "animate-spin" : ""}`} />
           {isScanning ? "Scanning..." : "Rescan"}
@@ -133,7 +133,7 @@ export default function RadarTab({ trip, setTrip }: { trip: any; setTrip: any })
           <h4 className="text-xs font-bold text-[#94A3B8] uppercase tracking-widest">
             Detected Hits ({radarHits.length})
           </h4>
-          <span className="text-[10px] text-[#39ff14] font-mono">● LIVE GPS FEED</span>
+          <span className="text-[10px] text-[#fcd34d] font-mono">● LIVE GPS FEED</span>
         </div>
 
         {radarHits.map((hit, idx) => {
@@ -142,12 +142,12 @@ export default function RadarTab({ trip, setTrip }: { trip: any; setTrip: any })
           const mapQuery = encodeURIComponent(`${hit.title} ${trip?.destination || ""}`);
 
           return (
-            <div key={idx} className="bg-white/5 border border-white/10 p-4 rounded-xl flex items-center justify-between group hover:border-[#00f0ff]/50 transition-colors">
+            <div key={idx} className="bg-white/5 border border-white/10 p-4 rounded-xl flex items-center justify-between group hover:border-[#7fd6ff]/50 transition-colors">
               <div className="flex-1 pr-2">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="text-[10px] bg-[#00f0ff]/20 text-[#00f0ff] px-2 py-0.5 rounded-full font-bold uppercase">{hit.type}</span>
+                  <span className="text-[10px] bg-[#7fd6ff]/20 text-[#7fd6ff] px-2 py-0.5 rounded-full font-bold uppercase">{hit.type}</span>
                 </div>
-                <h4 className="font-bold text-white text-sm group-hover:text-[#00f0ff] transition-colors">{hit.title}</h4>
+                <h4 className="font-bold text-white text-sm group-hover:text-[#7fd6ff] transition-colors">{hit.title}</h4>
                 <p className="text-xs text-white/50 flex items-center gap-1 mt-1">
                   <MapPin className="h-3 w-3 text-[#94A3B8]" /> {hit.location}
                 </p>
@@ -169,8 +169,8 @@ export default function RadarTab({ trip, setTrip }: { trip: any; setTrip: any })
                   disabled={isAdded}
                   className={`p-2 rounded-full transition-colors flex items-center justify-center ${
                     isAdded 
-                      ? "bg-[#39ff14]/20 text-[#39ff14] border border-[#39ff14]/40" 
-                      : "bg-[#00f0ff]/20 text-[#00f0ff] hover:bg-[#00f0ff] hover:text-black cursor-pointer"
+                      ? "bg-[#fcd34d]/20 text-[#fcd34d] border border-[#fcd34d]/40" 
+                      : "bg-[#7fd6ff]/20 text-[#7fd6ff] hover:bg-[#7fd6ff] hover:text-black cursor-pointer"
                   }`}
                   title={isAdded ? "Added to Agenda" : "Add to Agenda"}
                 >

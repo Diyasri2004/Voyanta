@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Sparkles } from "lucide-react";
+import FlapBoard from "@/components/hero/FlapBoard";
 
 const TRAVEL_TIPS = [
   "💡 Tip: Local markets are best visited early in the morning for fresh finds and peaceful walks.",
@@ -12,6 +12,7 @@ const TRAVEL_TIPS = [
   "✨ Preparing 7 Explorer Pillars customized specifically for your traveler group...",
 ];
 
+/** While the trip is built, the globe dives toward the destination behind this. */
 export function TravelerWaitIndicator({ destination }: { destination?: string }) {
   const [tipIndex, setTipIndex] = useState(0);
 
@@ -23,24 +24,15 @@ export function TravelerWaitIndicator({ destination }: { destination?: string })
   }, []);
 
   return (
-    <div className="flex flex-col items-center justify-center p-8 md:p-12 text-center my-auto">
-      {/* Animated Radar Pulse Spinner */}
-      <div className="relative mb-6 flex items-center justify-center">
-        <div className="absolute h-24 w-24 rounded-full bg-[#00f0ff]/10 animate-ping" />
-        <div className="absolute h-16 w-16 rounded-full border-2 border-[#00f0ff]/40 shadow-[0_0_30px_rgba(0,240,255,0.4)] animate-spin" />
-        <div className="relative flex h-14 w-14 items-center justify-center rounded-full bg-[#03050a] border border-[#00f0ff]/60 shadow-[0_0_20px_rgba(0,240,255,0.5)]">
-          <Sparkles className="h-6 w-6 text-[#00f0ff] animate-pulse" />
-        </div>
+    <div className="mt-auto flex flex-col items-center gap-7 px-4 pb-14 pt-10 text-center md:pb-20">
+      <FlapBoard text={destination?.split(",")[0] || "Voyanta"} />
+
+      <div className="inline-flex max-w-[92vw] items-center gap-2 rounded-full border border-[#ffc36b]/35 bg-[#ffc36b]/10 px-5 py-2 text-xs font-semibold text-[#ffd89a] md:text-sm">
+        Curating verified spots in {destination || "your destination"}. This takes a few moments.
       </div>
 
-      {/* Status Badge */}
-      <div className="inline-flex items-center gap-2 rounded-full border border-[#00f0ff]/40 bg-[#00f0ff]/10 px-4 py-1.5 text-xs md:text-sm font-bold text-[#00f0ff] shadow-[0_0_20px_rgba(0,240,255,0.2)] mb-4">
-        <span>⚡ Curating verified spots in {destination || "your destination"}... Please give us a few moments.</span>
-      </div>
-
-      {/* Rotating Travel Tip */}
-      <div className="max-w-md h-12 flex items-center justify-center">
-        <p className="text-xs md:text-sm text-[#CBD5E1] font-medium transition-all duration-500 ease-in-out px-4 py-2 rounded-xl bg-white/5 border border-white/10">
+      <div className="flex h-14 max-w-md items-center justify-center">
+        <p className="glass rounded-xl px-4 py-2.5 text-xs font-medium text-[#d6dbe6] transition-all duration-500 ease-in-out md:text-sm">
           {TRAVEL_TIPS[tipIndex]}
         </p>
       </div>

@@ -61,7 +61,7 @@ export default function AgendaTab({ trip, setTrip }: { trip: any; setTrip: any }
             onClick={() => setActiveDay(dayNum)}
             className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${
               activeDay === dayNum 
-                ? "bg-[#00f0ff] text-black shadow-[0_0_10px_rgba(0,240,255,0.5)]" 
+                ? "bg-[#7fd6ff] text-black shadow-[0_0_10px_rgba(127,214,255,0.5)]" 
                 : "bg-white/5 text-white hover:bg-white/10"
             }`}
           >
@@ -71,15 +71,15 @@ export default function AgendaTab({ trip, setTrip }: { trip: any; setTrip: any }
       </div>
 
       {conflicts.length > 0 && (
-        <div className="bg-[#ff007f]/10 border border-[#ff007f]/50 p-3 rounded-xl flex flex-col gap-2">
-          <div className="flex items-center gap-2 text-[#ff007f] font-bold text-sm">
+        <div className="bg-[#ffc36b]/10 border border-[#ffc36b]/50 p-3 rounded-xl flex flex-col gap-2">
+          <div className="flex items-center gap-2 text-[#ffc36b] font-bold text-sm">
             <AlertTriangle className="h-4 w-4" />
             Transit Conflict Detected!
           </div>
-          <p className="text-xs text-[#ff007f]/80">There isn't enough time to travel between some stops.</p>
+          <p className="text-xs text-[#ffc36b]/80">There isn't enough time to travel between some stops.</p>
           <button 
             onClick={handleMagicReRoute}
-            className="mt-1 bg-[#ff007f] text-white text-xs font-bold py-2 rounded-lg hover:bg-[#ff007f]/80 shadow-[0_0_15px_rgba(255,0,127,0.4)] transition-all"
+            className="mt-1 bg-[#ffc36b] text-white text-xs font-bold py-2 rounded-lg hover:bg-[#ffc36b]/80 shadow-[0_0_15px_rgba(255,195,107,0.4)] transition-all"
           >
             Magic Re-Route
           </button>
@@ -91,8 +91,8 @@ export default function AgendaTab({ trip, setTrip }: { trip: any; setTrip: any }
           <div key={stop.id} className="bg-white/5 border border-white/10 rounded-xl p-4 flex flex-col gap-2 relative group">
             <div className="flex justify-between items-start">
               <div>
-                <p className="text-[10px] text-[#00f0ff] uppercase tracking-wider font-bold mb-1">{stop.time} • {stop.duration}</p>
-                <h3 className="font-syne font-bold text-base text-white group-hover:text-[#39ff14] transition-colors line-clamp-1">{stop.title || stop.name || stop.location || "Attraction"}</h3>
+                <p className="text-[10px] text-[#7fd6ff] uppercase tracking-wider font-bold mb-1">{stop.time} • {stop.duration}</p>
+                <h3 className="font-syne font-bold text-base text-white group-hover:text-[#fcd34d] transition-colors line-clamp-1">{stop.title || stop.name || stop.location || "Attraction"}</h3>
               </div>
               <button 
                 onClick={() => {
@@ -101,7 +101,7 @@ export default function AgendaTab({ trip, setTrip }: { trip: any; setTrip: any }
                   const query = encodeURIComponent(SPOT_NAME + " " + CITY_NAME);
                   window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, "_blank");
                 }}
-                className="bg-[#39ff14]/10 text-[#39ff14] p-2 rounded-full hover:bg-[#39ff14]/20 transition-colors"
+                className="bg-[#fcd34d]/10 text-[#fcd34d] p-2 rounded-full hover:bg-[#fcd34d]/20 transition-colors"
                 title="Open in Google Maps"
               >
                 <ArrowRight className="h-4 w-4" />

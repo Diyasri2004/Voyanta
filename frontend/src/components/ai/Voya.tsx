@@ -1,7 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { MessageSquare, X, Send } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { X, Send } from "lucide-react";
+import HeaderMenu from "@/components/ui/HeaderMenu";
+import VoyaMark from "./VoyaMark";
 
 import { useCurrency } from "@/context/CurrencyContext";
 
@@ -67,6 +70,7 @@ export default function Voya({ trip }: { trip: any }) {
     }
   ]);
   const [input, setInput] = useState("");
+  const scrollRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
@@ -87,6 +91,10 @@ export default function Voya({ trip }: { trip: any }) {
       ]);
     }
   }, [trip?.destination]);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+  }, [messages, isLoading, isOpen]);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -179,148 +187,189 @@ export default function Voya({ trip }: { trip: any }) {
     }
   };
 
-  return (
-    <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-[9999] pointer-events-auto flex flex-col items-end">
-      {/* Chat Drawer */}
-      <div className={`absolute bottom-full right-0 mb-4 w-[calc(100vw-2rem)] sm:w-96 h-[500px] max-h-[75vh] bg-[#03050a]/95 backdrop-blur-xl border border-[#ff007f]/40 rounded-2xl shadow-[0_0_30px_rgba(255,0,127,0.2)] z-50 transition-all duration-300 flex flex-col origin-bottom-right ${isOpen ? 'scale-100 opacity-100' : 'scale-90 opacity-0 pointer-events-none'}`}>
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-[#00f0ff]/20 bg-gradient-to-r from-[#00f0ff]/10 to-transparent">
-          <div className="flex items-center gap-3">
-            <div className="relative group cursor-help">
-              <span className="text-2xl drop-shadow-[0_0_8px_rgba(0,240,255,0.8)] inline-block transition-transform group-hover:scale-125 group-hover:-rotate-12 duration-300">🤖</span>
-            </div>
-            <div>
-              <h3 className="font-syne font-bold text-[#00f0ff] flex items-center gap-2">
-                Voya 
-                <span className="inline-block transition-transform hover:scale-125 hover:rotate-12 duration-300 cursor-pointer drop-shadow-[0_0_5px_rgba(255,0,127,0.8)]">✨</span>
-              </h3>
-              <p className="text-[10px] text-[#00f0ff]/70 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#39ff14] animate-pulse inline-block" /> Online
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <select
-              value={activeLang}
-              onChange={(e) => selectLanguage(e.target.value)}
-              className="bg-black/60 text-[#00f0ff] border border-[#00f0ff]/30 text-[10px] rounded-lg px-1.5 py-1 focus:outline-none cursor-pointer"
-            >
-              <option value="en">🌐 EN</option>
-              <option value="hi">🇮🇳 HI (Hinglish)</option>
-              <option value="ta">🇮🇳 TA (Tanglish)</option>
-              <option value="te">🇮🇳 TE (Teluglish)</option>
-              <option value="kn">🇮🇳 KN (Kanglish)</option>
-              <option value="ml">🇮🇳 ML (Manglish)</option>
-              <option value="bn">🇮🇳 BN (Banglish)</option>
-              <option value="ar">🌍 AR (Arabizi)</option>
-              <option value="es">🇪🇸 ES</option>
-              <option value="fr">🇫🇷 FR</option>
-              <option value="de">🇩🇪 DE</option>
-              <option value="zh">🇨🇳 ZH (Pinyin)</option>
-              <option value="ru">🇷🇺 RU (Translit)</option>
-            </select>
-            <button onClick={() => setIsOpen(false)} className="text-white/50 hover:text-white ml-1">
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-        </div>
+  const LANG_OPTIONS = [
+    { value: "en", label: "English", hint: "EN" },
+    { value: "hi", label: "Hindi (Hinglish)", hint: "HI" },
+    { value: "ta", label: "Tamil (Tanglish)", hint: "TA" },
+    { value: "te", label: "Telugu (Teluglish)", hint: "TE" },
+    { value: "kn", label: "Kannada (Kanglish)", hint: "KN" },
+    { value: "ml", label: "Malayalam (Manglish)", hint: "ML" },
+    { value: "bn", label: "Bengali (Banglish)", hint: "BN" },
+    { value: "ar", label: "Arabic (Arabizi)", hint: "AR" },
+    { value: "es", label: "Spanish", hint: "ES" },
+    { value: "fr", label: "French", hint: "FR" },
+    { value: "de", label: "German", hint: "DE" },
+    { value: "zh", label: "Chinese (Pinyin)", hint: "ZH" },
+    { value: "ru", label: "Russian (Translit)", hint: "RU" },
+  ];
 
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3 hide-scrollbar">
-          {messages.map((m: any, i: number) => (
-            <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"} animate-fadeInUp`}>
-              <div className={`max-w-[85%] rounded-xl p-3 text-sm ${
-                m.role === "user" 
-                  ? "bg-gradient-to-br from-[#ff007f] to-[#ff007f]/80 text-white rounded-br-sm shadow-[0_0_15px_rgba(255,0,127,0.3)]" 
-                  : "bg-white/5 text-[#e2e8f0] border border-[#00f0ff]/20 rounded-bl-sm font-plus-jakarta shadow-[0_0_15px_rgba(0,240,255,0.05)]"
-              }`}>
-                <p className="whitespace-pre-wrap">{m.content || m.text}</p>
-                {/* Action Badges */}
-                {m.action?.booking_platforms && (
-                  <div className="mt-2.5 pt-2 border-t border-white/10 space-y-1">
-                    <div className="text-[11px] font-semibold text-[#ff007f]">🏨 Stays:</div>
-                    <div className="grid grid-cols-2 gap-1 text-[10px]">
-                      {Object.entries(m.action.booking_platforms).map(([p, u]: any) => (
-                        <a key={p} href={u} target="_blank" rel="noreferrer" className="capitalize text-[#00f0ff] underline truncate">{p.replace('_', ' ')}</a>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {m.action?.ticket_platforms && (
-                  <div className="mt-2.5 pt-2 border-t border-white/10 space-y-1">
-                    <div className="text-[11px] font-semibold text-[#39ff14]">🎟️ Experience Tickets:</div>
-                    <div className="grid grid-cols-2 gap-1 text-[10px]">
-                      {Object.entries(m.action.ticket_platforms).map(([p, u]: any) => (
-                        <a key={p} href={u} target="_blank" rel="noreferrer" className="capitalize text-[#00f0ff] underline truncate">{p}</a>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {m.action?.ride_hailing && (
-                  <div className="mt-2.5 pt-2 border-t border-white/10 space-y-1">
-                    <div className="text-[11px] font-semibold text-[#00f0ff]">🚕 Cabs & Transit:</div>
-                    <div className="grid grid-cols-2 gap-1 text-[10px]">
-                      {Object.entries(m.action.ride_hailing).map(([p, u]: any) => (
-                        <a key={p} href={u} target="_blank" rel="noreferrer" className="capitalize text-[#00f0ff] underline truncate">{p.replace('_', ' ')}</a>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-          {isLoading && (
-            <div className="flex justify-start">
-              <div className="bg-white/5 border border-[#00f0ff]/20 rounded-xl p-3 text-sm flex gap-1">
-                <div className="w-2 h-2 bg-[#00f0ff] rounded-full animate-bounce" />
-                <div className="w-2 h-2 bg-[#00f0ff] rounded-full animate-bounce [animation-delay:0.2s]" />
-                <div className="w-2 h-2 bg-[#00f0ff] rounded-full animate-bounce [animation-delay:0.4s]" />
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Quick Prompts */}
-        <div className="px-4 pb-2 flex gap-2 overflow-x-auto hide-scrollbar">
-          {SUGGESTIONS.map((sug, idx) => (
-            <button
-              key={idx}
-              onClick={() => sendMessage(undefined, sug)}
-              className="whitespace-nowrap text-[10px] bg-[#00f0ff]/10 text-[#00f0ff] border border-[#00f0ff]/30 px-3 py-1.5 rounded-full hover:bg-[#00f0ff]/20 transition-colors"
-            >
-              {sug}
-            </button>
-          ))}
-        </div>
-
-        {/* Input */}
-        <form onSubmit={(e) => sendMessage(e)} className="p-4 border-t border-[#00f0ff]/20 bg-black/50">
-          <div className="flex items-center bg-white/5 border border-white/10 rounded-full pr-2 focus-within:border-[#00f0ff]/50 transition-colors">
-            <input 
-              type="text" 
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              placeholder="Ask Voya..."
-              className="flex-1 bg-transparent px-4 py-3 text-sm outline-none text-white placeholder-white/40"
-            />
-            <button type="submit" disabled={!input.trim()} className="bg-[#00f0ff] text-black p-2 rounded-full hover:bg-white disabled:opacity-50 transition-colors">
-              <Send className="h-4 w-4" />
-            </button>
-          </div>
-        </form>
+  const linkGroup = (title: string, entries: Record<string, string>) => (
+    <div className="mt-3 border-t border-white/10 pt-2.5">
+      <div className="mb-1.5 text-[11px] font-semibold text-[#ffc36b]">{title}</div>
+      <div className="flex flex-wrap gap-1.5">
+        {Object.entries(entries).map(([p, u]) => (
+          <a
+            key={p}
+            href={u}
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-full border border-[#ffc36b]/30 bg-[#ffc36b]/10 px-2.5 py-1 text-[11px] font-medium capitalize text-[#ffd89a] transition hover:bg-[#ffc36b]/20"
+          >
+            {p.replace("_", " ")}
+          </a>
+        ))}
       </div>
+    </div>
+  );
 
-      {/* Floating Action Button */}
-      <button 
-        onClick={openDrawer}
-        className={`relative h-14 w-14 sm:h-16 sm:w-16 rounded-full bg-gradient-to-tr from-[#ff007f] to-[#00f0ff] flex items-center justify-center text-white shadow-[0_0_20px_rgba(255,0,127,0.5)] hover:shadow-[0_0_30px_rgba(0,240,255,0.8)] hover:scale-110 transition-all duration-300 z-[10000] group ${isOpen ? 'rotate-90' : 'rotate-0'}`}
-      >
-        <div className="absolute inset-0 rounded-full border border-white/40 bg-white/10 backdrop-blur-md"></div>
-        {isOpen ? <X className="h-7 w-7 relative z-10 drop-shadow-[0_0_5px_rgba(255,255,255,0.8)]" /> : <MessageSquare className="h-7 w-7 relative z-10 drop-shadow-[0_0_5px_rgba(255,255,255,0.8)]" />}
-        {!isOpen && (
-          <span className="absolute top-0 right-0 h-4 w-4 bg-[#39ff14] rounded-full border-2 border-[#03050a] animate-pulse"></span>
+  return (
+    <div
+      className="pointer-events-auto fixed right-4 z-[9999] flex flex-col items-end sm:right-6"
+      style={{ bottom: "max(1rem, env(safe-area-inset-bottom))" }}
+    >
+      {/* Chat panel */}
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            role="dialog"
+            aria-label="Voya travel assistant"
+            initial={{ opacity: 0, y: 24, rotateX: -14, scale: 0.94 }}
+            animate={{ opacity: 1, y: 0, rotateX: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 16, scale: 0.96 }}
+            transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+            style={{ transformPerspective: 1200, transformOrigin: "bottom right" }}
+            className="absolute bottom-full right-0 mb-4 flex h-[34rem] max-h-[calc(100svh-7.5rem)] w-[calc(100vw-2rem)] flex-col rounded-3xl border border-white/10 bg-[#070c19]/90 shadow-[0_40px_90px_-20px_rgba(0,0,0,0.9),0_0_60px_-20px_rgba(255,176,80,0.35)] backdrop-blur-2xl sm:w-[26rem]"
+          >
+            {/* ambient glow */}
+            <div aria-hidden className="pointer-events-none absolute -top-px left-8 right-8 h-px bg-gradient-to-r from-transparent via-[#ffc36b]/70 to-transparent" />
+
+            {/* Header */}
+            <div className="relative z-20 flex items-center justify-between gap-3 border-b border-white/[0.07] px-4 py-3.5">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[#ffc36b]/30 bg-[#ffc36b]/10 text-[#7fd6ff] shadow-[0_0_28px_-6px_rgba(255,195,107,0.6)]">
+                  <VoyaMark size={30} />
+                </div>
+                <div>
+                  <h3 className="font-display text-2xl leading-none text-[#f6efe2]">Voya</h3>
+                  <p className="mt-1 flex items-center gap-1.5 text-[11px] text-[#8b95ab]">
+                    <span className="relative flex h-1.5 w-1.5">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#7fd6ff]/70" />
+                      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[#7fd6ff]" />
+                    </span>
+                    Travel guide · online
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <HeaderMenu
+                  size="sm"
+                  icon="globe"
+                  ariaLabel="Chat language"
+                  value={activeLang}
+                  display={activeLang.toUpperCase()}
+                  onChange={selectLanguage}
+                  options={LANG_OPTIONS}
+                />
+                <button
+                  onClick={() => setIsOpen(false)}
+                  aria-label="Close chat"
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-[#8b95ab] transition hover:bg-white/10 hover:text-white"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Messages */}
+            <div className="hide-scrollbar flex flex-1 flex-col gap-3 overflow-y-auto px-4 py-4" ref={scrollRef}>
+              {messages.map((m: any, i: number) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                  className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
+                >
+                  <div
+                    className={`max-w-[86%] px-4 py-3 text-[13.5px] leading-relaxed ${
+                      m.role === "user"
+                        ? "rounded-2xl rounded-br-md bg-[linear-gradient(115deg,#ffe2ae,#ffc36b_55%,#ff9d5c)] font-medium text-[#1b1206] shadow-[0_10px_30px_-12px_rgba(255,176,80,0.7)]"
+                        : "rounded-2xl rounded-bl-md border border-white/10 bg-white/[0.05] text-[#e4e9f4]"
+                    }`}
+                  >
+                    <p className="whitespace-pre-wrap">{m.content || m.text}</p>
+                    {m.action?.booking_platforms && linkGroup("Stays", m.action.booking_platforms)}
+                    {m.action?.ticket_platforms && linkGroup("Experience tickets", m.action.ticket_platforms)}
+                    {m.action?.ride_hailing && linkGroup("Cabs and transit", m.action.ride_hailing)}
+                  </div>
+                </motion.div>
+              ))}
+              {isLoading && (
+                <div className="flex justify-start">
+                  <div className="flex gap-1.5 rounded-2xl rounded-bl-md border border-white/10 bg-white/[0.05] px-4 py-3.5">
+                    <span className="h-2 w-2 animate-bounce rounded-full bg-[#ffc36b]" />
+                    <span className="h-2 w-2 animate-bounce rounded-full bg-[#ffc36b] [animation-delay:0.15s]" />
+                    <span className="h-2 w-2 animate-bounce rounded-full bg-[#ffc36b] [animation-delay:0.3s]" />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Quick prompts */}
+            <div className="hide-scrollbar flex gap-2 overflow-x-auto px-4 pb-3">
+              {SUGGESTIONS.map((sug, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => sendMessage(undefined, sug)}
+                  className="glass whitespace-nowrap rounded-full px-3.5 py-2 text-[11.5px] font-medium text-[#cbd3e3] transition hover:border-[#ffc36b]/40 hover:text-white"
+                >
+                  {sug}
+                </button>
+              ))}
+            </div>
+
+            {/* Input */}
+            <form onSubmit={(e) => sendMessage(e)} className="border-t border-white/[0.07] p-3">
+              <div className="flex items-center rounded-full border border-white/10 bg-white/[0.04] pr-1.5 transition focus-within:border-[#ffc36b]/50 focus-within:shadow-[0_0_20px_-6px_rgba(255,195,107,0.5)]">
+                <input
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder="Ask Voya anything about your trip"
+                  className="h-12 flex-1 bg-transparent px-4 text-base text-white outline-none placeholder:text-white/35 sm:text-sm"
+                />
+                <button
+                  type="submit"
+                  disabled={!input.trim() || isLoading}
+                  aria-label="Send message"
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-[linear-gradient(115deg,#ffe2ae,#ffc36b_55%,#ff9d5c)] text-[#1b1206] transition hover:brightness-105 active:scale-95 disabled:opacity-40"
+                >
+                  <Send className="h-4 w-4" />
+                </button>
+              </div>
+            </form>
+          </motion.div>
         )}
-      </button>
+      </AnimatePresence>
+
+      {/* Launcher: glowing orb with Voya's emblem */}
+      <motion.button
+        onClick={isOpen ? () => setIsOpen(false) : openDrawer}
+        aria-label={isOpen ? "Close Voya chat" : "Open Voya travel assistant"}
+        whileHover={{ scale: 1.08, rotate: isOpen ? 0 : -6 }}
+        whileTap={{ scale: 0.94 }}
+        className="group relative z-[10000] flex h-16 w-16 items-center justify-center rounded-full border border-white/25 bg-[radial-gradient(circle_at_30%_25%,#2a3350,#0a1020_70%)] text-[#7fd6ff] shadow-[0_0_0_1px_rgba(255,195,107,0.35),0_18px_50px_-10px_rgba(255,176,80,0.7)] sm:h-[4.5rem] sm:w-[4.5rem]"
+      >
+        <span aria-hidden className="absolute -inset-1.5 rounded-full bg-[conic-gradient(from_0deg,transparent,rgba(255,195,107,0.55),transparent_60%)] opacity-70 blur-md animate-spin [animation-duration:6s]" />
+        <span className="relative">
+          {isOpen ? <X className="h-7 w-7 text-[#ffd89a]" /> : <VoyaMark size={38} />}
+        </span>
+        {!isOpen && (
+          <span className="absolute right-0.5 top-0.5 h-3.5 w-3.5 rounded-full border-2 border-[#070c19] bg-[#ffc36b]">
+            <span className="absolute inset-0 animate-ping rounded-full bg-[#ffc36b]/70" />
+          </span>
+        )}
+      </motion.button>
     </div>
   );
 }

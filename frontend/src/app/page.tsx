@@ -6,6 +6,11 @@ import CyberDashboard from "@/components/dashboard/CyberDashboard";
 import VoyAI from "@/components/ai/Voya";
 import CityHeroImage from "@/components/CityHeroImage";
 import { TravelerWaitIndicator } from "@/components/ui/traveler-wait-indicator";
+import TravelBackdrop from "@/components/3d/TravelBackdrop";
+import HeaderMenu from "@/components/ui/HeaderMenu";
+import Landing from "@/components/landing/Landing";
+import { sceneStore } from "@/lib/sceneStore";
+import { findDestination } from "@/lib/destinations";
 import { AnimatePresence, motion } from "framer-motion";
 import { DestinationInput } from "@/components/search/DestinationInput";
 import { useCurrency } from "@/context/CurrencyContext";
@@ -14,13 +19,14 @@ import {
   Loader2,
   MapPin,
   Search,
-  Snowflake,
+  Plane,
   LayoutGrid,
   Map as MapIcon,
   Navigation,
   PlaneTakeoff,
   PlaneLanding,
   Home,
+  Pencil,
   Users,
   ChevronDown,
   Plus,
@@ -32,7 +38,7 @@ import { getTranslation, LanguageName } from "@/lib/i18n";
 const VoyantaMap = dynamic(() => import("@/components/VoyantaMap"), {
   ssr: false,
   loading: () => (
-    <div className="w-full h-full min-h-[520px] bg-[#0A0D14] rounded-[2rem] border border-white/[0.08] flex items-center justify-center text-[#94A3B8]">
+    <div className="w-full h-full min-h-[520px] bg-[#090e1a] rounded-[2rem] border border-white/[0.08] flex items-center justify-center text-[#94A3B8]">
       Loading map...
     </div>
   ),
@@ -99,6 +105,12 @@ const LANGUAGES = [
   { code: "JA", name: "Japanese" as LanguageName, label: "🇯🇵 JA (日本語)" },
 ];
 
+const CURRENCIES = [
+  { code: "USD", sym: "$" }, { code: "EUR", sym: "€" }, { code: "GBP", sym: "£" },
+  { code: "INR", sym: "₹" }, { code: "JPY", sym: "¥" }, { code: "AUD", sym: "A$" },
+  { code: "CAD", sym: "C$" }, { code: "AED", sym: "د.إ" }, { code: "SGD", sym: "S$" },
+];
+
 interface TripPlan {
   destination: string;
   destination_image: string;
@@ -136,7 +148,7 @@ function StopCard({ stop, destination }: { stop: TripStop; destination: string }
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.97 }}
       onClick={() => window.open(mapUrl, "_blank")}
-      className="group overflow-hidden rounded-[2rem] bg-[#0A0D14]/85 border border-white/[0.08] shadow-2xl cursor-pointer transition-all hover:border-blue-500/40 hover:shadow-[0_0_30px_rgba(59,130,246,0.15)]"
+      className="group overflow-hidden rounded-[2rem] bg-[#090e1a]/85 border border-white/[0.08] shadow-2xl cursor-pointer transition-all hover:border-blue-500/40 hover:shadow-[0_0_30px_rgba(59,130,246,0.15)]"
     >
       <div className="relative h-64 overflow-hidden">
         <img
@@ -144,7 +156,7 @@ function StopCard({ stop, destination }: { stop: TripStop; destination: string }
           alt={stop.title}
           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#07090E] via-[#07090E]/30 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#060913] via-[#060913]/30 to-transparent" />
         <div className="absolute left-0 right-0 bottom-0 p-6">
           <span className="inline-flex rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[10px] font-bold tracking-[0.22em] text-white">
             {stop.type}
@@ -209,7 +221,7 @@ function CulinaryCard({ highlight, destination }: { highlight: any; destination:
   const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${title} ${destination}`)}`;
 
   return (
-    <div className="relative flex flex-col justify-between p-6 rounded-2xl bg-zinc-900/80 border border-zinc-800 hover:border-pink-500/30 transition-all duration-300 min-h-[220px]">
+    <div className="relative flex flex-col justify-between p-6 rounded-2xl bg-zinc-900/80 border border-zinc-800 hover:border-amber-500/30 transition-all duration-300 min-h-[220px]">
       <div className="space-y-2">
         <h3 className="text-xl font-bold text-white tracking-wide">{title}</h3>
         <p className="text-xs font-semibold tracking-wider text-emerald-400 uppercase">{specialty}</p>
@@ -225,7 +237,7 @@ function CulinaryCard({ highlight, destination }: { highlight: any; destination:
           href={mapUrl}
           target="_blank"
           rel="noreferrer"
-          className="px-4 py-1.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-medium hover:bg-cyan-500/20 transition-all"
+          className="px-4 py-1.5 rounded-full bg-sky-500/10 border border-sky-500/30 text-sky-400 text-xs font-medium hover:bg-sky-500/20 transition-all"
         >
           Navigate
         </a>
@@ -260,6 +272,11 @@ function addDays(iso: string, n: number): string {
   return getLocalDateString(n);
 }
 
+function fmtShort(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+}
+
 function diffDays(start: string, end: string): number {
   const ms = new Date(end).getTime() - new Date(start).getTime();
   return Math.max(1, Math.round(ms / 86400000));
@@ -275,6 +292,7 @@ export default function Page() {
   const [viewMode, setViewMode] = useState<ViewMode>("split");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editTrip, setEditTrip] = useState(false);
 
   const [travelers, setTravelers] = useState<TravelersState>({
     group_type: "Couple",
@@ -443,6 +461,23 @@ export default function Page() {
     void loadTripPlan(trimmedLocation, days, startDate);
   }
 
+  // The dashboard (and its loader) own the viewport; otherwise the full landing scrolls.
+  const showDashboard = Boolean(trip) || loading;
+
+  // Steer the 3D world: dive toward the destination while planning, recede behind the dashboard.
+  useEffect(() => {
+    sceneStore.warp = loading ? 1 : 0;
+    if (loading) {
+      const d = findDestination(locationInput);
+      if (d) sceneStore.focus = { lat: d.lat, lng: d.lng };
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
+
+  useEffect(() => {
+    if (trip && typeof window !== "undefined") window.scrollTo({ top: 0 });
+  }, [trip]);
+
   return (
     <>
       <style
@@ -452,7 +487,7 @@ export default function Page() {
             html, body { max-width: 100%; overflow-x: hidden; }
             input[type="date"] { min-width: 0; -webkit-appearance: none; appearance: none; }
             body {
-              background: #05070A;
+              background: #04060d;
               margin: 0;
               -webkit-font-smoothing: antialiased;
               -moz-osx-font-smoothing: grayscale;
@@ -484,389 +519,186 @@ export default function Page() {
         }}
       />
 
-      <div className="relative min-h-screen md:h-screen md:max-h-screen md:overflow-hidden bg-[#05070A] font-manrope text-white selection:bg-[#ff007f] selection:text-white flex flex-col justify-between">
-        <div className="fixed inset-0 pointer-events-none bg-[radial-gradient(circle_at_top,rgba(148,163,184,0.14),transparent_42%),linear-gradient(180deg,#05070A_0%,#04060A_100%)]" />
-        <div className="fixed inset-0 pointer-events-none bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.16] mix-blend-overlay" />
+      <div className={`relative min-h-screen font-manrope text-white selection:bg-[#ffc36b] selection:text-[#050912] flex flex-col ${showDashboard ? "md:h-screen md:max-h-screen md:overflow-hidden justify-between" : ""}`}>
+        <TravelBackdrop recede={Boolean(trip)} dive={loading && !trip} />
 
-        <header className="relative md:sticky top-0 z-40 border-b border-white/[0.05] bg-[#05070A]/85 backdrop-blur-2xl shrink-0">
-          <div className="mx-auto flex max-w-[1600px] flex-col md:flex-row md:items-center gap-4 px-4 py-3.5 sm:px-6 md:px-10">
+        <header
+          className={`${showDashboard ? "relative md:sticky" : "fixed inset-x-0"} top-0 z-40 shrink-0 border-b border-white/[0.06] bg-[#050912]/60 backdrop-blur-xl`}
+          style={{ paddingTop: "env(safe-area-inset-top)" }}
+        >
+          <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-x-3 gap-y-2.5 px-4 py-3 sm:px-6 lg:flex-nowrap lg:gap-4 lg:px-10">
             <button
               type="button"
               onClick={() => setTrip(null)}
-              className="flex items-center gap-3 transition-opacity hover:opacity-80"
+              aria-label="Voyanta home"
+              className="flex items-center gap-2 transition-opacity hover:opacity-80 sm:gap-2.5"
             >
-              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-white shadow-[0_0_28px_rgba(255,255,255,0.18)]">
-                <Snowflake className="h-5 w-5 text-black" />
+              <div className="relative flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-[#7fd6ff] via-[#38bdf8] to-[#818cf8] shadow-[0_0_28px_rgba(127,214,255,0.4)] sm:h-11 sm:w-11">
+                <Plane className="h-5 w-5 -rotate-45 text-[#04060d]" strokeWidth={2.4} />
               </div>
-              <span className="text-xl font-syne font-bold tracking-tight">VOYANTA</span>
+              <span className="font-syne text-[0.95rem] font-extrabold tracking-[0.08em] sm:text-xl sm:tracking-[0.18em]">VOYANTA</span>
             </button>
 
+            {/* Trip capsule: destination + dates at a glance, tap to edit */}
             {trip ? (
-              <form
-                onSubmit={handleSubmit}
-                className="ml-auto flex w-full max-w-5xl flex-col gap-3 md:flex-row"
+              <button
+                type="button"
+                onClick={() => setEditTrip((v) => !v)}
+                aria-expanded={editTrip}
+                className={`glass order-3 flex h-12 w-full min-w-0 items-center gap-3 rounded-full pl-4 pr-2 text-left transition hover:border-[#ffc36b]/40 lg:order-none lg:mx-auto lg:w-auto lg:min-w-[26rem] lg:max-w-xl lg:flex-1 ${
+                  editTrip ? "border-[#ffc36b]/50" : ""
+                }`}
               >
-                <div className="relative flex-1">
-                  <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#64748B]" />
-                  <input
-                    value={locationInput}
-                    onChange={(e) => setLocationInput(e.target.value)}
-                    placeholder={t.searchPlaceholder}
-                    className="w-full rounded-full border border-white/[0.10] bg-white/[0.03] py-3 pl-11 pr-4 text-sm text-white outline-none transition focus:border-[#00f0ff]/50 focus:shadow-[0_0_15px_rgba(0,240,255,0.2)]"
-                  />
-                </div>
-                {/* Departure date */}
-                <div className="relative">
-                  <PlaneTakeoff className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#64748B]" />
-                  <input
-                    id="start-date-header"
-                    type="date"
-                    value={startDate}
-                    min={todayIso()}
-                    onChange={(e) => handleStartDate(e.target.value)}
-                    className="w-full rounded-full border border-white/[0.10] bg-white/[0.03] py-3 pl-11 pr-4 text-sm text-white outline-none transition focus:border-blue-500/50 focus:shadow-[0_0_0_2px_rgba(59,130,246,0.15)] md:w-44"
-                    style={{ colorScheme: "dark" }}
-                  />
-                </div>
-                {/* Return date */}
-                <div className="relative">
-                  <PlaneLanding className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#64748B]" />
-                  <input
-                    id="return-date-header"
-                    type="date"
-                    value={returnDate}
-                    min={addDays(startDate, 1)}
-                    max={addDays(startDate, 30)}
-                    onChange={(e) => handleReturnDate(e.target.value)}
-                    className="w-full rounded-full border border-white/[0.10] bg-white/[0.03] py-3 pl-11 pr-4 text-sm text-white outline-none transition focus:border-[#00f0ff]/50 focus:shadow-[0_0_15px_rgba(0,240,255,0.2)] md:w-44"
-                    style={{ colorScheme: "dark" }}
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={loading || !locationInput.trim()}
-                  className="inline-flex items-center justify-center rounded-full bg-white px-6 py-3 text-sm font-bold text-[#05070A] transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : t.planTrip}
-                </button>
-              </form>
+                <MapPin className="h-4 w-4 shrink-0 text-[#ffc36b]" />
+                <span className="font-display truncate text-xl leading-none text-[#f6efe2]">
+                  {(trip.destination || locationInput).split(",")[0]}
+                </span>
+                <span className="hidden h-5 w-px bg-white/15 sm:block" />
+                <span className="hidden truncate text-xs font-medium text-[#aab3c5] sm:block">
+                  {fmtShort(startDate)} → {fmtShort(returnDate)}
+                </span>
+                <span className="ml-auto flex shrink-0 items-center gap-1.5 rounded-full bg-white/[0.07] px-3 py-1.5 text-xs font-semibold text-[#e8edf7]">
+                  {diffDays(startDate, returnDate)}d
+                  <Pencil className="h-3 w-3 text-[#ffc36b]" />
+                </span>
+              </button>
             ) : (
               <div className="ml-auto" />
             )}
 
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full md:w-auto justify-between md:justify-end">
-              {/* Language Selector */}
-              <div className="flex items-center gap-1.5 rounded-full border border-[#00f0ff]/40 bg-[#03050a]/80 px-3 py-1.5 shadow-[0_0_12px_rgba(0,240,255,0.2)]">
-                <span className="text-xs font-bold text-[#00f0ff]">🌐</span>
-                <select 
-                  value={selectedLanguage} 
-                  onChange={e => setSelectedLanguage(e.target.value as LanguageName)}
-                  className="bg-transparent text-white text-xs font-bold outline-none cursor-pointer"
-                >
-                  {LANGUAGES.map(lang => (
-                    <option key={lang.code} value={lang.name} className="bg-[#03050a] text-white">
-                      {lang.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Currency Selector */}
-              <div className="flex items-center gap-1.5 rounded-full border border-[#00f0ff]/40 bg-[#03050a]/80 px-3 py-1.5 shadow-[0_0_12px_rgba(0,240,255,0.2)]">
-                <span className="text-xs font-bold text-[#00f0ff]">💲</span>
-                <select 
-                  value={currency} 
-                  onChange={e => setCurrency(e.target.value)}
-                  className="bg-transparent text-white text-xs font-bold outline-none cursor-pointer"
-                >
-                  <option value="USD" className="bg-[#03050a] text-white">USD ($)</option>
-                  <option value="EUR" className="bg-[#03050a] text-white">EUR (€)</option>
-                  <option value="GBP" className="bg-[#03050a] text-white">GBP (£)</option>
-                  <option value="INR" className="bg-[#03050a] text-white">INR (₹)</option>
-                  <option value="JPY" className="bg-[#03050a] text-white">JPY (¥)</option>
-                  <option value="AUD" className="bg-[#03050a] text-white">AUD (A$)</option>
-                  <option value="CAD" className="bg-[#03050a] text-white">CAD (C$)</option>
-                  <option value="AED" className="bg-[#03050a] text-white">AED (د.إ)</option>
-                  <option value="SGD" className="bg-[#03050a] text-white">SGD (S$)</option>
-                </select>
-              </div>
-
+            <div className={`flex items-center gap-1.5 sm:gap-3 ${trip ? "ml-auto lg:ml-0" : ""}`}>
+              <HeaderMenu
+                icon="globe"
+                ariaLabel="Language"
+                value={selectedLanguage}
+                display={LANGUAGES.find((l) => l.name === selectedLanguage)?.code ?? "EN"}
+                onChange={(v) => setSelectedLanguage(v as LanguageName)}
+                options={LANGUAGES.map((l) => ({ value: l.name, label: l.name, hint: l.code }))}
+              />
+              <HeaderMenu
+                icon="coins"
+                ariaLabel="Currency"
+                value={currency}
+                display={currency}
+                onChange={setCurrency}
+                options={CURRENCIES.map((c) => ({ value: c.code, label: c.code, hint: c.sym }))}
+              />
               {trip && (
                 <button
-                  onClick={() => setTrip(null)}
-                  className="flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-xs font-bold text-white transition hover:bg-white/[0.08]"
+                  type="button"
+                  onClick={() => {
+                    setEditTrip(false);
+                    setTrip(null);
+                  }}
+                  aria-label={t.newTrip}
+                  className="flex h-10 items-center gap-2 whitespace-nowrap rounded-full border border-[#ffc36b]/45 bg-[#ffc36b]/10 px-3.5 text-xs font-bold text-[#ffd89a] transition hover:bg-[#ffc36b]/20 sm:px-4"
                 >
-                  <Home className="h-3.5 w-3.5" />
-                  {t.newTrip}
+                  <Plus className="h-4 w-4" strokeWidth={2.4} />
+                  <span className="hidden sm:inline">{t.newTrip}</span>
                 </button>
               )}
             </div>
           </div>
-        </header>
 
-        <main className="relative z-10 mx-auto w-full max-w-[1600px] px-4 sm:px-6 py-4 md:px-10 flex-1 flex flex-col justify-center md:overflow-y-auto">
-          {error ? (
-            <div className="mx-auto my-auto max-w-2xl rounded-3xl border border-[#00f0ff]/40 bg-[#03050a]/90 p-8 text-center backdrop-blur-md shadow-[0_0_40px_rgba(0,240,255,0.15)]">
-              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#111827] border border-[#ff007f]/40 shadow-[0_0_20px_rgba(255,0,127,0.2)]">
-                <Navigation className="h-6 w-6 text-[#ff007f]" strokeWidth={2} />
-              </div>
-              <h3 className="mb-2 font-syne text-xl font-bold text-white">{t.connectionInterrupted}</h3>
-              <p className="mb-6 text-sm text-[#94A3B8] break-words">{error}</p>
-              <button
-                onClick={() => handleSubmit()}
-                className="rounded-full bg-[#00f0ff]/10 px-6 py-2.5 text-sm font-bold text-[#00f0ff] transition-all hover:bg-[#00f0ff]/20 hover:shadow-[0_0_20px_rgba(0,240,255,0.3)] border border-[#00f0ff]/30"
+          <AnimatePresence initial={false}>
+            {trip && editTrip && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                className="overflow-hidden"
               >
-                {t.retryGeneration}
-              </button>
-            </div>
-          ) : null}
-
-          {trip ? (
-            <div className="flex flex-col w-full h-full">
-              <CyberDashboard trip={trip} setTrip={setTrip} selectedLanguage={selectedLanguage} />
-            </div>
-          ) : null}
-
-          {loading && !trip ? (
-            <TravelerWaitIndicator destination={locationInput} />
-          ) : null}
-
-          {!loading && !trip && !error ? (
-            <div className="flex my-auto items-center justify-center px-4 py-2">
-              <div className="w-full max-w-[780px] rounded-[2rem] border border-white/[0.07] bg-[#0B0F18]/80 px-4 py-6 sm:px-6 md:px-10 md:py-8 text-center backdrop-blur-2xl shadow-[0_0_80px_rgba(0,0,0,0.6)]">
-
-                {/* Icon */}
-                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#111827] border border-blue-500/20 shadow-[0_0_28px_rgba(59,130,246,0.25)]">
-                  <Navigation className="h-5 w-5 text-blue-400" strokeWidth={1.8} />
-                </div>
-
-                {/* Title */}
-                <h1 className="font-syne text-xl sm:text-2xl md:text-[2.2rem] font-extrabold leading-tight tracking-tight text-white">
-                  {t.heroTitle}
-                </h1>
-
-                {/* Subtitle */}
-                <p className="mx-auto mt-3 max-w-lg text-[0.9rem] leading-relaxed text-[#64748B]">
-                  {t.heroSubtitle}
-                </p>
-
-                <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-[10px]">
-
-                  {/* ── Row 1 : Destination search ── */}
-                  <DestinationInput
-                    value={locationInput}
-                    onChange={setLocationInput}
-                    placeholder={t.searchPlaceholder}
-                  />
-
-                  {/* Suggestion Chips */}
-                  <div className="flex flex-wrap items-center gap-2 mt-1 mb-2">
-                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mr-1">Trending:</span>
-                    
-                    {loadingTrending && (
-                      <div className="flex flex-wrap gap-2 animate-pulse">
-                        {[1, 2, 3, 4, 5].map((i) => (
-                          <div key={i} className="h-7 w-20 rounded-full bg-zinc-800/80" />
-                        ))}
-                      </div>
-                    )}
-
-                    {!loadingTrending && trending.map((item, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => {
-                          setLocationInput(item.name);
-                          setIsAutocompleteOpen(false);
-                        }}
-                        className="px-3.5 py-1.5 rounded-full text-xs font-medium bg-zinc-900/90 border border-zinc-800 text-zinc-300 hover:border-cyan-500 hover:text-cyan-300 hover:bg-cyan-500/10 transition-all cursor-pointer shadow-sm"
-                      >
-                        {item.name}
-                      </button>
-                    ))}
+                <form
+                  onSubmit={(e) => {
+                    setEditTrip(false);
+                    handleSubmit(e);
+                  }}
+                  className="mx-auto flex max-w-[1600px] flex-col gap-3 px-4 pb-4 sm:px-6 md:flex-row md:px-10"
+                >
+                  <div className="relative flex-1">
+                    <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#64748B]" />
+                    <input
+                      value={locationInput}
+                      onChange={(e) => setLocationInput(e.target.value)}
+                      placeholder={t.searchPlaceholder}
+                      className="h-12 w-full rounded-full border border-white/[0.10] bg-white/[0.04] pl-11 pr-4 text-base text-white outline-none transition focus:border-[#ffc36b]/50 focus:shadow-[0_0_15px_rgba(255,195,107,0.2)] md:text-sm"
+                    />
                   </div>
-
-                  {/* ── Row 2 : Departure | Return | Travelers | Plan trip ── */}
-                  <div className="flex flex-col md:flex-row items-stretch md:items-center gap-[10px]">
-
-                    {/* Departure date */}
-                    <div className="relative flex-1">
-                      <PlaneTakeoff className="pointer-events-none absolute left-[18px] top-1/2 h-[16px] w-[16px] -translate-y-1/2 text-[#475569]" />
+                  <div className="grid grid-cols-2 gap-3 md:flex">
+                    <div className="relative">
+                      <PlaneTakeoff className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#64748B]" />
                       <input
-                        id="start-date-main"
+                        id="start-date-header"
                         type="date"
                         value={startDate}
                         min={todayIso()}
                         onChange={(e) => handleStartDate(e.target.value)}
-                        className="w-full rounded-full border border-white/[0.09] bg-[#111827]/60 py-[14px] pl-12 pr-4 text-[0.95rem] text-white outline-none transition-all focus:border-blue-500/40 focus:bg-[#111827]/90 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.12)]"
+                        className="h-12 w-full rounded-full border border-white/[0.10] bg-white/[0.04] pl-11 pr-3 text-base text-white outline-none transition focus:border-[#ffc36b]/50 md:w-44 md:text-sm"
                         style={{ colorScheme: "dark" }}
                       />
                     </div>
-
-                    {/* Return date */}
-                    <div className="relative flex-1">
-                      <PlaneLanding className="pointer-events-none absolute left-[18px] top-1/2 h-[16px] w-[16px] -translate-y-1/2 text-[#475569]" />
+                    <div className="relative">
+                      <PlaneLanding className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#64748B]" />
                       <input
-                        id="return-date-main"
+                        id="return-date-header"
                         type="date"
                         value={returnDate}
                         min={addDays(startDate, 1)}
                         max={addDays(startDate, 30)}
                         onChange={(e) => handleReturnDate(e.target.value)}
-                        className="w-full rounded-full border border-white/[0.09] bg-[#111827]/60 py-[14px] pl-12 pr-4 text-[0.95rem] text-white outline-none transition-all focus:border-blue-500/40 focus:bg-[#111827]/90 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.12)]"
+                        className="h-12 w-full rounded-full border border-white/[0.10] bg-white/[0.04] pl-11 pr-3 text-base text-white outline-none transition focus:border-[#ffc36b]/50 md:w-44 md:text-sm"
                         style={{ colorScheme: "dark" }}
                       />
                     </div>
-
-                    {/* Travelers Popover */}
-                    <div className="relative flex-1">
-                      <button
-                        type="button"
-                        onClick={() => setIsTravelersOpen(!isTravelersOpen)}
-                        className="w-full flex items-center justify-between gap-2 rounded-full border border-[#00f0ff]/40 bg-[#111827]/80 py-[14px] px-5 text-[0.85rem] font-bold text-white outline-none transition-all hover:border-[#00f0ff] focus:border-[#00f0ff] focus:shadow-[0_0_15px_rgba(0,240,255,0.3)] cursor-pointer"
-                      >
-                        <div className="flex items-center gap-2">
-                          <Users className="h-4 w-4 text-[#00f0ff] shrink-0" />
-                          <span className="truncate">
-                            {getGroupTypeLabel(travelers.group_type)} ({travelers.adults + travelers.seniors + travelers.infants})
-                          </span>
-                        </div>
-                        <ChevronDown className="h-4 w-4 text-[#64748B] shrink-0" />
-                      </button>
-
-                      {isTravelersOpen && (
-                        <div className="absolute top-full mt-2 right-0 w-[min(20rem,calc(100vw-2rem))] bg-[#03050a]/95 backdrop-blur-2xl border border-[#00f0ff]/40 rounded-3xl p-5 z-50 shadow-[0_10px_40px_rgba(0,240,255,0.25)] text-left">
-                          <p className="text-[11px] font-bold uppercase tracking-wider text-[#00f0ff] mb-3">{t.groupType}</p>
-                          <div className="flex flex-wrap gap-2 mb-5">
-                            {(['Solo', 'Couple', 'Family', 'Friends', 'Business'] as const).map((type) => (
-                              <button
-                                key={type}
-                                type="button"
-                                onClick={() => setTravelers((prev) => ({ ...prev, group_type: type }))}
-                                className={cn(
-                                  "px-3 py-1.5 rounded-full text-xs font-bold transition-all border",
-                                  travelers.group_type === type
-                                    ? "bg-[#00f0ff]/20 border-[#00f0ff] text-white shadow-[0_0_12px_rgba(0,240,255,0.3)]"
-                                    : "bg-white/5 border-white/10 text-[#94A3B8] hover:bg-white/10 hover:text-white"
-                                )}
-                              >
-                                {getGroupTypeLabel(type)}
-                              </button>
-                            ))}
-                          </div>
-
-                          <p className="text-[11px] font-bold uppercase tracking-wider text-[#00f0ff] mb-3">{t.travelerCounts}</p>
-                          <div className="flex flex-col gap-3.5">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <p className="text-sm font-semibold text-white">{t.adults}</p>
-                                <p className="text-[11px] text-[#64748B]">{t.adultsDesc}</p>
-                              </div>
-                              <div className="flex items-center gap-3">
-                                <button
-                                  type="button"
-                                  onClick={() => setTravelers((prev) => ({ ...prev, adults: Math.max(1, prev.adults - 1) }))}
-                                  className="h-7 w-7 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-white hover:bg-white/20 transition"
-                                >
-                                  <Minus className="h-3.5 w-3.5" />
-                                </button>
-                                <span className="text-sm font-bold text-white w-4 text-center">{travelers.adults}</span>
-                                <button
-                                  type="button"
-                                  onClick={() => setTravelers((prev) => ({ ...prev, adults: prev.adults + 1 }))}
-                                  className="h-7 w-7 rounded-full bg-[#00f0ff]/20 border border-[#00f0ff]/40 flex items-center justify-center text-[#00f0ff] hover:bg-[#00f0ff]/30 transition"
-                                >
-                                  <Plus className="h-3.5 w-3.5" />
-                                </button>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <p className="text-sm font-semibold text-white">{t.seniors}</p>
-                                <p className="text-[11px] text-[#64748B]">{t.seniorsDesc}</p>
-                              </div>
-                              <div className="flex items-center gap-3">
-                                <button
-                                  type="button"
-                                  onClick={() => setTravelers((prev) => ({ ...prev, seniors: Math.max(0, prev.seniors - 1) }))}
-                                  className="h-7 w-7 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-white hover:bg-white/20 transition"
-                                >
-                                  <Minus className="h-3.5 w-3.5" />
-                                </button>
-                                <span className="text-sm font-bold text-white w-4 text-center">{travelers.seniors}</span>
-                                <button
-                                  type="button"
-                                  onClick={() => setTravelers((prev) => ({ ...prev, seniors: prev.seniors + 1 }))}
-                                  className="h-7 w-7 rounded-full bg-[#00f0ff]/20 border border-[#00f0ff]/40 flex items-center justify-center text-[#00f0ff] hover:bg-[#00f0ff]/30 transition"
-                                >
-                                  <Plus className="h-3.5 w-3.5" />
-                                </button>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <p className="text-sm font-semibold text-white">{t.infants}</p>
-                                <p className="text-[11px] text-[#64748B]">{t.infantsDesc}</p>
-                              </div>
-                              <div className="flex items-center gap-3">
-                                <button
-                                  type="button"
-                                  onClick={() => setTravelers((prev) => ({ ...prev, infants: Math.max(0, prev.infants - 1) }))}
-                                  className="h-7 w-7 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-white hover:bg-white/20 transition"
-                                >
-                                  <Minus className="h-3.5 w-3.5" />
-                                </button>
-                                <span className="text-sm font-bold text-white w-4 text-center">{travelers.infants}</span>
-                                <button
-                                  type="button"
-                                  onClick={() => setTravelers((prev) => ({ ...prev, infants: prev.infants + 1 }))}
-                                  className="h-7 w-7 rounded-full bg-[#00f0ff]/20 border border-[#00f0ff]/40 flex items-center justify-center text-[#00f0ff] hover:bg-[#00f0ff]/30 transition"
-                                >
-                                  <Plus className="h-3.5 w-3.5" />
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() => setIsTravelersOpen(false)}
-                            className="w-full mt-5 py-2.5 rounded-full bg-[#00f0ff]/15 border border-[#00f0ff]/40 text-[#00f0ff] text-xs font-bold hover:bg-[#00f0ff]/30 transition"
-                          >
-                            {t.applySelection}
-                          </button>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Plan trip button */}
-                    <button
-                      id="plan-trip-btn"
-                      type="submit"
-                      disabled={loading || !locationInput.trim()}
-                      className="w-full sm:w-auto shrink-0 rounded-full bg-white px-7 py-[14px] text-[0.95rem] font-bold text-[#05070A] transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : t.planTrip}
-                    </button>
                   </div>
-
-                  {/* Days pill — live count */}
-                  <div className="flex justify-center pt-1">
-                    <span className="rounded-full border border-blue-500/25 bg-blue-500/8 px-3 py-1 text-[11px] font-semibold text-blue-400 tracking-wide">
-                      {diffDays(startDate, returnDate)}&nbsp;{diffDays(startDate, returnDate) > 1 ? t.days : t.day}
-                    </span>
-                  </div>
+                  <button
+                    type="submit"
+                    disabled={loading || !locationInput.trim()}
+                    className="btn-glow inline-flex h-12 items-center justify-center rounded-full px-7 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : t.planTrip}
+                  </button>
                 </form>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </header>
 
-                <p className="mt-5 text-[0.8rem] text-[#334155]">
-                  When you open the map, clicking any marker will open navigation for that place.
-                </p>
+        {showDashboard ? (
+          <main className="relative z-10 mx-auto w-full max-w-[1600px] px-4 sm:px-6 py-4 md:px-10 flex-1 flex flex-col justify-center md:overflow-y-auto">
+            {trip ? (
+              <div className="flex flex-col w-full h-full">
+                <CyberDashboard trip={trip} setTrip={setTrip} selectedLanguage={selectedLanguage} />
               </div>
-            </div>
-          ) : null}
-        </main>
+            ) : null}
+
+            {loading && !trip ? <TravelerWaitIndicator destination={locationInput} /> : null}
+          </main>
+        ) : (
+          <Landing
+            t={t}
+            language={selectedLanguage}
+            locationInput={locationInput}
+            setLocationInput={setLocationInput}
+            startDate={startDate}
+            returnDate={returnDate}
+            minStart={todayIso()}
+            minReturn={addDays(startDate, 1)}
+            maxReturn={addDays(startDate, 30)}
+            onStartDate={handleStartDate}
+            onReturnDate={handleReturnDate}
+            daysCount={diffDays(startDate, returnDate)}
+            travelers={travelers}
+            setTravelers={setTravelers}
+            groupLabel={getGroupTypeLabel}
+            trending={trending}
+            loadingTrending={loadingTrending}
+            loading={loading}
+            error={error}
+            onSubmit={handleSubmit}
+          />
+        )}
       </div>
 
       {/* FLOATING VOYA DRAWER */}

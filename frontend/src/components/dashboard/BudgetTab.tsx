@@ -11,9 +11,9 @@ export default function BudgetTab({ trip }: { trip: any }) {
   const { formatCost, convertCost } = useCurrency();
   const [budgetLimit, setBudgetLimit] = useState(2000);
   const [expenses, setExpenses] = useState([
-    { category: "Dining", amount: 450, color: "#ff007f" },
-    { category: "Transit", amount: 200, color: "#00f0ff" },
-    { category: "Tickets", amount: 350, color: "#39ff14" },
+    { category: "Dining", amount: 450, color: "#ffc36b" },
+    { category: "Transit", amount: 200, color: "#7fd6ff" },
+    { category: "Tickets", amount: 350, color: "#fcd34d" },
     { category: "Shopping", amount: 150, color: "#f59e0b" },
   ]);
 

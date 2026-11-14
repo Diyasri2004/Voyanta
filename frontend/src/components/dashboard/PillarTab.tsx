@@ -24,11 +24,11 @@ export interface PillarItemData {
 
 function SkeletonCardGrid() {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 p-4">
+    <div className="grid grid-cols-1 gap-5 p-2 sm:grid-cols-2 sm:gap-6 md:p-4 lg:grid-cols-3 xl:grid-cols-4">
       {Array.from({ length: 8 }).map((_, idx) => (
         <div
           key={idx}
-          className="relative grid h-full w-full overflow-hidden rounded-2xl border border-white/10 bg-zinc-900/60 min-h-[420px] animate-pulse p-6 flex flex-col justify-end"
+          className="relative grid h-full w-full overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] min-h-[400px] animate-pulse p-6 flex flex-col justify-end"
         >
           <div className="h-4 w-24 bg-zinc-800 rounded mb-3" />
           <div className="h-6 w-3/4 bg-zinc-800 rounded mb-2" />
