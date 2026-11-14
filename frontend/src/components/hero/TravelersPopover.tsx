@@ -5,7 +5,14 @@ import { ChevronDown, Minus, Plus, Users } from "lucide-react";
 import type { TranslationDictionary } from "@/lib/i18n";
 import type { TravelersState } from "@/app/page";
 
-const GROUPS = ["Solo", "Couple", "Family", "Friends", "Business"] as const;
+/** The trip type is no longer chosen by hand; it is worked out from who is travelling. */
+function inferGroup(adults: number, seniors: number, infants: number): TravelersState["group_type"] {
+  const total = adults + seniors + infants;
+  if (total <= 1) return "Solo";
+  if (infants > 0 || seniors > 0) return "Family";
+  if (total === 2) return "Couple";
+  return "Friends";
+}
 
 function Stepper({
   label,
@@ -53,7 +60,7 @@ export default function TravelersPopover({
   t,
   travelers,
   setTravelers,
-  groupLabel,
+  groupLabel: _groupLabel,
 }: {
   t: TranslationDictionary;
   travelers: TravelersState;
@@ -63,6 +70,25 @@ export default function TravelersPopover({
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const total = travelers.adults + travelers.seniors + travelers.infants;
+  const [place, setPlace] = useState<{ up: boolean; max: number }>({ up: true, max: 480 });
+
+  const update = (patch: Partial<Pick<TravelersState, "adults" | "seniors" | "infants">>) =>
+    setTravelers((p) => {
+      const next = { ...p, ...patch };
+      return { ...next, group_type: inferGroup(next.adults, next.seniors, next.infants) };
+    });
+
+  // Open towards whichever side of the button has more room, so it is never cut off by the header or the screen edge.
+  const toggle = () => {
+    if (!open && root.current) {
+      const r = root.current.getBoundingClientRect();
+      const above = r.top - 84;
+      const below = window.innerHeight - r.bottom - 16;
+      const up = above >= 330 || above >= below;
+      setPlace({ up, max: Math.max(220, Math.floor(up ? above : below) - 12) });
+    }
+    setOpen((o) => !o);
+  };
 
   // close on outside click / Escape
   useEffect(() => {
@@ -84,43 +110,28 @@ export default function TravelersPopover({
       <button
         type="button"
         aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
+        onClick={toggle}
         className="flex h-full min-h-[3.4rem] w-full items-center justify-between gap-2 rounded-2xl border border-white/10 bg-white/[0.045] px-4 text-sm font-semibold text-white outline-none transition hover:border-white/25 focus-visible:border-[#ffc36b]/60"
       >
         <span className="flex items-center gap-2.5">
           <Users className="h-4 w-4 shrink-0 text-[#ffc36b]" />
           <span className="truncate">
-            {groupLabel(travelers.group_type)} ({total})
+            {total} {total === 1 ? "traveler" : "travelers"}
           </span>
         </span>
         <ChevronDown className={`h-4 w-4 shrink-0 text-white/50 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
 
       {open && (
-        <div className="absolute bottom-full right-0 z-50 mb-3 w-[min(20rem,calc(100vw-2rem))] rounded-3xl border border-white/12 bg-[#080d19]/95 p-5 text-left shadow-[0_24px_70px_-10px_rgba(0,0,0,0.9)] backdrop-blur-2xl">
-          <p className="mb-3 text-xs font-semibold text-[#ffc36b]">{t.groupType}</p>
-          <div className="mb-5 flex flex-wrap gap-2">
-            {GROUPS.map((type) => (
-              <button
-                key={type}
-                type="button"
-                onClick={() => setTravelers((p) => ({ ...p, group_type: type }))}
-                className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                  travelers.group_type === type
-                    ? "border-[#ffc36b] bg-[#ffc36b]/15 text-white"
-                    : "border-white/10 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white"
-                }`}
-              >
-                {groupLabel(type)}
-              </button>
-            ))}
-          </div>
-
+        <div
+          style={{ maxHeight: place.max }}
+          className={`absolute right-0 z-50 w-[min(20rem,calc(100vw-2rem))] overflow-y-auto overscroll-contain ${place.up ? "bottom-full mb-3" : "top-full mt-3"} rounded-3xl border border-white/12 bg-[#080d19]/95 p-5 text-left shadow-[0_24px_70px_-10px_rgba(0,0,0,0.9)] backdrop-blur-2xl`}
+        >
           <p className="mb-3 text-xs font-semibold text-[#ffc36b]">{t.travelerCounts}</p>
           <div className="flex flex-col gap-4">
-            <Stepper label={t.adults} hint={t.adultsDesc} value={travelers.adults} min={1} onChange={(v) => setTravelers((p) => ({ ...p, adults: v }))} />
-            <Stepper label={t.seniors} hint={t.seniorsDesc} value={travelers.seniors} min={0} onChange={(v) => setTravelers((p) => ({ ...p, seniors: v }))} />
-            <Stepper label={t.infants} hint={t.infantsDesc} value={travelers.infants} min={0} onChange={(v) => setTravelers((p) => ({ ...p, infants: v }))} />
+            <Stepper label={t.adults} hint={t.adultsDesc} value={travelers.adults} min={1} onChange={(v) => update({ adults: v })} />
+            <Stepper label={t.seniors} hint={t.seniorsDesc} value={travelers.seniors} min={0} onChange={(v) => update({ seniors: v })} />
+            <Stepper label={t.infants} hint={t.infantsDesc} value={travelers.infants} min={0} onChange={(v) => update({ infants: v })} />
           </div>
 
           <button
