@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Minus, Plus, Users } from "lucide-react";
 import type { TranslationDictionary } from "@/lib/i18n";
 import type { TravelersState } from "@/app/page";
@@ -56,93 +55,67 @@ function Stepper({
   );
 }
 
-export default function TravelersPopover({
+export function TravelersButton({
+  travelers,
+  open,
+  onToggle,
+}: {
+  travelers: TravelersState;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  const total = travelers.adults + travelers.seniors + travelers.infants;
+  return (
+    <button
+      type="button"
+      aria-expanded={open}
+      onClick={onToggle}
+      className="flex h-full min-h-[3.4rem] w-full items-center justify-between gap-2 rounded-2xl border border-white/10 bg-white/[0.045] px-4 text-sm font-semibold text-white outline-none transition hover:border-white/25 focus-visible:border-[#ffc36b]/60"
+    >
+      <span className="flex items-center gap-2.5">
+        <Users className="h-4 w-4 shrink-0 text-[#ffc36b]" />
+        <span className="truncate">
+          {total} {total === 1 ? "traveler" : "travelers"}
+        </span>
+      </span>
+      <ChevronDown className={`h-4 w-4 shrink-0 text-white/50 transition-transform ${open ? "rotate-180" : ""}`} />
+    </button>
+  );
+}
+
+/** Opens below the controls as part of the card, so it never covers the search box or the destination chips. */
+export function TravelersPanel({
   t,
   travelers,
   setTravelers,
-  groupLabel: _groupLabel,
+  onClose,
 }: {
   t: TranslationDictionary;
   travelers: TravelersState;
   setTravelers: React.Dispatch<React.SetStateAction<TravelersState>>;
-  groupLabel: (type: string) => string;
+  onClose: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const root = useRef<HTMLDivElement>(null);
-  const total = travelers.adults + travelers.seniors + travelers.infants;
-  const [place, setPlace] = useState<{ up: boolean; max: number }>({ up: true, max: 480 });
-
   const update = (patch: Partial<Pick<TravelersState, "adults" | "seniors" | "infants">>) =>
     setTravelers((p) => {
       const next = { ...p, ...patch };
       return { ...next, group_type: inferGroup(next.adults, next.seniors, next.infants) };
     });
 
-  // Open towards whichever side of the button has more room, so it is never cut off by the header or the screen edge.
-  const toggle = () => {
-    if (!open && root.current) {
-      const r = root.current.getBoundingClientRect();
-      const above = r.top - 84;
-      const below = window.innerHeight - r.bottom - 16;
-      const up = above >= 330 || above >= below;
-      setPlace({ up, max: Math.max(220, Math.floor(up ? above : below) - 12) });
-    }
-    setOpen((o) => !o);
-  };
-
-  // close on outside click / Escape
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (root.current && !root.current.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-
   return (
-    <div ref={root} className="relative">
+    <div className="mt-3 w-full rounded-2xl border border-white/12 bg-[#080d19]/80 p-5 text-left lg:ml-auto lg:max-w-sm">
+      <p className="mb-3 text-xs font-semibold text-[#ffc36b]">{t.travelerCounts}</p>
+      <div className="flex flex-col gap-4">
+        <Stepper label={t.adults} hint={t.adultsDesc} value={travelers.adults} min={1} onChange={(v) => update({ adults: v })} />
+        <Stepper label={t.seniors} hint={t.seniorsDesc} value={travelers.seniors} min={0} onChange={(v) => update({ seniors: v })} />
+        <Stepper label={t.infants} hint={t.infantsDesc} value={travelers.infants} min={0} onChange={(v) => update({ infants: v })} />
+      </div>
       <button
         type="button"
-        aria-expanded={open}
-        onClick={toggle}
-        className="flex h-full min-h-[3.4rem] w-full items-center justify-between gap-2 rounded-2xl border border-white/10 bg-white/[0.045] px-4 text-sm font-semibold text-white outline-none transition hover:border-white/25 focus-visible:border-[#ffc36b]/60"
+        onClick={onClose}
+        className="mt-5 w-full rounded-full border border-[#ffc36b]/40 bg-[#ffc36b]/12 py-2.5 text-xs font-bold text-[#ffc36b] transition hover:bg-[#ffc36b]/22"
       >
-        <span className="flex items-center gap-2.5">
-          <Users className="h-4 w-4 shrink-0 text-[#ffc36b]" />
-          <span className="truncate">
-            {total} {total === 1 ? "traveler" : "travelers"}
-          </span>
-        </span>
-        <ChevronDown className={`h-4 w-4 shrink-0 text-white/50 transition-transform ${open ? "rotate-180" : ""}`} />
+        {t.applySelection}
       </button>
-
-      {open && (
-        <div
-          style={{ maxHeight: place.max }}
-          className={`absolute right-0 z-50 w-[min(20rem,calc(100vw-2rem))] overflow-y-auto overscroll-contain ${place.up ? "bottom-full mb-3" : "top-full mt-3"} rounded-3xl border border-white/12 bg-[#080d19]/95 p-5 text-left shadow-[0_24px_70px_-10px_rgba(0,0,0,0.9)] backdrop-blur-2xl`}
-        >
-          <p className="mb-3 text-xs font-semibold text-[#ffc36b]">{t.travelerCounts}</p>
-          <div className="flex flex-col gap-4">
-            <Stepper label={t.adults} hint={t.adultsDesc} value={travelers.adults} min={1} onChange={(v) => update({ adults: v })} />
-            <Stepper label={t.seniors} hint={t.seniorsDesc} value={travelers.seniors} min={0} onChange={(v) => update({ seniors: v })} />
-            <Stepper label={t.infants} hint={t.infantsDesc} value={travelers.infants} min={0} onChange={(v) => update({ infants: v })} />
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setOpen(false)}
-            className="mt-5 w-full rounded-full border border-[#ffc36b]/40 bg-[#ffc36b]/12 py-2.5 text-xs font-bold text-[#ffc36b] transition hover:bg-[#ffc36b]/22"
-          >
-            {t.applySelection}
-          </button>
-        </div>
-      )}
     </div>
   );
 }

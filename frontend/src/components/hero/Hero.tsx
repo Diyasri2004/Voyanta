@@ -67,7 +67,8 @@ const Hero = forwardRef<HTMLElement, HeroProps>(function Hero(props, ref) {
             <CommandBar {...props} />
           </div>
 
-          <div className="mt-5 flex flex-wrap items-center gap-2">
+          <p className="mt-6 text-xs font-semibold text-[#ffc36b]">Trending destinations</p>
+          <div className="mt-2.5 flex flex-wrap items-center gap-2">
             {props.loadingTrending && !props.trending.length
               ? FALLBACK_CHIPS.slice(0, 5).map((n) => <span key={n} className="h-8 w-20 animate-pulse rounded-full bg-white/[0.06]" />)
               : chips.slice(0, 8).map((name) => (
@@ -86,7 +87,6 @@ const Hero = forwardRef<HTMLElement, HeroProps>(function Hero(props, ref) {
                 ))}
           </div>
 
-          <p className="mt-6 max-w-md text-sm leading-relaxed text-white/45">{t.heroSubtitle}</p>
         </div>
       </div>
 

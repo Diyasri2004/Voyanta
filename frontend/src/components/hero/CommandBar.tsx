@@ -1,9 +1,10 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { Loader2, PlaneLanding, PlaneTakeoff, TriangleAlert } from "lucide-react";
 import { DestinationInput } from "@/components/search/DestinationInput";
 import MagneticButton from "@/components/ui/MagneticButton";
-import TravelersPopover from "./TravelersPopover";
+import { TravelersButton, TravelersPanel } from "./TravelersPopover";
 import type { LandingProps } from "./types";
 
 const dateField =
@@ -11,8 +12,27 @@ const dateField =
 
 export default function CommandBar(p: LandingProps) {
   const { t } = p;
+  const [travOpen, setTravOpen] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  // close on outside click / Escape
+  useEffect(() => {
+    if (!travOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (formRef.current && !formRef.current.contains(e.target as Node)) setTravOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setTravOpen(false);
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [travOpen]);
+
   return (
     <form
+      ref={formRef}
       onSubmit={p.onSubmit}
       className="glass relative w-full rounded-[1.6rem] p-3 sm:p-4"
       aria-label="Plan a trip"
@@ -50,7 +70,7 @@ export default function CommandBar(p: LandingProps) {
         </label>
 
         <div className="col-span-2 lg:col-span-1">
-          <TravelersPopover t={t} travelers={p.travelers} setTravelers={p.setTravelers} groupLabel={p.groupLabel} />
+          <TravelersButton travelers={p.travelers} open={travOpen} onToggle={() => setTravOpen((o) => !o)} />
         </div>
 
         <div className="col-span-2 lg:col-span-1">
@@ -66,6 +86,8 @@ export default function CommandBar(p: LandingProps) {
           </MagneticButton>
         </div>
       </div>
+
+      {travOpen && <TravelersPanel t={t} travelers={p.travelers} setTravelers={p.setTravelers} onClose={() => setTravOpen(false)} />}
 
       <p className="mt-3 px-1 text-xs text-white/45">
         {p.daysCount} {p.daysCount > 1 ? t.days : t.day}
