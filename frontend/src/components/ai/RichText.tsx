@@ -7,7 +7,7 @@ const URL_OK = /^https?:\/\//i;
 /** Inline: **bold** and [label](https://url). Anything else stays plain text. */
 function inline(text: string, keyBase: string) {
   const out: React.ReactNode[] = [];
-  const re = /\*\*([^*]+)\*\*|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
+  const re = /\*\*([^*]+)\*\*|\[([^\]]+)\]\s*\((https?:\/\/[^\s)]+)\)/g;
   let last = 0;
   let m: RegExpExecArray | null;
   let i = 0;
@@ -55,7 +55,7 @@ export function RichText({ text }: { text: string }) {
 function safePartial(s: string) {
   let t = s;
   const open = t.lastIndexOf("[");
-  if (open !== -1 && !/\]\([^)]*\)/.test(t.slice(open))) t = t.slice(0, open);
+  if (open !== -1 && !/\]\s*\([^)]*\)/.test(t.slice(open))) t = t.slice(0, open);
   if ((t.match(/\*\*/g) || []).length % 2 === 1) t += "**";
   return t;
 }

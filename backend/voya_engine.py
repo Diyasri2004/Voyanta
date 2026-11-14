@@ -133,6 +133,14 @@ def _maps_url(name: str, where: str) -> str:
     return "https://www.google.com/maps/search/?api=1&query=" + urllib.parse.quote(f"{name} {where}".strip())
 
 
+_VAGUE_WORDS = {"off", "beat", "offbeat", "hidden", "gem", "gems", "secret", "secrets", "unique", "unusual", "less", "touristy", "tourist",
+                "local", "locals", "places", "place", "spots", "spot", "locations", "location", "things", "thing", "to", "do", "visit",
+                "see", "go", "some", "more", "new", "different", "best", "popular", "famous", "top", "trending", "good", "nice", "cool",
+                "interesting", "around", "nearby", "in", "the", "of", "and", "a", "for", "me", "my", "trip"}
+_OFFBEAT_CATEGORIES = ["viewpoint", "lake", "garden", "heritage site", "local market", "museum"]
+_POPULAR_CATEGORIES = ["tourist attraction", "monument", "museum", "park", "shopping area", "temple"]
+
+
 def _pin_url(name: str, lat: Any, lng: Any, fallback_where: str = "") -> str:
     """Google Maps link pinned to exact coordinates (falls back to a name search)."""
     try:
@@ -275,24 +283,32 @@ async def _tool_discover_places(a: Dict[str, Any], deps: Deps, ctx: Dict[str, An
     offbeat = str(a.get("vibe", "offbeat")).lower().startswith("off")
     shown = {_norm(s) for s in (ctx.get("shown_places") or [])}
 
-    # Search the traveler's own words plus a couple of broadened variants, in parallel.
-    queries = [query]
-    if offbeat:
-        queries += [f"{query} local", "viewpoint", "local market"] if len(query.split()) <= 2 else []
-    queries = queries[:3]
-    batches = await asyncio.gather(*[deps.poi_search(q, dest) for q in queries], return_exceptions=True)
+    # Vague asks ("offbeat locations", "hidden gems", "places") are not map categories and
+    # return nothing from a POI search, so they fan out to concrete categories instead.
+    words = set(re.findall(r"[a-z]+", query.lower()))
+    vague = not words or words <= _VAGUE_WORDS
+    if vague:
+        queries = list(_OFFBEAT_CATEGORIES if offbeat else _POPULAR_CATEGORIES)
+    else:
+        queries = [query]
+        if offbeat and len(query.split()) <= 2:
+            queries += [f"{query} local", "viewpoint"]
+    batches = await asyncio.gather(*[deps.poi_search(q, dest) for q in queries[:6]], return_exceptions=True)
+    batches = [b for b in batches if not isinstance(b, Exception)]
 
+    # Interleave categories so the answer is varied, and skip what the traveler already sees.
     pois, seen = [], set(shown)
-    for b in batches:
-        if isinstance(b, Exception):
-            continue
-        # Offbeat: the first few hits of a map search are the famous ones, so skip them when there is plenty.
-        items = b[4:] if offbeat and len(b) > 12 else b
-        for p in items:
-            key = _norm(p.get("name", ""))
-            if key and key not in seen:
-                seen.add(key)
-                pois.append(p)
+    depth = max((len(b) for b in batches), default=0)
+    for i in range(depth):
+        for b in batches:
+            # For a specific offbeat query the first hits are the famous ones; skip them when there is plenty.
+            start = 4 if (offbeat and not vague and len(b) > 12) else 0
+            if start + i < len(b):
+                p = b[start + i]
+                key = _norm(p.get("name", ""))
+                if key and key not in seen:
+                    seen.add(key)
+                    pois.append(p)
     pois = pois[:6]
 
     async def enrich(p: Dict[str, Any]) -> Dict[str, Any]:
@@ -318,7 +334,10 @@ async def _tool_discover_places(a: Dict[str, Any], deps: Deps, ctx: Dict[str, An
     return {
         "places": results,
         "count": len(results),
-        "note": "" if results else "Live place search returned nothing. You may suggest places from general knowledge, clearly labelled as unverified.",
+        "note": "" if results else (
+            "Live search found nothing new. Do NOT just apologise. Suggest 3-4 specific lesser-known places in the destination from your general knowledge, "
+            "each labelled '(unverified - please confirm on Maps)', and give each a link of the form "
+            "https://www.google.com/maps/search/?api=1&query=<place name>+<destination> (spaces as +)."),
     }
 
 

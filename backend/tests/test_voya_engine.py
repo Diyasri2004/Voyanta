@@ -166,3 +166,16 @@ def test_locate_place_falls_back_to_geocoder():
     deps.geocode = geo
     out = run(run_chat({**REQ, "message": "where is summit building"}, deps))
     assert out["action"]["places"][0]["name"] == "Summit Building"
+
+
+def test_vague_offbeat_request_fans_out_to_real_categories():
+    seen = []
+    async def poi(q, d):
+        seen.append(q)
+        return [{"name": f"{q.title()} One", "address": "a", "area": "x", "lat": 1.0, "lng": 2.0}] if q != "museum" else []
+    m = FakeModel('{"tools": [{"name": "discover_places", "arguments": {"query": "offbeat locations", "vibe": "offbeat"}}], "reply": ""}', "ok")
+    deps = make_deps(m)
+    deps.poi_search = poi
+    out = run(run_chat({**REQ, "message": "give me off beat locations"}, deps))
+    assert len(seen) >= 4 and "offbeat locations" not in seen
+    assert len(out["action"]["places"]) >= 4
