@@ -351,17 +351,21 @@ export default function Voya({ trip }: { trip: any }) {
                     )}
                     {m.action?.places?.length > 0 && (
                       <div className="mt-3 space-y-2 border-t border-white/10 pt-2.5">
-                        <div className="text-[11px] font-semibold text-[#ffc36b]">More places</div>
+                        <div className="text-[11px] font-semibold text-[#ffc36b]">{m.action.places.length === 1 ? "Location" : "More places"}</div>
                         {m.action.places.slice(0, 5).map((pl: any, k: number) => (
                           <div key={k} className="rounded-xl border border-white/10 bg-white/[0.04] p-2.5">
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
                                 <div className="truncate text-[13px] font-semibold text-[#f6efe2]">{pl.name}</div>
-                                {pl.area && <div className="text-[11.5px] text-[#9aa5bb]">{pl.area}</div>}
+                                {(pl.address || pl.area) && <div className="line-clamp-2 text-[11.5px] text-[#9aa5bb]">{pl.address || pl.area}</div>}
                               </div>
                               <div className="flex shrink-0 gap-1.5">
                                 <a href={pl.maps_url} target="_blank" rel="noreferrer noopener"
                                   className="rounded-full border border-white/15 bg-white/[0.06] px-2.5 py-1 text-[11px] font-semibold text-[#cbd3e3]">Map</a>
+                                {pl.directions_url && (
+                                  <a href={pl.directions_url} target="_blank" rel="noreferrer noopener"
+                                    className="rounded-full border border-[#ffc36b]/40 bg-[#ffc36b]/10 px-2.5 py-1 text-[11px] font-semibold text-[#ffc36b]">Directions</a>
+                                )}
                                 {pl.website && (
                                   <a href={pl.website} target="_blank" rel="noreferrer noopener"
                                     className="rounded-full border border-[#7fd6ff]/30 bg-[#7fd6ff]/10 px-2.5 py-1 text-[11px] font-semibold text-[#7fd6ff]">Site</a>

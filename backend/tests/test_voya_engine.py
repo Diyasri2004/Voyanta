@@ -137,3 +137,32 @@ def test_rate_limiter():
     assert not rl.allow("a", now=110)
     assert rl.allow("b", now=110)
     assert rl.allow("a", now=200)
+
+
+def test_locate_place_returns_real_address_and_pinned_map_link():
+    pois = [{"name": "Summit Building", "address": "Kapoorthala, Aliganj, Lucknow 226024", "area": "Aliganj", "lat": 26.8883, "lng": 80.9391, "url": ""}]
+    m = FakeModel('{"tools": [{"name": "locate_place", "arguments": {"name": "Summit Building", "destination": "Lucknow"}}], "reply": ""}',
+                  "Summit Building is at Kapoorthala. [Open in Maps](x)")
+    out = run(run_chat({**REQ, "message": "where is summit building", "destination": "Lucknow"}, make_deps(m, pois=pois)))
+    assert "Kapoorthala" in m.prompts[1] and "26.8883,80.9391" in m.prompts[1]
+    place = out["action"]["places"][0]
+    assert place["name"] == "Summit Building" and "26.8883,80.9391" in place["maps_url"]
+    assert place["directions_url"].endswith("26.8883,80.9391")
+
+
+def test_locate_place_never_guesses_when_unmatched():
+    pois = [{"name": "Totally Different Cafe", "address": "x", "lat": 1.0, "lng": 2.0}]
+    m = FakeModel('{"tools": [{"name": "locate_place", "arguments": {"name": "Summit Building"}}], "reply": ""}',
+                  "I could not confirm it. [Search](https://www.google.com/maps/search/?api=1&query=x)")
+    out = run(run_chat({**REQ, "message": "where is summit building"}, make_deps(m, pois=pois)))
+    assert '"matched": false' in m.prompts[1].lower() and out["action"] is None
+
+
+def test_locate_place_falls_back_to_geocoder():
+    async def geo(name, dest):
+        return [{"name": "Summit Building", "address": "Aliganj, Lucknow", "lat": 26.9, "lng": 80.9, "url": ""}]
+    m = FakeModel('{"tools": [{"name": "locate_place", "arguments": {"name": "Summit Building"}}], "reply": ""}', "ok")
+    deps = make_deps(m, pois=[])
+    deps.geocode = geo
+    out = run(run_chat({**REQ, "message": "where is summit building"}, deps))
+    assert out["action"]["places"][0]["name"] == "Summit Building"

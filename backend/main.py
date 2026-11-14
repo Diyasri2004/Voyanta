@@ -1963,6 +1963,26 @@ async def handle_voya_chat(req: ChatRequest, request: Request):
             return []
         return await _tomtom_pois(client, query, coords, radius=40000)
 
+    async def _geocode(name: str, destination: str):
+        """Fallback place lookup (OpenStreetMap Nominatim) when the POI search has no match."""
+        try:
+            r = await client.get(
+                "https://nominatim.openstreetmap.org/search",
+                params={"q": f"{name}, {destination}", "format": "jsonv2", "addressdetails": 1, "limit": 3},
+                headers={"User-Agent": "Voyanta/1.0 (trip planner)"},
+                timeout=6.0)
+            if r.status_code != 200:
+                return []
+            out = []
+            for it in r.json():
+                nm = (it.get("name") or (it.get("display_name") or "").split(",")[0]).strip()
+                if nm and it.get("lat") and it.get("lon"):
+                    out.append({"name": nm, "address": it.get("display_name", ""), "area": "", "lat": float(it["lat"]), "lng": float(it["lon"]), "url": ""})
+            return out
+        except Exception as e:
+            logger.warning(f"Nominatim lookup failed: {e}")
+            return []
+
     async def _weather(destination: str, start: Optional[str], end: Optional[str]):
         try:
             return await get_destination_weather(request, destination=destination, start_date=start, end_date=end)
@@ -1979,6 +1999,7 @@ async def handle_voya_chat(req: ChatRequest, request: Request):
         wiki_info=lambda name, d: _wiki_info(client, name, d.split(",")[0].strip().title()),
         parse_day=_parse_event_day,
         client=client,
+        geocode=_geocode,
     )
     in_india = False
     if dest:

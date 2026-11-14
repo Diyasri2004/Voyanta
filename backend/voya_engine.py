@@ -41,8 +41,13 @@ ENGINE_TOOLS: List[Dict[str, Any]] = [
     },
     {
         "name": "discover_places",
-        "description": "Real places from a live map search. Use when the traveler wants MORE places, offbeat/hidden/less-touristy spots, or anything not already shown as cards.",
+        "description": "Real places from a live map search with real addresses. Use for ANY question about places to visit, eat, shop, party or see: popular, trending, offbeat, hidden, or 'what is happening around'. Always prefer this over answering from memory.",
         "arguments": {"destination": "city", "query": "what to look for, e.g. waterfall, street food, viewpoint, bookstore cafe", "vibe": "offbeat or popular"},
+    },
+    {
+        "name": "locate_place",
+        "description": "Find the REAL address and exact Google Maps location of one specific named place (a building, landmark, restaurant, hotel, station, mall, college). Use for ANY 'where is X', 'address of X', 'how do I get to X', 'show X on map' question. Never answer a location question from memory.",
+        "arguments": {"name": "the place exactly as the traveler wrote it", "destination": "city"},
     },
     {
         "name": "get_weather",
@@ -110,6 +115,7 @@ class Deps:
     wiki_info: Optional[Callable[..., Awaitable[Dict[str, str]]]] = None  # (name, dest) -> {extract,image}
     parse_day: Optional[Callable[[str], Any]] = None
     client: Any = None
+    geocode: Optional[Callable[..., Awaitable[List[Dict[str, Any]]]]] = None  # (name, dest) -> places
 
 
 # ───────────────────────── helpers ─────────────────────────
@@ -125,6 +131,31 @@ def _safe_url(u: Any) -> str:
 
 def _maps_url(name: str, where: str) -> str:
     return "https://www.google.com/maps/search/?api=1&query=" + urllib.parse.quote(f"{name} {where}".strip())
+
+
+def _pin_url(name: str, lat: Any, lng: Any, fallback_where: str = "") -> str:
+    """Google Maps link pinned to exact coordinates (falls back to a name search)."""
+    try:
+        la, ln = float(lat), float(lng)
+        if not (la == 0 and ln == 0):
+            return f"https://www.google.com/maps/search/{urllib.parse.quote(name)}/@{la},{ln},17z"
+    except (TypeError, ValueError):
+        pass
+    return _maps_url(name, fallback_where)
+
+
+def _directions_url(lat: Any, lng: Any) -> str:
+    try:
+        return f"https://www.google.com/maps/dir/?api=1&destination={float(lat)},{float(lng)}"
+    except (TypeError, ValueError):
+        return ""
+
+
+def _name_score(want: str, got: str) -> float:
+    """Share of the wanted words that appear in a candidate's name (0..1)."""
+    w = [t for t in re.findall(r"[a-z0-9]+", (want or "").lower()) if t not in {"the", "of", "in", "at", "a"}]
+    g = set(re.findall(r"[a-z0-9]+", (got or "").lower()))
+    return (sum(1 for t in w if t in g) / len(w)) if w else 0.0
 
 
 def clamp_request(message: str, history: List[Dict[str, str]]):
@@ -277,7 +308,9 @@ async def _tool_discover_places(a: Dict[str, Any], deps: Deps, ctx: Dict[str, An
             "name": p["name"],
             "area": p.get("area") or p.get("address", ""),
             "about": blurb,
-            "maps_url": _maps_url(p["name"], p.get("address") or dest),
+            "address": p.get("address", ""),
+            "maps_url": _pin_url(p["name"], p.get("lat"), p.get("lng"), p.get("address") or dest),
+            "directions_url": _directions_url(p.get("lat"), p.get("lng")),
             "website": site,
         }
 
@@ -286,6 +319,45 @@ async def _tool_discover_places(a: Dict[str, Any], deps: Deps, ctx: Dict[str, An
         "places": results,
         "count": len(results),
         "note": "" if results else "Live place search returned nothing. You may suggest places from general knowledge, clearly labelled as unverified.",
+    }
+
+
+async def _tool_locate_place(a: Dict[str, Any], deps: Deps, ctx: Dict[str, Any]) -> Dict[str, Any]:
+    name = (a.get("name") or "").strip()
+    dest = a.get("destination") or ctx.get("destination") or ""
+    if not name:
+        return {"error": "no place name"}
+    cands: List[Dict[str, Any]] = []
+    for finder in (deps.poi_search, deps.geocode):
+        if not finder:
+            continue
+        try:
+            got = await finder(name, dest)
+        except Exception as e:
+            logger.warning(f"locate_place lookup failed: {e}")
+            got = []
+        cands += [c for c in (got or []) if isinstance(c, dict) and c.get("name")]
+        if any(_name_score(name, c["name"]) >= 0.6 for c in cands):
+            break  # a confident match is enough
+    ranked = sorted(cands, key=lambda c: _name_score(name, c["name"]), reverse=True)
+    best = ranked[0] if ranked and _name_score(name, ranked[0]["name"]) >= 0.5 else None
+    if not best:
+        return {
+            "matched": False,
+            "search_link": _maps_url(name, dest),
+            "note": "No verified listing found. Say you could not confirm the exact spot, do NOT guess an address, and give the search link so the traveler can check on Google Maps.",
+        }
+    return {
+        "matched": True,
+        "place": {
+            "name": best["name"],
+            "address": best.get("address", ""),
+            "area": best.get("area", ""),
+            "maps_url": _pin_url(best["name"], best.get("lat"), best.get("lng"), dest),
+            "directions_url": _directions_url(best.get("lat"), best.get("lng")),
+            "website": _safe_url(best.get("url") if str(best.get("url", "")).startswith("http") else ("https://" + best["url"] if best.get("url") else "")),
+        },
+        "other_matches": [{"name": c["name"], "address": c.get("address", ""), "maps_url": _pin_url(c["name"], c.get("lat"), c.get("lng"), dest)} for c in ranked[1:3] if _name_score(name, c["name"]) >= 0.5],
     }
 
 
@@ -312,6 +384,8 @@ async def run_tool(name: str, args: Dict[str, Any], deps: Deps, ctx: Dict[str, A
             return await asyncio.wait_for(_tool_search_events(args, deps, ctx), TOOL_TIMEOUT_S)
         if name == "discover_places":
             return await asyncio.wait_for(_tool_discover_places(args, deps, ctx), TOOL_TIMEOUT_S)
+        if name == "locate_place":
+            return await asyncio.wait_for(_tool_locate_place(args, deps, ctx), TOOL_TIMEOUT_S)
         if name == "get_weather":
             return await asyncio.wait_for(_tool_get_weather(args, deps, ctx), TOOL_TIMEOUT_S)
         if name in TOOL_NAMES:
@@ -337,8 +411,11 @@ TRAVELER'S LATEST MESSAGE: {message}
 TOOLS YOU CAN REQUEST (max {MAX_TOOLS_PER_TURN}):
 {tools}
 
-Decide what is needed. If the answer needs real events, real places, weather, prices or booking links, request the tool(s).
-If it is small talk, general advice, or needs no live data, answer directly.
+Decide what is needed.
+- A question about WHERE a specific named place is, its address, or how to reach it: ALWAYS request locate_place.
+- A question about places to go, eat, shop, party, what is popular, trending or happening: ALWAYS request discover_places (and search_events for events). Never answer these from memory; the traveler already sees the standard trail cards, so they want fresh, real, specific places beyond them.
+- Weather, prices, tickets, hotels, transport: request the matching tool.
+- Only small talk or pure advice that needs no live data may be answered directly.
 Respond with ONLY one JSON object:
 {{"tools": [{{"name": "<tool>", "arguments": {{...}}}}], "reply": "<your full final answer ONLY when tools is empty, otherwise empty string>"}}"""
 
@@ -354,7 +431,7 @@ TRAVELER'S LATEST MESSAGE: {message}
 TOOL RESULTS (the only source for events, dates, prices, links):
 {blob}
 
-Write the final answer now as plain text (no JSON). Use the tool results; mention at most 5 items; include the booking or map link for each item you recommend as [label](url)."""
+Write the final answer now as plain text (no JSON). Use the tool results; mention at most 5 items; for every place give its real street address when the tool provided one, plus a Google Maps link as [Open in Maps](url) and, when available, a [Directions](url) link. Never describe a location vaguely (like 'in the business district') when an address and map link are available. If a place was not matched, say so honestly and give the search link instead of guessing."""
 
 
 def _collect_action(results: Dict[str, Any]) -> Dict[str, Any]:
@@ -372,6 +449,9 @@ def _collect_action(results: Dict[str, Any]) -> Dict[str, Any]:
         elif name == "discover_places":
             if r.get("places"):
                 action["places"] = r["places"]
+        elif name == "locate_place":
+            if r.get("matched") and r.get("place"):
+                action["places"] = [r["place"]]
         else:
             for key in ("booking_platforms", "ticket_platforms", "ride_hailing", "transit_options", "car_rentals"):
                 if isinstance(r.get(key), dict):
