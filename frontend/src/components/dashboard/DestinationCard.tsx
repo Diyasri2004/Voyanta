@@ -16,6 +16,10 @@ export interface DestinationCardProps {
     maps_url?: string;
     image_url?: string;
     image?: string;
+    event_date?: string;
+    url?: string;
+    source?: string;
+    price_range?: string;
   };
   index?: number;
   destination?: string;
@@ -101,6 +105,9 @@ export const DestinationCard = ({
       {/* Card Content */}
       <div className="p-4 flex flex-col flex-1 justify-between">
         <div>
+          {item.event_date && (
+            <p className="mb-1 text-[11px] font-semibold text-emerald-400 line-clamp-1">📅 {item.event_date}</p>
+          )}
           <h4 className="text-base font-bold text-white line-clamp-1 group-hover:text-pink-400 transition-colors">
             {title}
           </h4>
@@ -111,7 +118,7 @@ export const DestinationCard = ({
 
         {/* Footer with Location & Buttons */}
         <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-xs text-neutral-400 gap-2">
-          <span className="truncate max-w-[130px] flex items-center gap-1 text-neutral-400" title={locationText}>
+          <span className="truncate min-w-0 flex-1 flex items-center gap-1 text-neutral-400" title={locationText}>
             📍 {locationText}
           </span>
           <div className="flex items-center gap-1.5 shrink-0">
@@ -126,6 +133,18 @@ export const DestinationCard = ({
               <Navigation className="w-3 h-3" />
               <span>Map</span>
             </a>
+            {item.url && (
+              <a
+                href={item.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/30 text-emerald-300 transition-colors font-medium text-xs border border-emerald-500/30"
+                title={item.source ? `Source: ${item.source}` : "Event details"}
+              >
+                Details
+              </a>
+            )}
             {onAddToPlan && (
               <button
                 type="button"

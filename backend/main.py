@@ -65,6 +65,8 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "").strip()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile").strip()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+TICKETMASTER_API_KEY = os.getenv("TICKETMASTER_API_KEY", "").strip()
+SERPAPI_KEY = os.getenv("SERPAPI_KEY", "").strip()
 
 logger.info(f"Key Status -> Groq ({GROQ_MODEL}): {bool(GROQ_API_KEY)} | OpenRouter: {bool(OPENROUTER_API_KEY)} | Gemini: {bool(GEMINI_API_KEY)}")
 
@@ -913,6 +915,165 @@ async def generate_itinerary(req: Dict[str, Any], request: Request):
     return payload
 
 # ─────────────────────────────────────────────
+#  Real Events Engine (Ticketmaster + Google Events). No AI-invented events.
+# ─────────────────────────────────────────────
+
+_MONTHS = {m: i for i, m in enumerate(["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"], 1)}
+
+def _parse_event_day(text: str) -> Optional[date]:
+    """Parse 'Nov 20', '2026-11-20' or 'Fri, Nov 20, 7 PM' into a future-leaning date."""
+    if not text:
+        return None
+    m = re.search(r"(\d{4})-(\d{2})-(\d{2})", text)
+    if m:
+        try:
+            return date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except ValueError:
+            return None
+    m = re.search(r"\b([A-Za-z]{3})[a-z]*\.?\s+(\d{1,2})\b", text)
+    if m and m.group(1).lower() in _MONTHS:
+        today = date.today()
+        try:
+            d = date(today.year, _MONTHS[m.group(1).lower()], int(m.group(2)))
+        except ValueError:
+            return None
+        if (today - d).days > 30:
+            d = date(today.year + 1, d.month, d.day)
+        return d
+    return None
+
+async def fetch_ticketmaster_events(client: httpx.AsyncClient, coords: Coordinates, days_ahead: int = 120) -> List[Dict[str, Any]]:
+    if not TICKETMASTER_API_KEY:
+        return []
+    start = date.today()
+    end = date.fromordinal(start.toordinal() + days_ahead)
+    try:
+        res = await client.get(
+            "https://app.ticketmaster.com/discovery/v2/events.json",
+            params={"apikey": TICKETMASTER_API_KEY, "latlong": f"{coords.lat},{coords.lng}", "radius": 100, "unit": "km",
+                    "startDateTime": f"{start.isoformat()}T00:00:00Z", "endDateTime": f"{end.isoformat()}T23:59:59Z",
+                    "sort": "date,asc", "size": 40},
+            timeout=8.0)
+        if res.status_code != 200:
+            logger.warning(f"Ticketmaster status {res.status_code}")
+            return []
+        out = []
+        for ev in res.json().get("_embedded", {}).get("events", []):
+            st = ev.get("dates", {}).get("start", {})
+            day = _parse_event_day(st.get("localDate", ""))
+            venues = ev.get("_embedded", {}).get("venues", [{}])
+            venue = venues[0] if venues else {}
+            imgs = [i for i in ev.get("images", []) if i.get("url")]
+            imgs.sort(key=lambda i: (i.get("ratio") != "16_9", -(i.get("width") or 0)))
+            cls = (ev.get("classifications") or [{}])[0]
+            kind = " · ".join(x for x in [cls.get("segment", {}).get("name"), cls.get("genre", {}).get("name")] if x and x != "Undefined")
+            price = ""
+            pr = (ev.get("priceRanges") or [{}])[0]
+            if pr.get("min") is not None:
+                price = f"{pr.get('currency', '')} {pr['min']:g}" + (f" - {pr['max']:g}" if pr.get("max") not in (None, pr["min"]) else "")
+            out.append({
+                "title": ev.get("name", ""),
+                "day": day,
+                "when": f"{day.strftime('%a, %b %d, %Y')}" + (f" · {st['localTime'][:5]}" if st.get("localTime") else "") if day else "",
+                "venue": venue.get("name", ""),
+                "address": ", ".join(x for x in [venue.get("address", {}).get("line1"), venue.get("city", {}).get("name")] if x),
+                "url": ev.get("url", ""),
+                "image": imgs[0]["url"] if imgs else "",
+                "description": kind or "Live event",
+                "price": price.strip(),
+                "source": "Ticketmaster",
+            })
+        return out
+    except Exception as e:
+        logger.warning(f"Ticketmaster error: {e}")
+        return []
+
+async def fetch_google_events(client: httpx.AsyncClient, destination: str) -> List[Dict[str, Any]]:
+    if not SERPAPI_KEY:
+        return []
+    try:
+        res = await client.get(
+            "https://serpapi.com/search.json",
+            params={"engine": "google_events", "q": f"Events in {destination}", "hl": "en", "api_key": SERPAPI_KEY},
+            timeout=10.0)
+        if res.status_code != 200:
+            logger.warning(f"SerpApi status {res.status_code}")
+            return []
+        out = []
+        for ev in res.json().get("events_results", []):
+            d = ev.get("date", {}) or {}
+            day = _parse_event_day(d.get("start_date", "")) or _parse_event_day(d.get("when", ""))
+            venue = (ev.get("venue") or {}).get("name", "")
+            out.append({
+                "title": ev.get("title", ""),
+                "day": day,
+                "when": d.get("when") or d.get("start_date", ""),
+                "venue": venue,
+                "address": ", ".join(ev.get("address") or []),
+                "url": ev.get("link", ""),
+                "image": ev.get("image") or ev.get("thumbnail") or "",
+                "description": ev.get("description", ""),
+                "price": "",
+                "source": "Google Events",
+            })
+        return out
+    except Exception as e:
+        logger.warning(f"SerpApi error: {e}")
+        return []
+
+async def build_real_events(client: httpx.AsyncClient, clean_dest: str) -> List[Dict[str, Any]]:
+    coords = await resolve_dynamic_coordinates(client, clean_dest)
+    tm, ge = await asyncio.gather(fetch_ticketmaster_events(client, coords), fetch_google_events(client, clean_dest))
+    today = date.today()
+    horizon = date.fromordinal(today.toordinal() + 180)
+
+    merged, seen = [], set()
+    for ev in tm + ge:
+        title = (ev.get("title") or "").strip()
+        day = ev.get("day")
+        if not title or (day and (day < today or day > horizon)):
+            continue
+        key = (re.sub(r"[^a-z0-9]", "", title.lower()), day)
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(ev)
+    merged.sort(key=lambda e: (e["day"] is None, e["day"] or today))
+    merged = merged[:30]
+
+    async def finish(idx: int, ev: Dict[str, Any]) -> Dict[str, Any]:
+        image = ev.get("image") or ""
+        if not image:
+            try:
+                image = await asyncio.wait_for(
+                    fetch_dynamic_place_photo(client, venue=ev.get("venue") or ev["title"], destination=clean_dest, category="Event"), timeout=5.0)
+            except Exception:
+                image = ""
+        location = ev.get("venue") or clean_dest
+        q = urllib.parse.quote(f"{ev.get('venue') or ev['title']} {ev.get('address') or clean_dest}")
+        nav = f"https://www.google.com/maps/search/?api=1&query={q}"
+        return {
+            "id": f"events_{idx + 1}",
+            "title": ev["title"],
+            "name": ev["title"],
+            "category": "Event",
+            "description": (ev.get("description") or "").strip() or f"Live event in {clean_dest}.",
+            "location": location,
+            "address": ev.get("address") or location,
+            "maps_url": nav,
+            "navigation_url": nav,
+            "image_url": image,
+            "image": image,
+            "event_date": ev.get("when", ""),
+            "event_start": ev["day"].isoformat() if ev.get("day") else "",
+            "url": ev.get("url", ""),
+            "source": ev.get("source", ""),
+            "price_range": ev.get("price", ""),
+        }
+
+    return list(await asyncio.gather(*[finish(i, e) for i, e in enumerate(merged)]))
+
+# ─────────────────────────────────────────────
 #  High-Capacity Parallel Trail Discovery Engine
 # ─────────────────────────────────────────────
 
@@ -937,6 +1098,22 @@ async def get_high_capacity_trails(
         return cached_data
 
     client = getattr(request.app.state, "client", None) if request else None
+
+    if active_category == "events":
+        events = await build_real_events(client, clean_dest)
+        payload = {
+            "status": "success",
+            "destination": destination,
+            "category": "events",
+            "count": len(events),
+            "places": events,
+            "results": events,
+            "events": events,
+            "sources": [n for n, k in (("Ticketmaster", TICKETMASTER_API_KEY), ("Google Events", SERPAPI_KEY)) if k],
+        }
+        if events:
+            response_cache.set(cache_key, payload)
+        return payload
 
     # Define 3 dynamic sub-angles based on category to ensure rich variety
     category_themes = {

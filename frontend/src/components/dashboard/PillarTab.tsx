@@ -49,18 +49,29 @@ export default function PillarTab({
   selectedLanguage = "English",
   onAddToPlan,
   isLoading = false,
+  emptyMessage,
 }: {
   items: PillarItemData[];
   destination: string;
   selectedLanguage?: LanguageName;
   onAddToPlan?: (item: PillarItemData) => void;
   isLoading?: boolean;
+  emptyMessage?: string;
 }) {
   const [likedIds, setLikedIds] = useState<Record<string, boolean>>({});
 
   const toggleLike = (id: string) => {
     setLikedIds((prev) => ({ ...prev, [id]: !prev[id] }));
   };
+
+  if (!isLoading && (!items || items.length === 0) && emptyMessage) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-2 py-20 px-6 text-center">
+        <p className="text-base font-semibold text-white">{emptyMessage}</p>
+        <p className="text-xs text-zinc-500">We only show real, verified results.</p>
+      </div>
+    );
+  }
 
   if (isLoading || !items || items.length === 0) {
     return <SkeletonCardGrid />;

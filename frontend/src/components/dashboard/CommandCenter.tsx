@@ -285,6 +285,13 @@ export default function CommandCenter({
           selectedLanguage={selectedLanguage}
           onAddToPlan={handleAddToPlan}
           isLoading={loadingPillars[currentTab] && (!getPillarItems(currentTab) || getPillarItems(currentTab).length === 0)}
+          emptyMessage={
+            fetchedRef.current.has(currentTab) && !loadingPillars[currentTab]
+              ? currentTab === "events"
+                ? `No upcoming events found in ${destination} right now.`
+                : `No results found for ${destination} right now. Please try again shortly.`
+              : undefined
+          }
         />
       </div>
 
