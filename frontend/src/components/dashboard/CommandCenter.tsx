@@ -95,7 +95,7 @@ export default function CommandCenter({
       fetch(`/api/weather?destination=${encodeURIComponent(destination)}`)
         .then((res) => res.json())
         .then((data) => setWeather(data))
-        .catch(() => setWeather({ temp_c: 28, condition: "Sunny" }));
+        .catch(() => setWeather(null));
     }
   }, [destination]);
 

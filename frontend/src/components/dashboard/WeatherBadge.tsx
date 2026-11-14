@@ -8,6 +8,7 @@ interface WeatherData {
   condition: string;
   emoji: string;
   humidity?: number;
+  forecast_available?: boolean;
   daily?: Array<{ date: string; max_c: number; min_c: number; condition: string; emoji: string }>;
 }
 
@@ -16,8 +17,6 @@ interface WeatherBadgeProps {
   startDate?: string;
   endDate?: string;
 }
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
 
 export default function WeatherBadge({ destination, startDate, endDate }: WeatherBadgeProps) {
   const [weather, setWeather] = useState<WeatherData | null>(null);
@@ -32,9 +31,9 @@ export default function WeatherBadge({ destination, startDate, endDate }: Weathe
     if (startDate) params.set("start_date", startDate);
     if (endDate) params.set("end_date", endDate);
 
-    fetch(`${BACKEND_URL}/api/weather?${params.toString()}`, { signal: controller.signal })
-      .then((r) => r.json())
-      .then((d) => { setWeather(d); setLoading(false); })
+    fetch(`/api/weather?${params.toString()}`, { signal: controller.signal })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { setWeather(d && typeof d.temp_c === "number" ? d : null); setLoading(false); })
       .catch((e) => { if (e.name !== "AbortError") setLoading(false); });
 
     return () => controller.abort();
@@ -98,6 +97,11 @@ export default function WeatherBadge({ destination, startDate, endDate }: Weathe
                 </div>
               ))}
             </>
+          )}
+          {startDate && !hasDailyBreakdown && (
+            <div className="border-t border-white/10 pt-2 text-[11px] text-gray-500">
+              Forecast for your travel dates isn&apos;t available yet (it covers the next 16 days). Showing current conditions.
+            </div>
           )}
           <div className="text-[10px] text-gray-600 pt-1">Powered by Open-Meteo · Free</div>
         </div>

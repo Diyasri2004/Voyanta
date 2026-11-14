@@ -35,7 +35,7 @@ export function DestinationInput({
           }
         })
         .catch(() => {});
-    }, 50);
+    }, 300);
 
     return () => {
       clearTimeout(timer);

@@ -3,6 +3,7 @@
 import { useMemo, useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import CyberDashboard from "@/components/dashboard/CyberDashboard";
+import WeatherBadge from "@/components/dashboard/WeatherBadge";
 import VoyAI from "@/components/ai/Voya";
 import CityHeroImage from "@/components/CityHeroImage";
 import { TravelerWaitIndicator } from "@/components/ui/traveler-wait-indicator";
@@ -365,7 +366,7 @@ export default function Page() {
           }
         })
         .catch(() => {});
-    }, 50);
+    }, 300);
 
     return () => {
       clearTimeout(timer);
@@ -583,6 +584,10 @@ export default function Page() {
                 onChange={setCurrency}
                 options={CURRENCIES.map((c) => ({ value: c.code, label: c.code, hint: c.sym }))}
               />
+              {trip && (
+                <WeatherBadge destination={trip.destination} startDate={trip.start_date} endDate={trip.end_date} />
+              )}
+
               {trip && (
                 <button
                   type="button"

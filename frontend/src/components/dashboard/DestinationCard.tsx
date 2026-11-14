@@ -46,7 +46,8 @@ export const DestinationCard = ({
   const title = item.title || item.name || "Landmark";
   const locationText = item.location || item.address || (destination ? `${destination} Area` : "Local Area");
   const categoryText = item.category || "ATTRACTION";
-  const imageUrl = item.image || item.image_url || "/fallback-travel.jpg";
+  const imageUrl = item.image || item.image_url || "";
+  const [imageBroken, setImageBroken] = React.useState(false);
 
   const navUrl =
     item.navigation_url ||
