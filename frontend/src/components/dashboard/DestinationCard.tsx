@@ -2,7 +2,7 @@
 
 import React from "react";
 import { motion, useReducedMotion } from "framer-motion";
-import { Navigation, Plus, Heart, Check, MapPin } from "lucide-react";
+import { Navigation, Plus, Check, MapPin } from "lucide-react";
 import TiltCard from "@/components/ui/TiltCard";
 
 export interface DestinationCardProps {
@@ -117,21 +117,6 @@ export const DestinationCard = ({
           >
             {categoryText}
           </span>
-          {onLike && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                onLike();
-              }}
-              style={z(34)}
-              aria-label="Like venue"
-              className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-black/55 backdrop-blur-md transition active:scale-90"
-            >
-              <Heart className={`h-4 w-4 transition-all ${isLiked ? "fill-[#ff6b6b] text-[#ff6b6b]" : "text-white"}`} />
-            </button>
-          )}
         </div>
 
         <div className="relative flex flex-1 flex-col justify-between p-5 pt-3 [transform-style:preserve-3d]">
@@ -150,24 +135,20 @@ export const DestinationCard = ({
             </p>
           </div>
 
-          <div style={z(22)} className="mt-4 flex items-center justify-between gap-2 border-t border-white/[0.08] pt-3 text-xs text-[#8b95ab]">
-            <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate" title={locationText}>
-              <MapPin className="h-3.5 w-3.5 shrink-0 text-[#ffc36b]" />
-              <span className="truncate">{locationText}</span>
-            </span>
-            <div className="flex shrink-0 items-center gap-1.5">
+          <div style={z(22)} className="mt-4 flex items-center gap-2 border-t border-white/[0.08] pt-3 text-xs text-[#8b95ab]">
+            <div className="flex w-full items-center gap-2">
               <a
                 href={navUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}
-                className="flex h-9 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.05] px-3 font-semibold text-[#cbd3e3] transition hover:bg-white/15"
+                className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-full border border-white/10 bg-white/[0.05] px-3 font-semibold text-[#cbd3e3] transition hover:bg-white/15"
                 title="View on Maps"
               >
                 <Navigation className="h-3.5 w-3.5" />
                 Map
               </a>
-              {item.url && (
+              {isEvent && item.url && (
                 <a
                   href={item.url}
                   target="_blank"
@@ -187,7 +168,7 @@ export const DestinationCard = ({
                     e.stopPropagation();
                     onAddToPlan(item);
                   }}
-                  className={`flex h-9 items-center gap-1.5 rounded-full px-3.5 font-bold transition ${
+                  className={`flex h-10 flex-1 items-center justify-center gap-1.5 rounded-full px-3.5 font-bold transition ${
                     isAdded
                       ? "bg-[#ffc36b] text-[#1b1206]"
                       : "bg-[linear-gradient(115deg,#ffe2ae,#ffc36b_55%,#ff9d5c)] text-[#1b1206] hover:brightness-105"

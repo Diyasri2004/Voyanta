@@ -1321,6 +1321,74 @@ async def _wiki_info(client: httpx.AsyncClient, name: str, destination: str) -> 
     dynamic_cache[key] = info
     return info
 
+_VIBE_BANK = {
+    "cafe": ["Slow down here with a good brew and easy conversation.", "A cosy corner for long catch-ups over coffee.", "Easy to settle in, whether you came with friends or a laptop."],
+    "food": ["A good stop when the group is hungry and in no rush.", "Come hungry and share a few plates around the table.", "Relaxed, tasty and made for a proper sit-down meal."],
+    "bar": ["Evening energy, good music and people who came to have a good time.", "Where a quiet drink slowly turns into a late night.", "Easy to start the night here and let it carry on."],
+    "rooftop": ["Open skies, city lights and a view worth the climb.", "Best around sunset, when the whole skyline turns gold."],
+    "play": ["Bring the squad and get properly competitive.", "Pure fun, made for groups and a little friendly rivalry.", "The kind of outing people end up telling stories about."],
+    "music": ["Come for the sound, stay for the crowd.", "Live energy that makes a regular evening feel like an event."],
+    "dessert": ["A sweet detour for anyone who believes dessert is a plan.", "Treat yourself here between the bigger stops of the day."],
+    "wellness": ["Switch off, breathe out and let the day slow down.", "A calm reset when the trip gets busy."],
+    "green": ["Fresh air and open space for an unhurried wander.", "A breather from the city, best at golden hour.", "Good for a slow walk and a few photos."],
+    "culture": ["Take your time here; the details reward a slower look.", "A window into the city's character and its past."],
+    "heritage": ["History you can walk through, best seen with fresh eyes.", "Stand where the city's story was written and take it in."],
+    "sacred": ["A calm, atmospheric stop that says a lot about local life.", "Quiet, meaningful and worth a few unhurried minutes."],
+    "shop": ["Good for browsing, bargains and a few unplanned finds.", "Wander through, soak up the buzz and pick up something local."],
+    "adventure": ["For anyone who wants the trip to get their heart racing.", "Get outdoors and add some adrenaline to the plan."],
+    "default": ["A local favourite worth adding to your plan.", "Easy to fit into the day and good to have on your list."],
+}
+_VIBE_PILLAR_DEFAULT = {"culinary": "food", "bars_pubs": "bar", "wellness": "wellness", "secret_spots": "green", "shopping": "shop",
+                        "adventures": "adventure", "theme_parks": "play", "sacred_temples": "sacred", "attractions": "heritage", "trending": "cafe"}
+
+
+def _vibe_kind(poi: Dict[str, Any], pillar: str) -> str:
+    blob = (poi.get("name", "") + " " + " ".join(poi.get("cats") or [])).lower()
+    rules = [("rooftop", "rooftop"), ("escape", "play"), ("gaming", "play"), ("arcade", "play"), ("bowling", "play"), ("karting", "play"), ("amusement", "play"),
+             ("live music", "music"), ("music", "music"), ("ice cream", "dessert"), ("dessert", "dessert"), ("bakery", "dessert"),
+             ("cafe", "cafe"), ("coffee", "cafe"), ("nightclub", "bar"), ("lounge", "bar"), ("pub", "bar"), (" bar", "bar"), ("restaurant", "food"),
+             ("spa", "wellness"), ("yoga", "wellness"), ("garden", "green"), ("park", "green"), ("lake", "green"), ("museum", "culture"), ("gallery", "culture"),
+             ("fort", "heritage"), ("monument", "heritage"), ("palace", "heritage"), ("temple", "sacred"), ("mosque", "sacred"), ("church", "sacred"),
+             ("mall", "shop"), ("market", "shop"), ("bazaar", "shop")]
+    for k, v in rules:
+        if k in blob:
+            return v
+    return _VIBE_PILLAR_DEFAULT.get(pillar, "default")
+
+
+def _vibe_template(poi: Dict[str, Any], pillar: str) -> str:
+    lines = _VIBE_BANK.get(_vibe_kind(poi, pillar), _VIBE_BANK["default"])
+    return lines[sum(ord(c) for c in poi.get("name", "")) % len(lines)]
+
+
+async def _vibe_batch(client: httpx.AsyncClient, dest: str, pillar: str, pois: List[Dict[str, Any]]) -> Dict[str, str]:
+    """One AI call for the whole tab: a short, inviting vibe line per place. No facts, no addresses.
+    Any failure just means the category templates are used instead."""
+    if not pois or client is None:
+        return {}
+    listing = "\n".join(f"- {p['name']} ({', '.join((p.get('cats') or [])[:2]) or pillar.replace('_', ' ')}, {p.get('area') or dest})" for p in pois[:27])
+    prompt = (
+        f"Write a one-sentence vibe line (max 16 words) for each place in {dest} below, for young travellers browsing a trip app.\n"
+        "Describe the mood and what it feels like to be there, based only on the kind of place. "
+        "Never state facts: no menu items, prices, ratings, opening hours, years, awards, or addresses, and no numbers at all. "
+        "Warm, specific, a little playful; never start with the place name; do not say 'located' or 'situated'.\n"
+        f"{listing}\n"
+        'Return ONLY JSON: {"lines": [{"name": "exact name from the list", "vibe": "the sentence"}]}'
+    )
+    try:
+        raw = await asyncio.wait_for(call_ai_with_rate_limit_fallback(client, prompt), timeout=8.0)
+        data = extract_json_payload(raw)
+        out: Dict[str, str] = {}
+        for it in (data or {}).get("lines", []):
+            v = str(it.get("vibe", "")).strip()
+            if v and len(v) <= 140 and not re.search(r"[0-9₹$€£]", v):
+                out[str(it.get("name", "")).strip().lower()] = v
+        return out
+    except Exception as e:
+        logger.warning(f"vibe batch skipped: {e}")
+        return {}
+
+
 def _describe_poi(poi: Dict[str, Any], dest: str) -> str:
     seen, labels = set(), []
     for c in poi["cats"]:
@@ -1383,6 +1451,8 @@ async def build_real_places(client: httpx.AsyncClient, clean_dest: str, pillar: 
         take([await _osm_pois(client, pillar, coords)])
     pois = pois[:27]
 
+    vibes = {} if pillar == "essentials" else await _vibe_batch(client, clean_dest, pillar, pois)
+
     async def card(idx: int, poi: Dict[str, Any]) -> Dict[str, Any]:
         name = poi["name"]
         info = {"image": "", "extract": ""}
@@ -1405,7 +1475,7 @@ async def build_real_places(client: httpx.AsyncClient, clean_dest: str, pillar: 
             "title": name,
             "name": name,
             "category": pillar.replace("_", " ").title(),
-            "description": poi.get("why") or info["extract"] or _describe_poi(poi, clean_dest),
+            "description": poi.get("why") or (_describe_poi(poi, clean_dest) if pillar == "essentials" else (vibes.get(name.lower()) or _vibe_template(poi, pillar))),
             "location": poi["area"] or clean_dest,
             "address": poi["address"] or poi["area"] or clean_dest,
             "maps_url": nav,
@@ -1473,7 +1543,7 @@ async def get_high_capacity_trails(
     trip_end = _parse_event_day(end_date) if isinstance(end_date, str) else None
     if trip_start and (not trip_end or trip_end < trip_start):
         trip_end = trip_start
-    cache_key = f"trails_{destination.strip()}_{active_category}".lower()
+    cache_key = f"trails2_{destination.strip()}_{active_category}".lower()
     if active_category == "events" and trip_start:
         cache_key += f"_{trip_start}_{trip_end}"
 

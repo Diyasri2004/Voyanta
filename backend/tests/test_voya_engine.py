@@ -194,3 +194,13 @@ def test_genz_request_uses_live_trending_names_verified_on_map():
     out = run(run_chat({**REQ, "destination": "Lucknow", "message": "where do gen z hang out"}, deps))
     top = out["action"]["places"][0]
     assert top["name"] == "Cafe Neon" and "26.85,81.0" in top["maps_url"] and "waffles" in top["about"]
+
+
+def test_card_descriptions_are_vibes_not_addresses():
+    sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+    os.environ.setdefault("TOMTOM_API_KEY", "x")
+    import main
+    poi = {"name": "Cafe Coffee Day", "cats": ["cafe/pub"], "area": "Hazratganj", "address": "31/82 Vidhan Sabha Marg"}
+    line = main._vibe_template(poi, "trending")
+    assert "Hazratganj" not in line and "31/82" not in line and len(line) > 20
+    assert main._vibe_kind({"name": "The Lockdown Escape Room", "cats": []}, "trending") == "play"
