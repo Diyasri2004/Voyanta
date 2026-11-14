@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import WeatherBadge from "./WeatherBadge";
 import CulinaryPillarTab from "./CulinaryPillarTab";
 import PillarTab, { PillarItemData } from "./PillarTab";
 import PlanBuilderDrawer, { SavedPlanItem } from "./PlanBuilderDrawer";
@@ -51,7 +52,6 @@ export default function CommandCenter({
   const [internalTab, setInternalTab] = useState(activeTab);
   const [savedPlanItems, setSavedPlanItems] = useState<SavedPlanItem[]>([]);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [weather, setWeather] = useState<{ temp_c: number; condition: string } | null>(null);
   const [pillarCache, setPillarCache] = useState<Record<string, PillarItemData[]>>({});
   const [loadingPillars, setLoadingPillars] = useState<Record<string, boolean>>({});
   const fetchedRef = useRef(new Set<string>());
@@ -89,15 +89,6 @@ export default function CommandCenter({
   const tripEnd: string = trip?.end_date || "";
   const cacheKeyFor = (p: string) =>
     p === "events" ? `voyanta_${destination}_events_${tripStart}_${tripEnd}` : `voyanta_${destination}_${p}`;
-
-  useEffect(() => {
-    if (destination && destination !== "Destination") {
-      fetch(`/api/weather?destination=${encodeURIComponent(destination)}`)
-        .then((res) => res.json())
-        .then((data) => setWeather(data))
-        .catch(() => setWeather(null));
-    }
-  }, [destination]);
 
   const fetchPillarData = async (pillarName: string) => {
     if (!destination || destination === "Destination") return;
@@ -258,11 +249,7 @@ export default function CommandCenter({
           </h2>
           <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-[#aab3c5]">
             {destination.includes(",") && <span>{destination.split(",").slice(1).join(",").trim()}</span>}
-            {weather && (
-              <span className="glass rounded-full px-3 py-1 font-medium text-[#e8edf7]">
-                {Math.round(weather.temp_c)}°C · {weather.condition}
-              </span>
-            )}
+            <WeatherBadge destination={destination} startDate={tripStart} endDate={tripEnd} />
           </div>
         </div>
         <button

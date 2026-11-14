@@ -78,17 +78,20 @@ export const DestinationCard = ({
         {/* card plate: photo + body surface */}
         <div className="absolute inset-0 overflow-hidden rounded-3xl border border-white/10 bg-[#0a1020]/90 shadow-[0_20px_50px_-20px_rgba(0,0,0,0.9)] transition-colors duration-500 group-hover:border-[#ffc36b]/40">
           <div className="relative h-52 w-full overflow-hidden bg-[#0f172a]">
-            <img
-              src={imageUrl}
-              alt={title}
-              loading="lazy"
-              decoding="async"
-              className="h-full w-full scale-110 object-cover transition-transform duration-[900ms] ease-out group-hover:scale-125"
-              onError={(e) => {
-                (e.target as HTMLImageElement).src =
-                  "https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=800&q=80";
-              }}
-            />
+            {imageUrl && !imageBroken ? (
+              <img
+                src={imageUrl}
+                alt={title}
+                loading="lazy"
+                decoding="async"
+                className="h-full w-full scale-110 object-cover transition-transform duration-[900ms] ease-out group-hover:scale-125"
+                onError={() => setImageBroken(true)}
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center bg-[radial-gradient(circle_at_50%_40%,#1a2442,#0a1020_70%)]">
+                <MapPin className="h-10 w-10 text-[#ffc36b]/50" />
+              </div>
+            )}
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#0a1020] via-[#0a1020]/20 to-transparent" />
           </div>
         </div>
