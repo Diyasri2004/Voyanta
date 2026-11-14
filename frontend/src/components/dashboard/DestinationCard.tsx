@@ -14,6 +14,8 @@ export interface DestinationCardProps {
     description?: string;
     location?: string;
     address?: string;
+    lat?: number | string | null;
+    lng?: number | string | null;
     navigation_url?: string;
     maps_url?: string;
     image_url?: string;
@@ -44,17 +46,28 @@ export const DestinationCard = ({
 }: DestinationCardProps) => {
   const reduce = useReducedMotion();
   const title = item.title || item.name || "Landmark";
-  const locationText = item.location || item.address || (destination ? `${destination} Area` : "Local Area");
+  // The label and the Map button must always describe the SAME place.
+  // Real coordinates (from TomTom/OSM) are the only fully reliable source, so:
+  //  - with coordinates: show the real street/area and open the map pinned there
+  //  - events: show the real venue and open that venue
+  //  - anything else (AI-written cards): never show a guessed neighbourhood;
+  //    show the destination and search "<place>, <destination>".
+  const lat = Number(item.lat);
+  const lng = Number(item.lng);
+  const hasCoords = item.lat != null && item.lng != null && Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0);
+  const isEvent = (item.category || "").toLowerCase() === "event";
+  const locationText = hasCoords || isEvent
+    ? item.address || item.location || destination || "Local Area"
+    : destination || "Local Area";
   const categoryText = item.category || "ATTRACTION";
   const imageUrl = item.image || item.image_url || "";
   const [imageBroken, setImageBroken] = React.useState(false);
 
-  const navUrl =
-    item.navigation_url ||
-    item.maps_url ||
-    `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-      `${title}, ${locationText || ""}, ${destination}`
-    )}`;
+  const navUrl = hasCoords
+    ? `https://www.google.com/maps/search/${encodeURIComponent(title)}/@${lat},${lng},17z`
+    : isEvent && (item.navigation_url || item.maps_url)
+      ? (item.navigation_url || item.maps_url)!
+      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${title}, ${destination}`)}`;
 
   const z = (px: number) => ({ transform: `translateZ(${px}px)` });
 

@@ -20,6 +20,8 @@ export interface PillarItemData {
   event_time?: string;
   price_range?: string;
   rating?: number;
+  lat?: number | null;
+  lng?: number | null;
 }
 
 function SkeletonCardGrid() {
@@ -50,6 +52,7 @@ export default function PillarTab({
   onAddToPlan,
   isLoading = false,
   emptyMessage,
+  addedTitles,
 }: {
   items: PillarItemData[];
   destination: string;
@@ -57,6 +60,7 @@ export default function PillarTab({
   onAddToPlan?: (item: PillarItemData) => void;
   isLoading?: boolean;
   emptyMessage?: string;
+  addedTitles?: string[];
 }) {
   const [likedIds, setLikedIds] = useState<Record<string, boolean>>({});
 
@@ -82,6 +86,7 @@ export default function PillarTab({
       items={items}
       destination={destination}
       onAddToPlan={onAddToPlan}
+      addedTitles={addedTitles}
       likedIds={likedIds}
       onToggleLike={toggleLike}
     />

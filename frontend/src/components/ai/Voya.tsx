@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { X, Send } from "lucide-react";
 import HeaderMenu from "@/components/ui/HeaderMenu";
 import VoyaMark from "./VoyaMark";
+import { TypedText } from "./RichText";
 
 import { useCurrency } from "@/context/CurrencyContext";
 
@@ -52,6 +53,7 @@ export default function Voya({ trip }: { trip: any }) {
     content: string;
     text?: string;
     action?: any;
+    fresh?: boolean;
   }
 
   const [isOpen, setIsOpen] = useState(false);
@@ -114,11 +116,30 @@ export default function Voya({ trip }: { trip: any }) {
   };
 
   const SUGGESTIONS = [
-    "✨ Swap an activity for a hidden gem",
-    "🍱 Top local food spots & budget",
-    "🚗 Local transit & navigation tips",
-    "☔ Rainy day backup plan",
+    "Offbeat spots that are not on my cards",
+    "Events happening during my trip",
+    "Top local food spots and budget",
+    "Rainy day backup plan",
   ];
+
+  /** Names of places already shown as cards, so Voya can offer different ones when asked for more. */
+  const collectShownPlaces = (): string[] => {
+    const out: string[] = [];
+    try {
+      const dest = trip?.destination;
+      if (dest) {
+        for (let i = 0; i < sessionStorage.length; i++) {
+          const k = sessionStorage.key(i) || "";
+          if (k.startsWith(`voyanta_${dest}_`)) {
+            const arr = JSON.parse(sessionStorage.getItem(k) || "[]");
+            if (Array.isArray(arr)) arr.forEach((x: any) => (x?.title || x?.name) && out.push(x.title || x.name));
+          }
+        }
+      }
+    } catch (_) {}
+    (trip?.itinerary || []).forEach((s: any) => s?.title && out.push(s.title));
+    return Array.from(new Set(out)).slice(0, 80);
+  };
 
   const sendMessage = async (customMessage?: any, presetMessage?: string) => {
     let userMsg = "";
@@ -151,7 +172,10 @@ export default function Voya({ trip }: { trip: any }) {
           user_time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           user_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
           history: newMessages.map(m => ({ role: m.role, content: m.content || m.text || '' })),
-          active_itinerary: trip?.itinerary || []
+          active_itinerary: trip?.itinerary || [],
+          trip_start: trip?.start_date || '',
+          trip_end: trip?.end_date || '',
+          shown_places: collectShownPlaces()
         })
       });
 
@@ -168,7 +192,8 @@ export default function Voya({ trip }: { trip: any }) {
           role: 'assistant',
           content: aiText,
           text: aiText,
-          action: data.action || null
+          action: data.action || null,
+          fresh: true
         }
       ]);
     } catch (err) {
@@ -297,7 +322,58 @@ export default function Voya({ trip }: { trip: any }) {
                         : "rounded-2xl rounded-bl-md border border-white/10 bg-white/[0.05] text-[#e4e9f4]"
                     }`}
                   >
-                    <p className="whitespace-pre-wrap">{m.content || m.text}</p>
+                    {m.role === "user" ? (
+                      <p className="whitespace-pre-wrap">{m.content || m.text}</p>
+                    ) : (
+                      <TypedText text={m.content || m.text || ""} animate={!!m.fresh && i === messages.length - 1} />
+                    )}
+                    {m.action?.events?.length > 0 && (
+                      <div className="mt-3 space-y-2 border-t border-white/10 pt-2.5">
+                        <div className="text-[11px] font-semibold text-[#ffc36b]">Events</div>
+                        {m.action.events.slice(0, 5).map((ev: any, k: number) => (
+                          <div key={k} className="flex items-start justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.04] p-2.5">
+                            <div className="min-w-0">
+                              <div className="truncate text-[13px] font-semibold text-[#f6efe2]">{ev.title}</div>
+                              <div className="mt-0.5 text-[11.5px] text-[#9aa5bb]">
+                                {[ev.when, ev.venue, ev.price].filter(Boolean).join(" · ")}
+                              </div>
+                              {ev.note && <div className="mt-0.5 text-[11px] text-[#7fd6ff]">{ev.note}</div>}
+                            </div>
+                            {ev.book_url && (
+                              <a href={ev.book_url} target="_blank" rel="noreferrer noopener"
+                                className="shrink-0 rounded-full bg-[linear-gradient(115deg,#ffe2ae,#ffc36b_55%,#ff9d5c)] px-3 py-1.5 text-[11px] font-bold text-[#1b1206]">
+                                Book
+                              </a>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {m.action?.places?.length > 0 && (
+                      <div className="mt-3 space-y-2 border-t border-white/10 pt-2.5">
+                        <div className="text-[11px] font-semibold text-[#ffc36b]">More places</div>
+                        {m.action.places.slice(0, 5).map((pl: any, k: number) => (
+                          <div key={k} className="rounded-xl border border-white/10 bg-white/[0.04] p-2.5">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="truncate text-[13px] font-semibold text-[#f6efe2]">{pl.name}</div>
+                                {pl.area && <div className="text-[11.5px] text-[#9aa5bb]">{pl.area}</div>}
+                              </div>
+                              <div className="flex shrink-0 gap-1.5">
+                                <a href={pl.maps_url} target="_blank" rel="noreferrer noopener"
+                                  className="rounded-full border border-white/15 bg-white/[0.06] px-2.5 py-1 text-[11px] font-semibold text-[#cbd3e3]">Map</a>
+                                {pl.website && (
+                                  <a href={pl.website} target="_blank" rel="noreferrer noopener"
+                                    className="rounded-full border border-[#7fd6ff]/30 bg-[#7fd6ff]/10 px-2.5 py-1 text-[11px] font-semibold text-[#7fd6ff]">Site</a>
+                                )}
+                              </div>
+                            </div>
+                            {pl.about && <p className="mt-1 line-clamp-2 text-[11.5px] leading-snug text-[#8b95ab]">{pl.about}</p>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {m.action?.event_platforms && linkGroup("Book events", m.action.event_platforms)}
                     {m.action?.booking_platforms && linkGroup("Stays", m.action.booking_platforms)}
                     {m.action?.ticket_platforms && linkGroup("Experience tickets", m.action.ticket_platforms)}
                     {m.action?.ride_hailing && linkGroup("Cabs and transit", m.action.ride_hailing)}

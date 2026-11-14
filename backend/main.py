@@ -15,6 +15,7 @@ from typing import List, Optional, Dict, Any
 
 from fastapi import FastAPI, HTTPException, Depends, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 import asyncpg
 from cachetools import TTLCache
@@ -22,6 +23,7 @@ from dotenv import load_dotenv
 
 from models import EventFestival
 from chat_agent import get_voya_system_prompt, get_chat_agent_tools, execute_tool_call
+from voya_engine import Deps, RateLimiter, run_chat
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("voyanta")
@@ -235,6 +237,10 @@ class ChatRequest(BaseModel):
     user_timezone: Optional[str] = ""
     history: Optional[List[ChatMessage]] = []
     active_itinerary: Optional[List[Dict[str, Any]]] = []
+    trip_start: Optional[str] = ""
+    trip_end: Optional[str] = ""
+    travelers: Optional[str] = ""
+    shown_places: Optional[List[str]] = []
 
 # ─────────────────────────────────────────────
 #  Lifespan & Initialization
@@ -1936,85 +1942,59 @@ async def create_dynamic_trip_plan(body: TripPlanRequest, request: Request):
 #  Interactive Chat Agent Endpoint
 # ─────────────────────────────────────────────
 
+voya_limiter = RateLimiter(per_minute=12, per_hour=120)
+
 @app.post("/api/chat", tags=["Chat"])
 @app.post("/chat", tags=["Chat"])
 @app.post("/api/voya/chat", tags=["Chat"])
 async def handle_voya_chat(req: ChatRequest, request: Request):
+    """Voya: plan -> run real-data tools -> answer. See voya_engine.py."""
+    ip = (request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (request.client.host if request.client else "anon"))
+    if not voya_limiter.allow(ip):
+        msg = "You are sending messages very quickly. Give me a few seconds and ask again."
+        return JSONResponse(status_code=429, content={"status": "rate_limited", "reply": msg, "response": msg, "action": None})
+
     client = request.app.state.client
-    
-    system_prompt = get_voya_system_prompt(
-        destination=req.destination,
-        language=req.language,
-        currency=req.currency,
-        user_time=req.user_time,
-        user_timezone=req.user_timezone,
-        active_itinerary=req.active_itinerary
-    )
+    dest = (req.destination or "").strip()
 
-    tools = get_chat_agent_tools()
-    
-    convo_history_str = ""
-    if req.history:
-        for m in req.history[-8:]:
-            role_label = "User" if m.role == "user" else "Voya"
-            convo_history_str += f"{role_label}: {m.content}\n"
+    async def _poi_search(query: str, destination: str):
+        coords = await resolve_dynamic_coordinates(client, destination)
+        if coords is UNRESOLVED_COORDS:
+            return []
+        return await _tomtom_pois(client, query, coords, radius=40000)
 
-    prompt = f"""{system_prompt}
-
-Conversation History:
-{convo_history_str}
-User's Latest Query: {req.message}
-
-Available Tools:
-{json.dumps(tools, indent=2)}
-
-OUTPUT FORMAT:
-Respond with ONLY a single valid JSON object:
-- If invoking a tool:
-{{"tool_call": {{"name": "<tool_name>", "arguments": {{...}}}}, "reply": "<Your full, detailed conversational answer in {req.language}>"}}
-
-- If answering directly (general knowledge, recommendations, advice, banter):
-{{"tool_call": null, "reply": "<Your full, engaging, concrete answer in {req.language}>"}}
-"""
-
-    try:
-        raw_res = await call_ai_with_rate_limit_fallback(client, prompt)
-        parsed = extract_json_payload(raw_res)
-
-        reply_text = ""
-        action_payload = None
-
-        if parsed and isinstance(parsed, dict) and ("reply" in parsed or "tool_call" in parsed or "response" in parsed):
-            reply_text = parsed.get("reply", "") or parsed.get("response", "")
-            tool_data = parsed.get("tool_call")
-
-            if tool_data and isinstance(tool_data, dict) and "name" in tool_data:
-                tool_name = tool_data.get("name")
-                tool_args = tool_data.get("arguments", {})
-                if not tool_args.get("destination") and req.destination:
-                    tool_args["destination"] = req.destination
-                action_payload = await execute_tool_call(tool_name, tool_args, client=client)
-        else:
-            # If response was plain text or malformed JSON, return raw string cleanly
-            reply_text = raw_res.strip()
-
-        if not reply_text:
-            reply_text = "I'm here! What destination or plan would you like to explore?"
-
-        return {
-            "status": "success",
-            "reply": reply_text,
-            "response": reply_text,
-            "action": action_payload
-        }
-    except Exception as e:
-        logger.error(f"Chat execution fallback: {e}")
+    async def _weather(destination: str, start: Optional[str], end: Optional[str]):
         try:
-            fallback_prompt = f"{system_prompt}\n\nUser: {req.message}\nProvide an informative, direct response."
-            raw_fallback = await call_ai_with_rate_limit_fallback(client, fallback_prompt)
-            return {"status": "success", "reply": raw_fallback.strip(), "response": raw_fallback.strip(), "action": None}
+            return await get_destination_weather(request, destination=destination, start_date=start, end_date=end)
+        except Exception as e:
+            logger.warning(f"Voya weather lookup failed: {e}")
+            return None
+
+    deps = Deps(
+        call_ai=lambda prompt: call_ai_with_rate_limit_fallback(client, prompt),
+        extract_json=extract_json_payload,
+        build_events=lambda d, s, e: build_real_events(client, d.split(",")[0].strip().title(), s, e, geo_query=d),
+        poi_search=_poi_search,
+        weather=_weather,
+        wiki_info=lambda name, d: _wiki_info(client, name, d.split(",")[0].strip().title()),
+        parse_day=_parse_event_day,
+        client=client,
+    )
+    in_india = False
+    if dest:
+        try:
+            c = await resolve_dynamic_coordinates(client, dest)
+            in_india = c is not UNRESOLVED_COORDS and 6.0 <= c.lat <= 37.5 and 68.0 <= c.lng <= 98.0
         except Exception:
-            return {"status": "success", "reply": "I'm here to assist your travel planning. What destination or question do you have?", "response": "I'm here to assist your travel planning. What destination or question do you have?", "action": None}
+            in_india = False
+
+    payload = req.model_dump() if hasattr(req, "model_dump") else req.dict()
+    try:
+        out = await run_chat(payload, deps, in_india=in_india)
+    except Exception as e:
+        logger.error(f"Voya chat failed: {e}")
+        out = {"reply": "I hit a snag reaching my travel data. Please ask again in a moment.", "action": None}
+    return {"status": "success", "reply": out["reply"], "response": out["reply"], "action": out.get("action")}
 
 # ─────────────────────────────────────────────
 #  Geocoding, Routing & POI APIs (TomTom)

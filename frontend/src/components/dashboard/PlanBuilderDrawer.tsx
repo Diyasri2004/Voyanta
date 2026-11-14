@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { X, Trash2, Calendar, Clock, Download, Share2, MapPin, Navigation, Sparkles } from "lucide-react";
+import { useState, useEffect } from "react";
+import { X, Trash2, Calendar, Clock, Download, Share2, MapPin, Navigation, Sparkles, ArrowLeft } from "lucide-react";
 import { PillarItemData } from "./PillarTab";
 
 export interface SavedPlanItem extends PillarItemData {
@@ -26,6 +26,14 @@ export default function PlanBuilderDrawer({
 }) {
   const [activeDay, setActiveDay] = useState<number>(1);
 
+  // Escape closes the drawer, and the page behind it must not stay locked.
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const exportItinerary = () => {
@@ -46,8 +54,11 @@ export default function PlanBuilderDrawer({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-black/70 backdrop-blur-sm animate-fade-in flex justify-end">
-      <div className="relative w-full max-w-lg bg-[#050810] border-l border-white/10 text-white flex flex-col h-full shadow-2xl">
+    <div
+      className="fixed inset-0 z-50 overflow-hidden bg-black/70 backdrop-blur-sm animate-fade-in flex justify-end"
+      onClick={onClose}
+    >
+      <div onClick={(e) => e.stopPropagation()} className="relative w-full max-w-lg bg-[#050810] border-l border-white/10 text-white flex flex-col h-full shadow-2xl">
         {/* Drawer Header */}
         <div className="p-6 border-b border-white/10 flex items-center justify-between bg-[#080c16]">
           <div className="flex items-center gap-3">
@@ -152,6 +163,18 @@ export default function PlanBuilderDrawer({
               </div>
             ))
           )}
+        </div>
+
+        {/* Footer: always a clear way back to the cards */}
+        <div className="border-t border-white/10 bg-[#080c16] p-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#ffc36b] px-4 py-3 text-sm font-bold text-[#1b1206] transition hover:brightness-105"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to places, add more
+          </button>
         </div>
       </div>
     </div>

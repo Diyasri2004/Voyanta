@@ -55,6 +55,8 @@ export default function CommandCenter({
   const [pillarCache, setPillarCache] = useState<Record<string, PillarItemData[]>>({});
   const [loadingPillars, setLoadingPillars] = useState<Record<string, boolean>>({});
   const fetchedRef = useRef(new Set<string>());
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const ALL_PILLARS = [
     "attractions", "events", "culinary", "bars_pubs", "wellness",
@@ -184,11 +186,18 @@ export default function CommandCenter({
   };
 
   const handleAddToPlan = (item: PillarItemData) => {
-    setSavedPlanItems((prev) => {
-      if (prev.some((p) => p.title === item.title)) return prev;
-      return [...prev, item];
-    });
-    setIsDrawerOpen(true);
+    // Toggle: tap Add again to remove. The drawer stays closed so the person
+    // can keep browsing and adding; a small toast offers a way to open it.
+    const exists = savedPlanItems.some((p) => p.title === item.title);
+    setSavedPlanItems((prev) =>
+      prev.some((p) => p.title === item.title)
+        ? prev.filter((p) => p.title !== item.title)
+        : [...prev, item]
+    );
+    const added = !exists;
+    setToast(added ? `Added "${item.title}"` : `Removed "${item.title}"`);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 3200);
   };
 
   const handleRemovePlanItem = (idx: number) => {
@@ -200,6 +209,7 @@ export default function CommandCenter({
   };
 
   const planItems = savedPlanItems;
+  const addedTitles = savedPlanItems.map((p) => p.title);
 
   const combinedCulinaryItems = (() => {
     const rawCulinary = trip?.culinary || [];
@@ -303,6 +313,7 @@ export default function CommandCenter({
           destination={destination}
           selectedLanguage={selectedLanguage}
           onAddToPlan={handleAddToPlan}
+          addedTitles={addedTitles}
           isLoading={loadingPillars[currentTab] && (!getPillarItems(currentTab) || getPillarItems(currentTab).length === 0)}
           emptyMessage={
             fetchedRef.current.has(currentTab) && !loadingPillars[currentTab]
@@ -314,6 +325,22 @@ export default function CommandCenter({
         />
         </motion.div>
       </div>
+
+      {/* Add / remove confirmation */}
+      {toast && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-24 z-40 flex justify-center px-4">
+          <div className="pointer-events-auto flex max-w-md items-center gap-3 rounded-full border border-white/10 bg-[#0b1020]/95 py-2 pl-4 pr-2 text-sm text-[#f6efe2] shadow-2xl backdrop-blur-xl">
+            <span className="truncate">{toast}</span>
+            <button
+              type="button"
+              onClick={() => { setIsDrawerOpen(true); setToast(null); }}
+              className="shrink-0 rounded-full bg-[#ffc36b] px-3 py-1.5 text-xs font-bold text-[#1b1206]"
+            >
+              View itinerary ({planItems.length})
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Plan Builder Drawer Slide-over */}
       <PlanBuilderDrawer

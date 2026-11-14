@@ -8,6 +8,7 @@ export interface DestinationGridProps {
   onAddToPlan?: (item: any) => void;
   likedIds?: Record<string, boolean>;
   onToggleLike?: (id: string) => void;
+  addedTitles?: string[];
 }
 
 export function DestinationGrid({
@@ -16,6 +17,7 @@ export function DestinationGrid({
   onAddToPlan,
   likedIds = {},
   onToggleLike,
+  addedTitles = [],
 }: DestinationGridProps) {
   const itemsToRender = items || [];
 
@@ -29,6 +31,7 @@ export function DestinationGrid({
             item={place}
             index={idx}
             destination={destination}
+            isAdded={addedTitles.includes(place.title)}
             isLiked={!!likedIds[itemId]}
             onLike={onToggleLike ? () => onToggleLike(itemId) : undefined}
             onAddToPlan={onAddToPlan ? () => onAddToPlan(place) : undefined}
