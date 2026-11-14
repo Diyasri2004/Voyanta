@@ -15,7 +15,7 @@ export default function CulinaryHighlights({
     <section className="mt-8 pt-8 border-t border-white/10 shrink-0">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <p className="text-[11px] uppercase tracking-[0.28em] text-[#ff007f] font-bold">
+          <p className="text-[11px] uppercase tracking-[0.28em] text-[#ff8a5c] font-bold">
             Local Flavour
           </p>
           <h2 className="mt-1 text-2xl font-syne font-bold tracking-tight text-white">

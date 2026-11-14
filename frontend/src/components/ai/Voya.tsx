@@ -182,20 +182,20 @@ export default function Voya({ trip }: { trip: any }) {
   return (
     <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-[9999] pointer-events-auto flex flex-col items-end">
       {/* Chat Drawer */}
-      <div className={`absolute bottom-full right-0 mb-4 w-[calc(100vw-2rem)] sm:w-96 h-[500px] max-h-[75vh] bg-[#03050a]/95 backdrop-blur-xl border border-[#ff007f]/40 rounded-2xl shadow-[0_0_30px_rgba(255,0,127,0.2)] z-50 transition-all duration-300 flex flex-col origin-bottom-right ${isOpen ? 'scale-100 opacity-100' : 'scale-90 opacity-0 pointer-events-none'}`}>
+      <div className={`absolute bottom-full right-0 mb-4 w-[calc(100vw-2rem)] sm:w-96 h-[500px] max-h-[75vh] bg-[#04060d]/95 backdrop-blur-xl border border-[#ff8a5c]/40 rounded-2xl shadow-[0_0_30px_rgba(255,138,92,0.2)] z-50 transition-all duration-300 flex flex-col origin-bottom-right ${isOpen ? 'scale-100 opacity-100' : 'scale-90 opacity-0 pointer-events-none'}`}>
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-[#00f0ff]/20 bg-gradient-to-r from-[#00f0ff]/10 to-transparent">
+        <div className="flex items-center justify-between p-4 border-b border-[#5eead4]/20 bg-gradient-to-r from-[#5eead4]/10 to-transparent">
           <div className="flex items-center gap-3">
             <div className="relative group cursor-help">
-              <span className="text-2xl drop-shadow-[0_0_8px_rgba(0,240,255,0.8)] inline-block transition-transform group-hover:scale-125 group-hover:-rotate-12 duration-300">🤖</span>
+              <span className="text-2xl drop-shadow-[0_0_8px_rgba(94,234,212,0.8)] inline-block transition-transform group-hover:scale-125 group-hover:-rotate-12 duration-300">🤖</span>
             </div>
             <div>
-              <h3 className="font-syne font-bold text-[#00f0ff] flex items-center gap-2">
+              <h3 className="font-syne font-bold text-[#5eead4] flex items-center gap-2">
                 Voya 
-                <span className="inline-block transition-transform hover:scale-125 hover:rotate-12 duration-300 cursor-pointer drop-shadow-[0_0_5px_rgba(255,0,127,0.8)]">✨</span>
+                <span className="inline-block transition-transform hover:scale-125 hover:rotate-12 duration-300 cursor-pointer drop-shadow-[0_0_5px_rgba(255,138,92,0.8)]">✨</span>
               </h3>
-              <p className="text-[10px] text-[#00f0ff]/70 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#39ff14] animate-pulse inline-block" /> Online
+              <p className="text-[10px] text-[#5eead4]/70 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#fcd34d] animate-pulse inline-block" /> Online
               </p>
             </div>
           </div>
@@ -203,7 +203,7 @@ export default function Voya({ trip }: { trip: any }) {
             <select
               value={activeLang}
               onChange={(e) => selectLanguage(e.target.value)}
-              className="bg-black/60 text-[#00f0ff] border border-[#00f0ff]/30 text-[10px] rounded-lg px-1.5 py-1 focus:outline-none cursor-pointer"
+              className="bg-black/60 text-[#5eead4] border border-[#5eead4]/30 text-[10px] rounded-lg px-1.5 py-1 focus:outline-none cursor-pointer"
             >
               <option value="en">🌐 EN</option>
               <option value="hi">🇮🇳 HI (Hinglish)</option>
@@ -231,37 +231,37 @@ export default function Voya({ trip }: { trip: any }) {
             <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"} animate-fadeInUp`}>
               <div className={`max-w-[85%] rounded-xl p-3 text-sm ${
                 m.role === "user" 
-                  ? "bg-gradient-to-br from-[#ff007f] to-[#ff007f]/80 text-white rounded-br-sm shadow-[0_0_15px_rgba(255,0,127,0.3)]" 
-                  : "bg-white/5 text-[#e2e8f0] border border-[#00f0ff]/20 rounded-bl-sm font-plus-jakarta shadow-[0_0_15px_rgba(0,240,255,0.05)]"
+                  ? "bg-gradient-to-br from-[#ff8a5c] to-[#ff8a5c]/80 text-white rounded-br-sm shadow-[0_0_15px_rgba(255,138,92,0.3)]" 
+                  : "bg-white/5 text-[#e2e8f0] border border-[#5eead4]/20 rounded-bl-sm font-plus-jakarta shadow-[0_0_15px_rgba(94,234,212,0.05)]"
               }`}>
                 <p className="whitespace-pre-wrap">{m.content || m.text}</p>
                 {/* Action Badges */}
                 {m.action?.booking_platforms && (
                   <div className="mt-2.5 pt-2 border-t border-white/10 space-y-1">
-                    <div className="text-[11px] font-semibold text-[#ff007f]">🏨 Stays:</div>
+                    <div className="text-[11px] font-semibold text-[#ff8a5c]">🏨 Stays:</div>
                     <div className="grid grid-cols-2 gap-1 text-[10px]">
                       {Object.entries(m.action.booking_platforms).map(([p, u]: any) => (
-                        <a key={p} href={u} target="_blank" rel="noreferrer" className="capitalize text-[#00f0ff] underline truncate">{p.replace('_', ' ')}</a>
+                        <a key={p} href={u} target="_blank" rel="noreferrer" className="capitalize text-[#5eead4] underline truncate">{p.replace('_', ' ')}</a>
                       ))}
                     </div>
                   </div>
                 )}
                 {m.action?.ticket_platforms && (
                   <div className="mt-2.5 pt-2 border-t border-white/10 space-y-1">
-                    <div className="text-[11px] font-semibold text-[#39ff14]">🎟️ Experience Tickets:</div>
+                    <div className="text-[11px] font-semibold text-[#fcd34d]">🎟️ Experience Tickets:</div>
                     <div className="grid grid-cols-2 gap-1 text-[10px]">
                       {Object.entries(m.action.ticket_platforms).map(([p, u]: any) => (
-                        <a key={p} href={u} target="_blank" rel="noreferrer" className="capitalize text-[#00f0ff] underline truncate">{p}</a>
+                        <a key={p} href={u} target="_blank" rel="noreferrer" className="capitalize text-[#5eead4] underline truncate">{p}</a>
                       ))}
                     </div>
                   </div>
                 )}
                 {m.action?.ride_hailing && (
                   <div className="mt-2.5 pt-2 border-t border-white/10 space-y-1">
-                    <div className="text-[11px] font-semibold text-[#00f0ff]">🚕 Cabs & Transit:</div>
+                    <div className="text-[11px] font-semibold text-[#5eead4]">🚕 Cabs & Transit:</div>
                     <div className="grid grid-cols-2 gap-1 text-[10px]">
                       {Object.entries(m.action.ride_hailing).map(([p, u]: any) => (
-                        <a key={p} href={u} target="_blank" rel="noreferrer" className="capitalize text-[#00f0ff] underline truncate">{p.replace('_', ' ')}</a>
+                        <a key={p} href={u} target="_blank" rel="noreferrer" className="capitalize text-[#5eead4] underline truncate">{p.replace('_', ' ')}</a>
                       ))}
                     </div>
                   </div>
@@ -271,10 +271,10 @@ export default function Voya({ trip }: { trip: any }) {
           ))}
           {isLoading && (
             <div className="flex justify-start">
-              <div className="bg-white/5 border border-[#00f0ff]/20 rounded-xl p-3 text-sm flex gap-1">
-                <div className="w-2 h-2 bg-[#00f0ff] rounded-full animate-bounce" />
-                <div className="w-2 h-2 bg-[#00f0ff] rounded-full animate-bounce [animation-delay:0.2s]" />
-                <div className="w-2 h-2 bg-[#00f0ff] rounded-full animate-bounce [animation-delay:0.4s]" />
+              <div className="bg-white/5 border border-[#5eead4]/20 rounded-xl p-3 text-sm flex gap-1">
+                <div className="w-2 h-2 bg-[#5eead4] rounded-full animate-bounce" />
+                <div className="w-2 h-2 bg-[#5eead4] rounded-full animate-bounce [animation-delay:0.2s]" />
+                <div className="w-2 h-2 bg-[#5eead4] rounded-full animate-bounce [animation-delay:0.4s]" />
               </div>
             </div>
           )}
@@ -286,7 +286,7 @@ export default function Voya({ trip }: { trip: any }) {
             <button
               key={idx}
               onClick={() => sendMessage(undefined, sug)}
-              className="whitespace-nowrap text-[10px] bg-[#00f0ff]/10 text-[#00f0ff] border border-[#00f0ff]/30 px-3 py-1.5 rounded-full hover:bg-[#00f0ff]/20 transition-colors"
+              className="whitespace-nowrap text-[10px] bg-[#5eead4]/10 text-[#5eead4] border border-[#5eead4]/30 px-3 py-1.5 rounded-full hover:bg-[#5eead4]/20 transition-colors"
             >
               {sug}
             </button>
@@ -294,8 +294,8 @@ export default function Voya({ trip }: { trip: any }) {
         </div>
 
         {/* Input */}
-        <form onSubmit={(e) => sendMessage(e)} className="p-4 border-t border-[#00f0ff]/20 bg-black/50">
-          <div className="flex items-center bg-white/5 border border-white/10 rounded-full pr-2 focus-within:border-[#00f0ff]/50 transition-colors">
+        <form onSubmit={(e) => sendMessage(e)} className="p-4 border-t border-[#5eead4]/20 bg-black/50">
+          <div className="flex items-center bg-white/5 border border-white/10 rounded-full pr-2 focus-within:border-[#5eead4]/50 transition-colors">
             <input 
               type="text" 
               value={input}
@@ -303,7 +303,7 @@ export default function Voya({ trip }: { trip: any }) {
               placeholder="Ask Voya..."
               className="flex-1 bg-transparent px-4 py-3 text-sm outline-none text-white placeholder-white/40"
             />
-            <button type="submit" disabled={!input.trim()} className="bg-[#00f0ff] text-black p-2 rounded-full hover:bg-white disabled:opacity-50 transition-colors">
+            <button type="submit" disabled={!input.trim()} className="bg-[#5eead4] text-black p-2 rounded-full hover:bg-white disabled:opacity-50 transition-colors">
               <Send className="h-4 w-4" />
             </button>
           </div>
@@ -313,12 +313,12 @@ export default function Voya({ trip }: { trip: any }) {
       {/* Floating Action Button */}
       <button 
         onClick={openDrawer}
-        className={`relative h-14 w-14 sm:h-16 sm:w-16 rounded-full bg-gradient-to-tr from-[#ff007f] to-[#00f0ff] flex items-center justify-center text-white shadow-[0_0_20px_rgba(255,0,127,0.5)] hover:shadow-[0_0_30px_rgba(0,240,255,0.8)] hover:scale-110 transition-all duration-300 z-[10000] group ${isOpen ? 'rotate-90' : 'rotate-0'}`}
+        className={`relative h-14 w-14 sm:h-16 sm:w-16 rounded-full bg-gradient-to-tr from-[#ff8a5c] to-[#5eead4] flex items-center justify-center text-white shadow-[0_0_20px_rgba(255,138,92,0.5)] hover:shadow-[0_0_30px_rgba(94,234,212,0.8)] hover:scale-110 transition-all duration-300 z-[10000] group ${isOpen ? 'rotate-90' : 'rotate-0'}`}
       >
         <div className="absolute inset-0 rounded-full border border-white/40 bg-white/10 backdrop-blur-md"></div>
         {isOpen ? <X className="h-7 w-7 relative z-10 drop-shadow-[0_0_5px_rgba(255,255,255,0.8)]" /> : <MessageSquare className="h-7 w-7 relative z-10 drop-shadow-[0_0_5px_rgba(255,255,255,0.8)]" />}
         {!isOpen && (
-          <span className="absolute top-0 right-0 h-4 w-4 bg-[#39ff14] rounded-full border-2 border-[#03050a] animate-pulse"></span>
+          <span className="absolute top-0 right-0 h-4 w-4 bg-[#fcd34d] rounded-full border-2 border-[#04060d] animate-pulse"></span>
         )}
       </button>
     </div>

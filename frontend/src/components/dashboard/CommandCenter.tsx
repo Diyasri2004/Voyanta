@@ -94,7 +94,7 @@ export default function CommandCenter({
       fetch(`/api/weather?destination=${encodeURIComponent(destination)}`)
         .then((res) => res.json())
         .then((data) => setWeather(data))
-        .catch(() => setWeather({ temp_c: 28, condition: "Sunny" }));
+        .catch(() => setWeather(null));
     }
   }, [destination]);
 
@@ -271,7 +271,7 @@ export default function CommandCenter({
               onClick={() => handleTabChange(tab.id)}
               className={`flex flex-col items-center gap-1 rounded-xl px-3 py-2 text-[11px] font-bold whitespace-nowrap transition-all ${
                 isActive
-                  ? "bg-[#ff007f]/20 text-[#ff007f] border border-[#ff007f]/50 shadow-[0_0_15px_rgba(255,0,127,0.3)]"
+                  ? "bg-[#ff8a5c]/20 text-[#ff8a5c] border border-[#ff8a5c]/50 shadow-[0_0_15px_rgba(255,138,92,0.3)]"
                   : "text-[#94A3B8] hover:bg-white/5 hover:text-white"
               }`}
             >

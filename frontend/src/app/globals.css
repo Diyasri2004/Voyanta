@@ -1,43 +1,228 @@
 @import "tailwindcss";
 
+/* ─────────────────────────────────────────────────────────────
+   VOYANTA — dark-only 3D travel theme
+   Palette: midnight sky · aurora teal · sunset coral · gold
+   ───────────────────────────────────────────────────────────── */
+
 :root {
-  --background: #03050a;
-  --foreground: #ffffff;
+  color-scheme: dark;
+  --background: #04060d;
+  --foreground: #f4f7fb;
+
+  --sky-0: #04060d; /* deepest night */
+  --sky-1: #070b16;
+  --sky-2: #0a0f1c;
+  --aurora: #5eead4; /* primary accent */
+  --sunset: #ff8a5c; /* secondary accent */
+  --gold: #fcd34d; /* highlight */
+  --horizon: #818cf8; /* cool depth accent */
+  --glass: rgba(14, 20, 36, 0.55);
+  --glass-border: rgba(255, 255, 255, 0.09);
 }
 
 @theme {
-  --color-cyber-dark: #03050a;
-  --color-cyber-pink: #ff007f;
-  --color-cyber-cyan: #00f0ff;
-  --color-cyber-lime: #39ff14;
+  /* kept so existing `cyber-*` utilities still resolve, now on the travel palette */
+  --color-cyber-dark: #04060d;
+  --color-cyber-pink: #ff8a5c;
+  --color-cyber-cyan: #5eead4;
+  --color-cyber-lime: #fcd34d;
+
+  --color-sky-0: #04060d;
+  --color-aurora: #5eead4;
+  --color-sunset: #ff8a5c;
+  --color-gold: #fcd34d;
+  --color-horizon: #818cf8;
 
   --animate-festival-ping: festival-ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
   --animate-slide-in: slideIn 0.3s ease-out forwards;
+  --animate-float: float 7s ease-in-out infinite;
+  --animate-drift: drift 24s linear infinite;
+  --animate-shimmer: shimmer 3.2s linear infinite;
 
   @keyframes festival-ping {
-    75%, 100% {
+    75%,
+    100% {
       transform: scale(2);
       opacity: 0;
     }
   }
 
   @keyframes slideIn {
-    0% { transform: translateX(-100%); }
-    100% { transform: translateX(0); }
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(0);
+    }
   }
+
+  @keyframes float {
+    0%,
+    100% {
+      transform: translate3d(0, 0, 0) rotateZ(0deg);
+    }
+    50% {
+      transform: translate3d(0, -14px, 24px) rotateZ(1.5deg);
+    }
+  }
+
+  @keyframes drift {
+    from {
+      transform: translate3d(-10%, 0, 0);
+    }
+    to {
+      transform: translate3d(110vw, 0, 0);
+    }
+  }
+
+  @keyframes shimmer {
+    from {
+      background-position: 200% 0;
+    }
+    to {
+      background-position: -200% 0;
+    }
+  }
+}
+
+html {
+  background: var(--background);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-plus-jakarta), system-ui, sans-serif;
+}
+
+::selection {
+  background: var(--sunset);
+  color: #fff;
+}
+
+/* Slim dark scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(94, 234, 212, 0.25) transparent;
 }
 
 @keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(8px) scale(0.98); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .animate-fadeInUp {
   animation: fadeInUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* ── Glass panel ───────────────────────────────────────────── */
+.glass {
+  background: linear-gradient(145deg, rgba(20, 28, 48, 0.62), rgba(8, 12, 24, 0.55));
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  box-shadow:
+    0 30px 80px -30px rgba(0, 0, 0, 0.9),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* ── Gradient text ─────────────────────────────────────────── */
+.text-gradient-travel {
+  background: linear-gradient(100deg, #5eead4 0%, #a5f3fc 30%, #fcd34d 62%, #ff8a5c 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 6s linear infinite;
+}
+
+/* ── Glow primary button ───────────────────────────────────── */
+.btn-glow {
+  position: relative;
+  background: linear-gradient(120deg, #5eead4, #38bdf8 55%, #818cf8);
+  color: #04060d;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.15) inset,
+    0 10px 40px -8px rgba(94, 234, 212, 0.55);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease, filter 0.25s ease;
+}
+.btn-glow:hover:not(:disabled) {
+  transform: translateY(-2px) scale(1.02);
+  filter: brightness(1.08);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.25) inset,
+    0 16px 50px -8px rgba(94, 234, 212, 0.75);
+}
+.btn-glow:active:not(:disabled) {
+  transform: translateY(0) scale(0.99);
+}
+
+/* ── 3D helpers ────────────────────────────────────────────── */
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+.perspective-1200 {
+  perspective: 1200px;
+}
+
+/* Boarding-pass perforation */
+.perforation {
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.22) 1.2px, transparent 1.6px);
+  background-size: 10px 4px;
+  background-repeat: repeat-x;
+  background-position: center;
+}
+
+/* Barcode strip (decorative) */
+.barcode {
+  background-image: repeating-linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.55) 0 2px,
+    transparent 2px 4px,
+    rgba(255, 255, 255, 0.55) 4px 5px,
+    transparent 5px 9px,
+    rgba(255, 255, 255, 0.55) 9px 12px,
+    transparent 12px 14px
+  );
+}
+
+/* Orbiting loader (CSS-only 3D) */
+@keyframes orbit {
+  from {
+    transform: rotateX(68deg) rotateZ(0deg);
+  }
+  to {
+    transform: rotateX(68deg) rotateZ(360deg);
+  }
+}
+@keyframes orbit-counter {
+  from {
+    transform: rotateZ(0deg) rotateX(-68deg);
+  }
+  to {
+    transform: rotateZ(-360deg) rotateX(-68deg);
+  }
+}
+@keyframes spin-slow {
+  to {
+    transform: rotateY(360deg);
+  }
+}
+
+/* Respect users who ask for less motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }

@@ -4,6 +4,7 @@ import logging
 import httpx
 import re
 import urllib.parse
+import unicodedata
 import asyncio
 import time
 from collections import OrderedDict
@@ -285,6 +286,8 @@ def tomtom_key():
         raise HTTPException(status_code=500, detail="TomTom API key not configured.")
     return TOMTOM_API_KEY
 
+UNRESOLVED_COORDS = Coordinates(lat=0.0, lng=0.0)  # identity-checked sentinel: destination could not be geocoded
+
 async def resolve_dynamic_coordinates(client: httpx.AsyncClient, destination: str) -> Coordinates:
     cache_key = f"coords:{destination.lower().strip()}"
     if cache_key in dynamic_cache:
@@ -340,7 +343,7 @@ async def resolve_dynamic_coordinates(client: httpx.AsyncClient, destination: st
         except Exception as e:
             logger.warning(f"TomTom geocode error for {clean}: {e}")
 
-    return Coordinates(lat=20.0, lng=0.0)
+    return UNRESOLVED_COORDS
 
 _PHOTO_STOPWORDS = {
     "the", "and", "for", "with", "from", "near", "city", "park", "old", "new", "day", "night",
@@ -779,78 +782,6 @@ def extract_json_payload(text: str) -> Optional[Any]:
 
     return None
 
-CATEGORY_IMAGE_FALLBACKS = {
-    "attractions": [
-        "https://images.unsplash.com/photo-1506973035872-a4ec16b8e8d9?auto=format&fit=crop&w=800&q=80",
-        "https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?auto=format&fit=crop&w=800&q=80",
-        "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?auto=format&fit=crop&w=800&q=80",
-        "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=800&q=80",
-        "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?auto=format&fit=crop&w=800&q=80"
-    ],
-    "culinary": [
-        "https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=800&q=80",
-        "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800&q=80",
-        "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=800&q=80",
-        "https://images.unsplash.com/photo-1552611052-33e04de081de?auto=format&fit=crop&w=800&q=80",
-        "https://images.unsplash.com/photo-1565299585323-38d6b0865b47?auto=format&fit=crop&w=800&q=80"
-    ],
-    "bars_pubs": [
-        "https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=800&q=80",
-        "https://images.unsplash.com/photo-1572116469696-31de0f17cc34?auto=format&fit=crop&w=800&q=80",
-        "https://images.unsplash.com/photo-1543007630-9710e4a00a20?auto=format&fit=crop&w=800&q=80",
-        "https://images.unsplash.com/photo-1566417713940-fe7c737a9ef2?auto=format&fit=crop&w=800&q=80"
-    ],
-    "wellness": [
-        "https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=800&q=80",
-        "https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=800&q=80",
-        "https://images.unsplash.com/photo-1519710164239-da123dc03ef4?auto=format&fit=crop&w=800&q=80",
-        "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&w=800&q=80"
-    ],
-    "secret_spots": [
-        "https://images.unsplash.com/photo-1533105079780-92b9be482077?auto=format&fit=crop&w=800&q=80",
-        "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?auto=format&fit=crop&w=800&q=80",
-        "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80",
-        "https://images.unsplash.com/photo-1516483638261-f4dbaf036963?auto=format&fit=crop&w=800&q=80"
-    ],
-    "shopping": [
-        "https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=800&q=80",
-        "https://images.unsplash.com/photo-1528698827591-e19ccd7bc23d?auto=format&fit=crop&w=800&q=80",
-        "https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=800&q=80"
-    ],
-    "adventures": [
-        "https://images.unsplash.com/photo-1533240332313-0db49b459ad6?auto=format&fit=crop&w=800&q=80",
-        "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80",
-        "https://images.unsplash.com/photo-1501555088652-021faa106b9b?auto=format&fit=crop&w=800&q=80"
-    ],
-    "theme_parks": [
-        "https://images.unsplash.com/photo-1513889961551-628c1e5e2ee9?auto=format&fit=crop&w=800&q=80",
-        "https://images.unsplash.com/photo-1561571994-3c61c554181a?auto=format&fit=crop&w=800&q=80",
-        "https://images.unsplash.com/photo-1508873696983-2df5293cb32f?auto=format&fit=crop&w=800&q=80"
-    ],
-    "sacred_temples": [
-        "https://images.unsplash.com/photo-1548013146-72479768bada?auto=format&fit=crop&w=800&q=80",
-        "https://images.unsplash.com/photo-1564507592333-c60657eea523?auto=format&fit=crop&w=800&q=80",
-        "https://images.unsplash.com/photo-1503899036084-c55cdd92da26?auto=format&fit=crop&w=800&q=80"
-    ],
-    "events": [
-        "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=800&q=80",
-        "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=800&q=80",
-        "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=800&q=80"
-    ],
-    "essentials": [
-        "https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=800&q=80",
-        "https://images.unsplash.com/photo-1519501025264-65ba15a82390?auto=format&fit=crop&w=800&q=80"
-    ]
-}
-
-def get_fast_dynamic_image_url(query: str, destination: str, category: str = "", idx: int = 0) -> str:
-    cat_key = category.lower().replace(" ", "_")
-    pool = CATEGORY_IMAGE_FALLBACKS.get(cat_key, CATEGORY_IMAGE_FALLBACKS["attractions"])
-    return pool[idx % len(pool)]
-
-async def fetch_dynamic_venue_image(query: str, destination: str, client: Optional[httpx.AsyncClient] = None) -> str:
-    return get_fast_dynamic_image_url(query, destination, "attractions", 0)
-
 async def generate_itinerary_segment(destination: str, start_day: int, end_day: int, client: httpx.AsyncClient) -> List[Dict[str, Any]]:
     prompt = f"""You are a master local travel curator.
 Destination: {destination}
@@ -887,7 +818,9 @@ Output strictly a JSON array of slot objects:
 @app.post("/itinerary/generate", tags=["Trips"])
 async def generate_itinerary(req: Dict[str, Any], request: Request):
     client = request.app.state.client
-    destination = (req.get("destination") or req.get("location") or "Lisbon").strip().title()
+    destination = (req.get("destination") or req.get("location") or "").strip().title()
+    if not destination:
+        raise HTTPException(status_code=400, detail="A destination is required.")
     total_days = min(max(int(req.get("days") or 3), 1), 30)
     cache_key = f"itinerary_{destination.lower()}_{total_days}"
 
@@ -1054,6 +987,8 @@ async def fetch_google_events(client: httpx.AsyncClient, destination: str) -> Li
 
 async def build_real_events(client: httpx.AsyncClient, clean_dest: str, trip_start: Optional[date] = None, trip_end: Optional[date] = None, geo_query: str = "") -> List[Dict[str, Any]]:
     coords = await resolve_dynamic_coordinates(client, geo_query or clean_dest)
+    if coords is UNRESOLVED_COORDS:
+        return []
     today = date.today()
     far = max(today.toordinal() + 180, (trip_end.toordinal() + 60) if trip_end else 0)
     horizon = date.fromordinal(min(far, today.toordinal() + 365))
@@ -1337,6 +1272,8 @@ def _describe_poi(poi: Dict[str, Any], dest: str) -> str:
 async def build_real_places(client: httpx.AsyncClient, clean_dest: str, pillar: str, geo_query: str = "") -> List[Dict[str, Any]]:
     cfg = REAL_POI_PILLARS[pillar]
     coords = await resolve_dynamic_coordinates(client, geo_query or clean_dest)
+    if coords is UNRESOLVED_COORDS:
+        return []
 
     per_query = await asyncio.gather(*[_tomtom_pois(client, q, coords) for q in cfg["queries"]])
     pois: List[Dict[str, Any]] = []
@@ -1406,14 +1343,14 @@ async def build_real_places(client: httpx.AsyncClient, clean_dest: str, pillar: 
 @app.get("/places", tags=["Discovery"])
 @app.get("/trails", tags=["Discovery"])
 async def get_high_capacity_trails(
-    destination: str = Query("New York"),
+    destination: str = Query(..., min_length=1),
     pillar: Optional[str] = Query(None),
     category: Optional[str] = Query(None),
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),
     request: Request = None
 ):
-    clean_dest = destination.split(",")[0].strip().title() if destination else "New York"
+    clean_dest = destination.split(",")[0].strip().title()
     active_category = (pillar or category or "attractions").strip().lower()
     trip_start = _parse_event_day(start_date) if isinstance(start_date, str) else None
     trip_end = _parse_event_day(end_date) if isinstance(end_date, str) else None
@@ -1640,6 +1577,8 @@ async def get_destination_weather(request: Request, destination: str = Query(...
 
     client = request.app.state.client
     coords = await resolve_dynamic_coordinates(client, clean_dest)
+    if coords is UNRESOLVED_COORDS:
+        raise HTTPException(status_code=404, detail="Destination not found.")
     try:
         weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={coords.lat}&longitude={coords.lng}&current_weather=true"
         w_res = await client.get(weather_url, timeout=2.0)
@@ -1654,35 +1593,97 @@ async def get_destination_weather(request: Request, destination: str = Query(...
     except Exception as e:
         logger.warning(f"Weather lookup failed: {e}")
 
-    return {"temp": 24, "temp_c": 24, "condition": "Sunny", "icon": "01d"}
+    raise HTTPException(status_code=503, detail="Weather is unavailable right now.")
+
+async def _tomtom_place_suggestions(client: httpx.AsyncClient, query: str) -> List[Dict[str, Any]]:
+    if not TOMTOM_API_KEY:
+        return []
+    try:
+        res = await client.get(
+            f"{TOMTOM_BASE}/search/2/search/{urllib.parse.quote(query)}.json",
+            params={"key": TOMTOM_API_KEY, "typeahead": "true", "limit": 15, "idxSet": "Geo", "language": "en-GB",
+                    "entityTypeSet": "Country,CountrySubdivision,Municipality"},
+            timeout=2.5)
+        if res.status_code != 200:
+            return []
+        out = []
+        for i, r in enumerate(res.json().get("results", [])):
+            a = r.get("address", {})
+            kind = r.get("entityType", "")
+            country = a.get("country", "")
+            region = a.get("countrySubdivisionName") or a.get("countrySubdivision") or ""
+            if kind == "Country":
+                name, parts = country, [country]
+            elif kind == "CountrySubdivision":
+                name, parts = region, [region, country]
+            else:
+                name = a.get("municipality") or ""
+                parts = [name] + ([region] if region and region.lower() != name.lower() else []) + [country]
+            parts = [x for x in parts if x]
+            if name and parts:
+                out.append({"name": name, "label": ", ".join(parts), "country": country, "region": region, "pop": 0, "rank": i})
+        return out
+    except Exception as e:
+        logger.warning(f"TomTom autocomplete error: {e}")
+        return []
+
+async def _open_meteo_place_suggestions(client: httpx.AsyncClient, query: str) -> List[Dict[str, Any]]:
+    try:
+        res = await client.get("https://geocoding-api.open-meteo.com/v1/search",
+                               params={"name": query, "count": 10, "language": "en"}, timeout=2.5)
+        if res.status_code != 200:
+            return []
+        out = []
+        for i, item in enumerate(res.json().get("results", [])):
+            name, admin, country = item.get("name", ""), item.get("admin1", ""), item.get("country", "")
+            if not name:
+                continue
+            parts = [name] + ([admin] if admin and admin.lower() != name.lower() else []) + ([country] if country and country.lower() != name.lower() else [])
+            out.append({"name": name, "label": ", ".join(parts), "country": country, "region": admin,
+                        "pop": item.get("population") or 0, "rank": 100 + i})
+        return out
+    except Exception as e:
+        logger.warning(f"Open-Meteo autocomplete error: {e}")
+        return []
 
 @app.get("/api/autocomplete", tags=["Maps & Geocoding"])
 async def autocomplete_destinations(request: Request, q: str = Query("", min_length=1)):
+    """Real places worldwide (countries, regions, cities), best-known first. Value keeps the region so
+    'Delhi, New York, United States' can never be confused with Delhi, India."""
     query = q.strip().lower()
-    if not query:
+    if len(query) < 2:
         return {"suggestions": []}
+    cache_key = f"autocomplete:{query}"
+    if cache_key in dynamic_cache:
+        return dynamic_cache[cache_key]
 
     client = request.app.state.client
-    suggestions = []
-    seen = set()
+    tomtom, meteo = await asyncio.gather(_tomtom_place_suggestions(client, query), _open_meteo_place_suggestions(client, query))
 
-    try:
-        url = f"https://geocoding-api.open-meteo.com/v1/search?name={urllib.parse.quote(query)}&count=10"
-        res = await client.get(url, timeout=1.5)
-        if res.status_code == 200:
-            for item in res.json().get("results", []):
-                name = item.get("name", "")
-                country = item.get("country", "")
-                admin = item.get("admin1", "")
-                if name.lower().startswith(query):
-                    label = f"{name}, {admin}, {country}" if admin else f"{name}, {country}"
-                    if label.lower() not in seen:
-                        suggestions.append({"label": label, "value": f"{name}, {country}"})
-                        seen.add(label.lower())
-    except Exception as e:
-        logger.warning(f"Autocomplete error: {e}")
+    def plain(text: str) -> str:
+        return "".join(c for c in unicodedata.normalize("NFKD", text.lower()) if not unicodedata.combining(c))
 
-    return {"suggestions": suggestions[:6]}
+    q_plain = plain(query)
+
+    def matches(item) -> bool:
+        name = plain(item["name"])
+        return name.startswith(q_plain) or any(w.startswith(q_plain) for w in re.split(r"[\s,\-]+", name))
+
+    population = {(m["name"].lower(), m["country"].lower(), m["region"].lower()): m["pop"] for m in meteo}
+    merged, seen = [], set()
+    for item in tomtom + meteo:
+        if not matches(item) or item["label"].lower() in seen:
+            continue
+        seen.add(item["label"].lower())
+        item["pop"] = item["pop"] or population.get((item["name"].lower(), item["country"].lower(), item["region"].lower()), 0)
+        merged.append(item)
+
+    # Best-known first (population when known), otherwise the provider's own relevance order
+    merged.sort(key=lambda m: (-m["pop"], m["rank"]))
+    result = {"suggestions": [{"label": m["label"], "value": m["label"]} for m in merged[:8]]}
+    if result["suggestions"]:
+        dynamic_cache[cache_key] = result
+    return result
 
 # ─────────────────────────────────────────────
 #  Trip Planner Endpoints (100% Dynamic)
@@ -1692,7 +1693,9 @@ async def autocomplete_destinations(request: Request, q: str = Query("", min_len
 @app.post("/trip-plan", response_model=TripPlanResponse, tags=["Trips"])
 async def create_dynamic_trip_plan(body: TripPlanRequest, request: Request):
     client = request.app.state.client
-    dest_name = (body.destination or body.location or "Tokyo").strip().title()
+    dest_name = (body.destination or body.location or "").strip().title()
+    if not dest_name:
+        raise HTTPException(status_code=400, detail="A destination is required.")
     num_days = max(1, min(body.days or 3, 30))
     start_date = body.start_date or date.today()
     coords = await resolve_dynamic_coordinates(client, dest_name)

@@ -6,6 +6,8 @@ import CyberDashboard from "@/components/dashboard/CyberDashboard";
 import VoyAI from "@/components/ai/Voya";
 import CityHeroImage from "@/components/CityHeroImage";
 import { TravelerWaitIndicator } from "@/components/ui/traveler-wait-indicator";
+import TravelBackdrop from "@/components/3d/TravelBackdrop";
+import BoardingPass from "@/components/ui/BoardingPass";
 import { AnimatePresence, motion } from "framer-motion";
 import { DestinationInput } from "@/components/search/DestinationInput";
 import { useCurrency } from "@/context/CurrencyContext";
@@ -14,7 +16,7 @@ import {
   Loader2,
   MapPin,
   Search,
-  Snowflake,
+  Plane,
   LayoutGrid,
   Map as MapIcon,
   Navigation,
@@ -32,7 +34,7 @@ import { getTranslation, LanguageName } from "@/lib/i18n";
 const VoyantaMap = dynamic(() => import("@/components/VoyantaMap"), {
   ssr: false,
   loading: () => (
-    <div className="w-full h-full min-h-[520px] bg-[#0A0D14] rounded-[2rem] border border-white/[0.08] flex items-center justify-center text-[#94A3B8]">
+    <div className="w-full h-full min-h-[520px] bg-[#090e1a] rounded-[2rem] border border-white/[0.08] flex items-center justify-center text-[#94A3B8]">
       Loading map...
     </div>
   ),
@@ -136,7 +138,7 @@ function StopCard({ stop, destination }: { stop: TripStop; destination: string }
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.97 }}
       onClick={() => window.open(mapUrl, "_blank")}
-      className="group overflow-hidden rounded-[2rem] bg-[#0A0D14]/85 border border-white/[0.08] shadow-2xl cursor-pointer transition-all hover:border-blue-500/40 hover:shadow-[0_0_30px_rgba(59,130,246,0.15)]"
+      className="group overflow-hidden rounded-[2rem] bg-[#090e1a]/85 border border-white/[0.08] shadow-2xl cursor-pointer transition-all hover:border-blue-500/40 hover:shadow-[0_0_30px_rgba(59,130,246,0.15)]"
     >
       <div className="relative h-64 overflow-hidden">
         <img
@@ -144,7 +146,7 @@ function StopCard({ stop, destination }: { stop: TripStop; destination: string }
           alt={stop.title}
           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#07090E] via-[#07090E]/30 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#060913] via-[#060913]/30 to-transparent" />
         <div className="absolute left-0 right-0 bottom-0 p-6">
           <span className="inline-flex rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[10px] font-bold tracking-[0.22em] text-white">
             {stop.type}
@@ -209,7 +211,7 @@ function CulinaryCard({ highlight, destination }: { highlight: any; destination:
   const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${title} ${destination}`)}`;
 
   return (
-    <div className="relative flex flex-col justify-between p-6 rounded-2xl bg-zinc-900/80 border border-zinc-800 hover:border-pink-500/30 transition-all duration-300 min-h-[220px]">
+    <div className="relative flex flex-col justify-between p-6 rounded-2xl bg-zinc-900/80 border border-zinc-800 hover:border-orange-500/30 transition-all duration-300 min-h-[220px]">
       <div className="space-y-2">
         <h3 className="text-xl font-bold text-white tracking-wide">{title}</h3>
         <p className="text-xs font-semibold tracking-wider text-emerald-400 uppercase">{specialty}</p>
@@ -225,7 +227,7 @@ function CulinaryCard({ highlight, destination }: { highlight: any; destination:
           href={mapUrl}
           target="_blank"
           rel="noreferrer"
-          className="px-4 py-1.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-medium hover:bg-cyan-500/20 transition-all"
+          className="px-4 py-1.5 rounded-full bg-teal-500/10 border border-teal-500/30 text-teal-400 text-xs font-medium hover:bg-teal-500/20 transition-all"
         >
           Navigate
         </a>
@@ -347,7 +349,7 @@ export default function Page() {
           }
         })
         .catch(() => {});
-    }, 50);
+    }, 300);
 
     return () => {
       clearTimeout(timer);
@@ -452,7 +454,7 @@ export default function Page() {
             html, body { max-width: 100%; overflow-x: hidden; }
             input[type="date"] { min-width: 0; -webkit-appearance: none; appearance: none; }
             body {
-              background: #05070A;
+              background: #04060d;
               margin: 0;
               -webkit-font-smoothing: antialiased;
               -moz-osx-font-smoothing: grayscale;
@@ -484,21 +486,20 @@ export default function Page() {
         }}
       />
 
-      <div className="relative min-h-screen md:h-screen md:max-h-screen md:overflow-hidden bg-[#05070A] font-manrope text-white selection:bg-[#ff007f] selection:text-white flex flex-col justify-between">
-        <div className="fixed inset-0 pointer-events-none bg-[radial-gradient(circle_at_top,rgba(148,163,184,0.14),transparent_42%),linear-gradient(180deg,#05070A_0%,#04060A_100%)]" />
-        <div className="fixed inset-0 pointer-events-none bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.16] mix-blend-overlay" />
+      <div className="relative min-h-screen md:h-screen md:max-h-screen md:overflow-hidden bg-[#04060d] font-manrope text-white selection:bg-[#ff8a5c] selection:text-white flex flex-col justify-between">
+        <TravelBackdrop dim={Boolean(trip) || loading} />
 
-        <header className="relative md:sticky top-0 z-40 border-b border-white/[0.05] bg-[#05070A]/85 backdrop-blur-2xl shrink-0">
+        <header className="relative md:sticky top-0 z-40 border-b border-white/[0.05] bg-[#04060d]/85 backdrop-blur-2xl shrink-0">
           <div className="mx-auto flex max-w-[1600px] flex-col md:flex-row md:items-center gap-4 px-4 py-3.5 sm:px-6 md:px-10">
             <button
               type="button"
               onClick={() => setTrip(null)}
               className="flex items-center gap-3 transition-opacity hover:opacity-80"
             >
-              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-white shadow-[0_0_28px_rgba(255,255,255,0.18)]">
-                <Snowflake className="h-5 w-5 text-black" />
+              <div className="relative flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-[#5eead4] via-[#38bdf8] to-[#818cf8] shadow-[0_0_32px_rgba(94,234,212,0.45)]">
+                <Plane className="h-5 w-5 -rotate-45 text-[#04060d]" strokeWidth={2.4} />
               </div>
-              <span className="text-xl font-syne font-bold tracking-tight">VOYANTA</span>
+              <span className="text-xl font-syne font-extrabold tracking-[0.18em]">VOYANTA</span>
             </button>
 
             {trip ? (
@@ -512,7 +513,7 @@ export default function Page() {
                     value={locationInput}
                     onChange={(e) => setLocationInput(e.target.value)}
                     placeholder={t.searchPlaceholder}
-                    className="w-full rounded-full border border-white/[0.10] bg-white/[0.03] py-3 pl-11 pr-4 text-sm text-white outline-none transition focus:border-[#00f0ff]/50 focus:shadow-[0_0_15px_rgba(0,240,255,0.2)]"
+                    className="w-full rounded-full border border-white/[0.10] bg-white/[0.03] py-3 pl-11 pr-4 text-sm text-white outline-none transition focus:border-[#5eead4]/50 focus:shadow-[0_0_15px_rgba(94,234,212,0.2)]"
                   />
                 </div>
                 {/* Departure date */}
@@ -538,14 +539,14 @@ export default function Page() {
                     min={addDays(startDate, 1)}
                     max={addDays(startDate, 30)}
                     onChange={(e) => handleReturnDate(e.target.value)}
-                    className="w-full rounded-full border border-white/[0.10] bg-white/[0.03] py-3 pl-11 pr-4 text-sm text-white outline-none transition focus:border-[#00f0ff]/50 focus:shadow-[0_0_15px_rgba(0,240,255,0.2)] md:w-44"
+                    className="w-full rounded-full border border-white/[0.10] bg-white/[0.03] py-3 pl-11 pr-4 text-sm text-white outline-none transition focus:border-[#5eead4]/50 focus:shadow-[0_0_15px_rgba(94,234,212,0.2)] md:w-44"
                     style={{ colorScheme: "dark" }}
                   />
                 </div>
                 <button
                   type="submit"
                   disabled={loading || !locationInput.trim()}
-                  className="inline-flex items-center justify-center rounded-full bg-white px-6 py-3 text-sm font-bold text-[#05070A] transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-70"
+                  className="inline-flex items-center justify-center btn-glow rounded-full px-6 py-3 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : t.planTrip}
                 </button>
@@ -556,15 +557,15 @@ export default function Page() {
 
             <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full md:w-auto justify-between md:justify-end">
               {/* Language Selector */}
-              <div className="flex items-center gap-1.5 rounded-full border border-[#00f0ff]/40 bg-[#03050a]/80 px-3 py-1.5 shadow-[0_0_12px_rgba(0,240,255,0.2)]">
-                <span className="text-xs font-bold text-[#00f0ff]">🌐</span>
+              <div className="flex items-center gap-1.5 rounded-full border border-[#5eead4]/40 bg-[#04060d]/80 px-3 py-1.5 shadow-[0_0_12px_rgba(94,234,212,0.2)]">
+                <span className="text-xs font-bold text-[#5eead4]">🌐</span>
                 <select 
                   value={selectedLanguage} 
                   onChange={e => setSelectedLanguage(e.target.value as LanguageName)}
                   className="bg-transparent text-white text-xs font-bold outline-none cursor-pointer"
                 >
                   {LANGUAGES.map(lang => (
-                    <option key={lang.code} value={lang.name} className="bg-[#03050a] text-white">
+                    <option key={lang.code} value={lang.name} className="bg-[#04060d] text-white">
                       {lang.label}
                     </option>
                   ))}
@@ -572,22 +573,22 @@ export default function Page() {
               </div>
 
               {/* Currency Selector */}
-              <div className="flex items-center gap-1.5 rounded-full border border-[#00f0ff]/40 bg-[#03050a]/80 px-3 py-1.5 shadow-[0_0_12px_rgba(0,240,255,0.2)]">
-                <span className="text-xs font-bold text-[#00f0ff]">💲</span>
+              <div className="flex items-center gap-1.5 rounded-full border border-[#5eead4]/40 bg-[#04060d]/80 px-3 py-1.5 shadow-[0_0_12px_rgba(94,234,212,0.2)]">
+                <span className="text-xs font-bold text-[#5eead4]">💲</span>
                 <select 
                   value={currency} 
                   onChange={e => setCurrency(e.target.value)}
                   className="bg-transparent text-white text-xs font-bold outline-none cursor-pointer"
                 >
-                  <option value="USD" className="bg-[#03050a] text-white">USD ($)</option>
-                  <option value="EUR" className="bg-[#03050a] text-white">EUR (€)</option>
-                  <option value="GBP" className="bg-[#03050a] text-white">GBP (£)</option>
-                  <option value="INR" className="bg-[#03050a] text-white">INR (₹)</option>
-                  <option value="JPY" className="bg-[#03050a] text-white">JPY (¥)</option>
-                  <option value="AUD" className="bg-[#03050a] text-white">AUD (A$)</option>
-                  <option value="CAD" className="bg-[#03050a] text-white">CAD (C$)</option>
-                  <option value="AED" className="bg-[#03050a] text-white">AED (د.إ)</option>
-                  <option value="SGD" className="bg-[#03050a] text-white">SGD (S$)</option>
+                  <option value="USD" className="bg-[#04060d] text-white">USD ($)</option>
+                  <option value="EUR" className="bg-[#04060d] text-white">EUR (€)</option>
+                  <option value="GBP" className="bg-[#04060d] text-white">GBP (£)</option>
+                  <option value="INR" className="bg-[#04060d] text-white">INR (₹)</option>
+                  <option value="JPY" className="bg-[#04060d] text-white">JPY (¥)</option>
+                  <option value="AUD" className="bg-[#04060d] text-white">AUD (A$)</option>
+                  <option value="CAD" className="bg-[#04060d] text-white">CAD (C$)</option>
+                  <option value="AED" className="bg-[#04060d] text-white">AED (د.إ)</option>
+                  <option value="SGD" className="bg-[#04060d] text-white">SGD (S$)</option>
                 </select>
               </div>
 
@@ -606,15 +607,15 @@ export default function Page() {
 
         <main className="relative z-10 mx-auto w-full max-w-[1600px] px-4 sm:px-6 py-4 md:px-10 flex-1 flex flex-col justify-center md:overflow-y-auto">
           {error ? (
-            <div className="mx-auto my-auto max-w-2xl rounded-3xl border border-[#00f0ff]/40 bg-[#03050a]/90 p-8 text-center backdrop-blur-md shadow-[0_0_40px_rgba(0,240,255,0.15)]">
-              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#111827] border border-[#ff007f]/40 shadow-[0_0_20px_rgba(255,0,127,0.2)]">
-                <Navigation className="h-6 w-6 text-[#ff007f]" strokeWidth={2} />
+            <div className="mx-auto my-auto max-w-2xl rounded-3xl border border-[#5eead4]/40 bg-[#04060d]/90 p-8 text-center backdrop-blur-md shadow-[0_0_40px_rgba(94,234,212,0.15)]">
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#111827] border border-[#ff8a5c]/40 shadow-[0_0_20px_rgba(255,138,92,0.2)]">
+                <Navigation className="h-6 w-6 text-[#ff8a5c]" strokeWidth={2} />
               </div>
               <h3 className="mb-2 font-syne text-xl font-bold text-white">{t.connectionInterrupted}</h3>
               <p className="mb-6 text-sm text-[#94A3B8] break-words">{error}</p>
               <button
                 onClick={() => handleSubmit()}
-                className="rounded-full bg-[#00f0ff]/10 px-6 py-2.5 text-sm font-bold text-[#00f0ff] transition-all hover:bg-[#00f0ff]/20 hover:shadow-[0_0_20px_rgba(0,240,255,0.3)] border border-[#00f0ff]/30"
+                className="rounded-full bg-[#5eead4]/10 px-6 py-2.5 text-sm font-bold text-[#5eead4] transition-all hover:bg-[#5eead4]/20 hover:shadow-[0_0_20px_rgba(94,234,212,0.3)] border border-[#5eead4]/30"
               >
                 {t.retryGeneration}
               </button>
@@ -632,16 +633,17 @@ export default function Page() {
           ) : null}
 
           {!loading && !trip && !error ? (
-            <div className="flex my-auto items-center justify-center px-4 py-2">
-              <div className="w-full max-w-[780px] rounded-[2rem] border border-white/[0.07] bg-[#0B0F18]/80 px-4 py-6 sm:px-6 md:px-10 md:py-8 text-center backdrop-blur-2xl shadow-[0_0_80px_rgba(0,0,0,0.6)]">
+            <div className="flex my-auto items-center justify-center px-4 py-2 lg:justify-start">
+              <BoardingPass from="HOME" to={locationInput.trim().slice(0, 14).toUpperCase() || "ANYWHERE"}>
+                <div className="text-center">
 
                 {/* Icon */}
-                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#111827] border border-blue-500/20 shadow-[0_0_28px_rgba(59,130,246,0.25)]">
-                  <Navigation className="h-5 w-5 text-blue-400" strokeWidth={1.8} />
+                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#5eead4]/10 border border-[#5eead4]/30 shadow-[0_0_28px_rgba(94,234,212,0.3)]">
+                  <Navigation className="h-5 w-5 text-[#5eead4]" strokeWidth={1.8} />
                 </div>
 
                 {/* Title */}
-                <h1 className="font-syne text-xl sm:text-2xl md:text-[2.2rem] font-extrabold leading-tight tracking-tight text-white">
+                <h1 className="text-gradient-travel font-syne text-xl sm:text-2xl md:text-[2.4rem] font-extrabold leading-tight tracking-tight">
                   {t.heroTitle}
                 </h1>
 
@@ -679,7 +681,7 @@ export default function Page() {
                           setLocationInput(item.name);
                           setIsAutocompleteOpen(false);
                         }}
-                        className="px-3.5 py-1.5 rounded-full text-xs font-medium bg-zinc-900/90 border border-zinc-800 text-zinc-300 hover:border-cyan-500 hover:text-cyan-300 hover:bg-cyan-500/10 transition-all cursor-pointer shadow-sm"
+                        className="px-3.5 py-1.5 rounded-full text-xs font-medium bg-zinc-900/90 border border-zinc-800 text-zinc-300 hover:border-teal-500 hover:text-teal-300 hover:bg-teal-500/10 transition-all cursor-pointer shadow-sm"
                       >
                         {item.name}
                       </button>
@@ -698,7 +700,7 @@ export default function Page() {
                         value={startDate}
                         min={todayIso()}
                         onChange={(e) => handleStartDate(e.target.value)}
-                        className="w-full rounded-full border border-white/[0.09] bg-[#111827]/60 py-[14px] pl-12 pr-4 text-[0.95rem] text-white outline-none transition-all focus:border-blue-500/40 focus:bg-[#111827]/90 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.12)]"
+                        className="w-full rounded-full border border-white/[0.09] bg-[#111827]/60 py-[14px] pl-12 pr-4 text-[0.95rem] text-white outline-none transition-all focus:border-[#5eead4]/50 focus:bg-[#111827]/90 focus:shadow-[0_0_0_3px_rgba(94,234,212,0.14)]"
                         style={{ colorScheme: "dark" }}
                       />
                     </div>
@@ -713,7 +715,7 @@ export default function Page() {
                         min={addDays(startDate, 1)}
                         max={addDays(startDate, 30)}
                         onChange={(e) => handleReturnDate(e.target.value)}
-                        className="w-full rounded-full border border-white/[0.09] bg-[#111827]/60 py-[14px] pl-12 pr-4 text-[0.95rem] text-white outline-none transition-all focus:border-blue-500/40 focus:bg-[#111827]/90 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.12)]"
+                        className="w-full rounded-full border border-white/[0.09] bg-[#111827]/60 py-[14px] pl-12 pr-4 text-[0.95rem] text-white outline-none transition-all focus:border-[#5eead4]/50 focus:bg-[#111827]/90 focus:shadow-[0_0_0_3px_rgba(94,234,212,0.14)]"
                         style={{ colorScheme: "dark" }}
                       />
                     </div>
@@ -723,10 +725,10 @@ export default function Page() {
                       <button
                         type="button"
                         onClick={() => setIsTravelersOpen(!isTravelersOpen)}
-                        className="w-full flex items-center justify-between gap-2 rounded-full border border-[#00f0ff]/40 bg-[#111827]/80 py-[14px] px-5 text-[0.85rem] font-bold text-white outline-none transition-all hover:border-[#00f0ff] focus:border-[#00f0ff] focus:shadow-[0_0_15px_rgba(0,240,255,0.3)] cursor-pointer"
+                        className="w-full flex items-center justify-between gap-2 rounded-full border border-[#5eead4]/40 bg-[#111827]/80 py-[14px] px-5 text-[0.85rem] font-bold text-white outline-none transition-all hover:border-[#5eead4] focus:border-[#5eead4] focus:shadow-[0_0_15px_rgba(94,234,212,0.3)] cursor-pointer"
                       >
                         <div className="flex items-center gap-2">
-                          <Users className="h-4 w-4 text-[#00f0ff] shrink-0" />
+                          <Users className="h-4 w-4 text-[#5eead4] shrink-0" />
                           <span className="truncate">
                             {getGroupTypeLabel(travelers.group_type)} ({travelers.adults + travelers.seniors + travelers.infants})
                           </span>
@@ -735,8 +737,8 @@ export default function Page() {
                       </button>
 
                       {isTravelersOpen && (
-                        <div className="absolute top-full mt-2 right-0 w-[min(20rem,calc(100vw-2rem))] bg-[#03050a]/95 backdrop-blur-2xl border border-[#00f0ff]/40 rounded-3xl p-5 z-50 shadow-[0_10px_40px_rgba(0,240,255,0.25)] text-left">
-                          <p className="text-[11px] font-bold uppercase tracking-wider text-[#00f0ff] mb-3">{t.groupType}</p>
+                        <div className="absolute top-full mt-2 right-0 w-[min(20rem,calc(100vw-2rem))] bg-[#04060d]/95 backdrop-blur-2xl border border-[#5eead4]/40 rounded-3xl p-5 z-50 shadow-[0_10px_40px_rgba(94,234,212,0.25)] text-left">
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-[#5eead4] mb-3">{t.groupType}</p>
                           <div className="flex flex-wrap gap-2 mb-5">
                             {(['Solo', 'Couple', 'Family', 'Friends', 'Business'] as const).map((type) => (
                               <button
@@ -746,7 +748,7 @@ export default function Page() {
                                 className={cn(
                                   "px-3 py-1.5 rounded-full text-xs font-bold transition-all border",
                                   travelers.group_type === type
-                                    ? "bg-[#00f0ff]/20 border-[#00f0ff] text-white shadow-[0_0_12px_rgba(0,240,255,0.3)]"
+                                    ? "bg-[#5eead4]/20 border-[#5eead4] text-white shadow-[0_0_12px_rgba(94,234,212,0.3)]"
                                     : "bg-white/5 border-white/10 text-[#94A3B8] hover:bg-white/10 hover:text-white"
                                 )}
                               >
@@ -755,7 +757,7 @@ export default function Page() {
                             ))}
                           </div>
 
-                          <p className="text-[11px] font-bold uppercase tracking-wider text-[#00f0ff] mb-3">{t.travelerCounts}</p>
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-[#5eead4] mb-3">{t.travelerCounts}</p>
                           <div className="flex flex-col gap-3.5">
                             <div className="flex items-center justify-between">
                               <div>
@@ -774,7 +776,7 @@ export default function Page() {
                                 <button
                                   type="button"
                                   onClick={() => setTravelers((prev) => ({ ...prev, adults: prev.adults + 1 }))}
-                                  className="h-7 w-7 rounded-full bg-[#00f0ff]/20 border border-[#00f0ff]/40 flex items-center justify-center text-[#00f0ff] hover:bg-[#00f0ff]/30 transition"
+                                  className="h-7 w-7 rounded-full bg-[#5eead4]/20 border border-[#5eead4]/40 flex items-center justify-center text-[#5eead4] hover:bg-[#5eead4]/30 transition"
                                 >
                                   <Plus className="h-3.5 w-3.5" />
                                 </button>
@@ -798,7 +800,7 @@ export default function Page() {
                                 <button
                                   type="button"
                                   onClick={() => setTravelers((prev) => ({ ...prev, seniors: prev.seniors + 1 }))}
-                                  className="h-7 w-7 rounded-full bg-[#00f0ff]/20 border border-[#00f0ff]/40 flex items-center justify-center text-[#00f0ff] hover:bg-[#00f0ff]/30 transition"
+                                  className="h-7 w-7 rounded-full bg-[#5eead4]/20 border border-[#5eead4]/40 flex items-center justify-center text-[#5eead4] hover:bg-[#5eead4]/30 transition"
                                 >
                                   <Plus className="h-3.5 w-3.5" />
                                 </button>
@@ -822,7 +824,7 @@ export default function Page() {
                                 <button
                                   type="button"
                                   onClick={() => setTravelers((prev) => ({ ...prev, infants: prev.infants + 1 }))}
-                                  className="h-7 w-7 rounded-full bg-[#00f0ff]/20 border border-[#00f0ff]/40 flex items-center justify-center text-[#00f0ff] hover:bg-[#00f0ff]/30 transition"
+                                  className="h-7 w-7 rounded-full bg-[#5eead4]/20 border border-[#5eead4]/40 flex items-center justify-center text-[#5eead4] hover:bg-[#5eead4]/30 transition"
                                 >
                                   <Plus className="h-3.5 w-3.5" />
                                 </button>
@@ -833,7 +835,7 @@ export default function Page() {
                           <button
                             type="button"
                             onClick={() => setIsTravelersOpen(false)}
-                            className="w-full mt-5 py-2.5 rounded-full bg-[#00f0ff]/15 border border-[#00f0ff]/40 text-[#00f0ff] text-xs font-bold hover:bg-[#00f0ff]/30 transition"
+                            className="w-full mt-5 py-2.5 rounded-full bg-[#5eead4]/15 border border-[#5eead4]/40 text-[#5eead4] text-xs font-bold hover:bg-[#5eead4]/30 transition"
                           >
                             {t.applySelection}
                           </button>
@@ -846,7 +848,7 @@ export default function Page() {
                       id="plan-trip-btn"
                       type="submit"
                       disabled={loading || !locationInput.trim()}
-                      className="w-full sm:w-auto shrink-0 rounded-full bg-white px-7 py-[14px] text-[0.95rem] font-bold text-[#05070A] transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="w-full sm:w-auto shrink-0 btn-glow rounded-full px-7 py-[14px] text-[0.95rem] font-bold disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : t.planTrip}
                     </button>
@@ -854,7 +856,7 @@ export default function Page() {
 
                   {/* Days pill — live count */}
                   <div className="flex justify-center pt-1">
-                    <span className="rounded-full border border-blue-500/25 bg-blue-500/8 px-3 py-1 text-[11px] font-semibold text-blue-400 tracking-wide">
+                    <span className="rounded-full border border-[#5eead4]/25 bg-[#5eead4]/10 px-3 py-1 text-[11px] font-semibold text-[#5eead4] tracking-wide">
                       {diffDays(startDate, returnDate)}&nbsp;{diffDays(startDate, returnDate) > 1 ? t.days : t.day}
                     </span>
                   </div>
@@ -863,7 +865,8 @@ export default function Page() {
                 <p className="mt-5 text-[0.8rem] text-[#334155]">
                   When you open the map, clicking any marker will open navigation for that place.
                 </p>
-              </div>
+                </div>
+              </BoardingPass>
             </div>
           ) : null}
         </main>

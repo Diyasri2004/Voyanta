@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { Heart, MapPin, Navigation, Plus } from "lucide-react";
 
 const cardVariants = cva(
-  "relative grid h-full w-full transform-gpu overflow-hidden rounded-2xl border border-white/10 shadow-lg transition-all duration-300 ease-in-out group hover:shadow-2xl hover:border-[#39ff14]/40 min-h-[420px]",
+  "relative grid h-full w-full transform-gpu overflow-hidden rounded-2xl border border-white/10 shadow-lg transition-all duration-300 ease-in-out group hover:shadow-2xl hover:border-[#fcd34d]/40 min-h-[420px]",
   {
     variants: {},
     defaultVariants: {},
@@ -108,7 +108,7 @@ const DestinationCard = React.forwardRef<
 
         {/* Text Content */}
         <div className="relative z-10 flex h-full flex-col justify-end p-6 text-white transition-transform duration-500 ease-in-out group-hover:-translate-y-1">
-          <p className="text-[11px] uppercase tracking-wider text-[#39ff14] font-semibold mb-1">
+          <p className="text-[11px] uppercase tracking-wider text-[#fcd34d] font-semibold mb-1">
             {category}
           </p>
           <h2 className="text-xl font-bold leading-tight tracking-tight text-white md:text-2xl line-clamp-2 drop-shadow-md mb-3">
@@ -129,7 +129,7 @@ const DestinationCard = React.forwardRef<
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="shrink-0 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-medium hover:bg-cyan-500/20 transition-all flex items-center gap-1"
+              className="shrink-0 px-3 py-1 rounded-full bg-teal-500/10 border border-teal-500/30 text-teal-400 text-xs font-medium hover:bg-teal-500/20 transition-all flex items-center gap-1"
             >
               <Navigation className="w-3 h-3 shrink-0"/>
               <span>Navigate</span>

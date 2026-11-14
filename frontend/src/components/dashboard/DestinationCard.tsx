@@ -2,6 +2,7 @@
 
 import React from "react";
 import { Navigation, Plus, Heart, Check } from "lucide-react";
+import TiltCard from "@/components/ui/TiltCard";
 
 export interface DestinationCardProps {
   item?: {
@@ -43,7 +44,8 @@ export const DestinationCard = ({
   const title = item.title || item.name || "Landmark";
   const locationText = item.location || item.address || (destination ? `${destination} Area` : "Local Area");
   const categoryText = item.category || "ATTRACTION";
-  const imageUrl = item.image || item.image_url || "/fallback-travel.jpg";
+  const imageUrl = item.image || item.image_url || "";
+  const [imageBroken, setImageBroken] = React.useState(false);
 
   const navUrl =
     item.navigation_url ||
@@ -53,31 +55,35 @@ export const DestinationCard = ({
     )}`;
 
   return (
+    <TiltCard max={6} lift={10} className="rounded-2xl">
     <div
       style={{
         animation: "fadeInUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards",
         animationDelay: `${Math.min(index * 0.04, 0.6)}s`,
         opacity: 0,
       }}
-      className="group relative flex flex-col rounded-2xl bg-neutral-900/80 border border-white/10 overflow-hidden shadow-lg transition-transform duration-300 hover:-translate-y-1 hover:border-pink-500/40 min-h-[380px]"
+      className="group relative flex flex-col rounded-2xl bg-neutral-900/80 border border-white/10 overflow-hidden shadow-lg transition-transform duration-300 hover:-translate-y-1 hover:border-orange-500/40 min-h-[380px]"
     >
       {/* Background Image Container */}
       <div className="relative h-48 w-full overflow-hidden bg-neutral-800 shrink-0">
-        <img
-          src={imageUrl}
-          alt={title}
-          loading="lazy"
-          decoding="async"
-          className="h-full w-full object-cover transition-opacity duration-300 group-hover:scale-105"
-          onError={(e) => {
-            (e.target as HTMLImageElement).src =
-              "https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=800&q=80";
-          }}
-        />
+        {imageUrl && !imageBroken ? (
+          <img
+            src={imageUrl}
+            alt={title}
+            loading="lazy"
+            decoding="async"
+            className="h-full w-full object-cover transition-opacity duration-300 group-hover:scale-105"
+            onError={() => setImageBroken(true)}
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-neutral-800 to-neutral-900 text-3xl">
+            📍
+          </div>
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-neutral-950/80 via-transparent to-transparent pointer-events-none" />
 
         {/* Category Badge */}
-        <span className="absolute top-3 left-3 px-2.5 py-1 rounded-full text-xs font-semibold bg-black/60 backdrop-blur-md text-pink-400 border border-white/10 uppercase tracking-wider">
+        <span className="absolute top-3 left-3 px-2.5 py-1 rounded-full text-xs font-semibold bg-black/60 backdrop-blur-md text-orange-400 border border-white/10 uppercase tracking-wider">
           {categoryText}
         </span>
 
@@ -115,7 +121,7 @@ export const DestinationCard = ({
               {item.in_trip ? "✅ " : "⏳ "}{item.event_note}
             </p>
           )}
-          <h4 className="text-base font-bold text-white line-clamp-1 group-hover:text-pink-400 transition-colors">
+          <h4 className="text-base font-bold text-white line-clamp-1 group-hover:text-orange-400 transition-colors">
             {title}
           </h4>
           <p className="mt-1.5 text-xs text-neutral-400 line-clamp-2 leading-relaxed">
@@ -162,8 +168,8 @@ export const DestinationCard = ({
                 }}
                 className={`px-3 py-1 rounded-lg transition-colors font-medium text-xs flex items-center gap-1 ${
                   isAdded
-                    ? "bg-pink-600 text-white"
-                    : "bg-white/10 hover:bg-pink-600 hover:text-white text-gray-200"
+                    ? "bg-orange-600 text-white"
+                    : "bg-white/10 hover:bg-orange-600 hover:text-white text-gray-200"
                 }`}
               >
                 {isAdded ? (
@@ -181,6 +187,7 @@ export const DestinationCard = ({
         </div>
       </div>
     </div>
+    </TiltCard>
   );
 };
 

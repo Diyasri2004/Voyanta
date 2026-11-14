@@ -35,7 +35,7 @@ export function DestinationInput({
           }
         })
         .catch(() => {});
-    }, 50);
+    }, 300);
 
     return () => {
       clearTimeout(timer);
@@ -57,11 +57,11 @@ export function DestinationInput({
         onBlur={() => setTimeout(() => setIsOpen(false), 200)}
         placeholder={placeholder}
         autoComplete="off"
-        className="w-full rounded-full border border-white/[0.09] bg-[#111827]/60 py-[14px] pl-12 pr-5 text-[0.95rem] text-white placeholder-[#475569] outline-none transition-all focus:border-[#00f0ff]/50 focus:bg-[#111827]/90 focus:shadow-[0_0_15px_rgba(0,240,255,0.2)]"
+        className="w-full rounded-full border border-white/[0.09] bg-[#111827]/60 py-[14px] pl-12 pr-5 text-[0.95rem] text-white placeholder-[#475569] outline-none transition-all focus:border-[#5eead4]/50 focus:bg-[#111827]/90 focus:shadow-[0_0_15px_rgba(94,234,212,0.2)]"
       />
 
       {isOpen && value.trim().length > 0 && suggestions.length > 0 && (
-        <div className="absolute top-full mt-2 w-full bg-[#03050a]/95 backdrop-blur-xl border border-[#00f0ff]/40 rounded-2xl overflow-hidden z-50 shadow-[0_10px_30px_rgba(0,240,255,0.2)] transition-all max-h-60 overflow-y-auto">
+        <div className="absolute top-full mt-2 w-full bg-[#04060d]/95 backdrop-blur-xl border border-[#5eead4]/40 rounded-2xl overflow-hidden z-50 shadow-[0_10px_30px_rgba(94,234,212,0.2)] transition-all max-h-60 overflow-y-auto">
           {suggestions.map((item, idx) => (
             <button
               key={idx}
@@ -71,9 +71,9 @@ export function DestinationInput({
                 onChange(item.label);
                 setIsOpen(false);
               }}
-              className="w-full text-left px-5 py-3.5 hover:bg-[#00f0ff]/15 text-white text-sm border-b border-white/5 last:border-0 transition-colors flex items-center gap-2 font-medium"
+              className="w-full text-left px-5 py-3.5 hover:bg-[#5eead4]/15 text-white text-sm border-b border-white/5 last:border-0 transition-colors flex items-center gap-2 font-medium"
             >
-              <MapPin className="h-4 w-4 text-[#00f0ff] shrink-0" />
+              <MapPin className="h-4 w-4 text-[#5eead4] shrink-0" />
               {item.label}
             </button>
           ))}
