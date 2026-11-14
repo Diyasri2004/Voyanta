@@ -1016,10 +1016,17 @@ async def fetch_google_events(client: httpx.AsyncClient, destination: str) -> Li
     if not SERPAPI_KEY:
         return []
     try:
-        res = await client.get(
-            "https://serpapi.com/search.json",
-            params={"engine": "google_events", "q": f"Events in {destination}", "hl": "en", "api_key": SERPAPI_KEY},
-            timeout=10.0)
+        res = None
+        for attempt in range(2):  # one retry: SerpApi occasionally times out on the first call
+            try:
+                res = await client.get(
+                    "https://serpapi.com/search.json",
+                    params={"engine": "google_events", "q": f"Events in {destination}", "hl": "en", "api_key": SERPAPI_KEY},
+                    timeout=12.0)
+                break
+            except httpx.TimeoutException:
+                if attempt == 1:
+                    raise
         if res.status_code != 200:
             logger.warning(f"SerpApi status {res.status_code}")
             return []
