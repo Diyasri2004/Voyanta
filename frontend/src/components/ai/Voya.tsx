@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { X, Send } from "lucide-react";
+import { X, Send, Mic, Volume2, VolumeX } from "lucide-react";
 import HeaderMenu from "@/components/ui/HeaderMenu";
 import VoyaMark from "./VoyaMark";
 import { TypedText } from "./RichText";
+import { useVoice } from "./useVoice";
 
 import { useCurrency } from "@/context/CurrencyContext";
 
@@ -141,6 +142,17 @@ export default function Voya({ trip }: { trip: any }) {
     return Array.from(new Set(out)).slice(0, 80);
   };
 
+  // Voice: speak to Voya in your language and hear the answer back.
+  const sendRef = useRef<(m?: any) => void>(() => {});
+  const [voiceReplies, setVoiceReplies] = useState(false);
+  const voiceRepliesRef = useRef(false);
+  voiceRepliesRef.current = voiceReplies;
+  const voice = useVoice(
+    activeLang || "en",
+    (text) => { setVoiceReplies(true); voiceRepliesRef.current = true; sendRef.current(text); },
+    (text) => setInput(text),
+  );
+
   const sendMessage = async (customMessage?: any, presetMessage?: string) => {
     let userMsg = "";
     if (typeof customMessage === "string") {
@@ -186,6 +198,7 @@ export default function Voya({ trip }: { trip: any }) {
       const data = await response.json();
       const aiText = data.reply || data.response || data.message || ("I'm ready! How else can I assist your trip to " + (trip?.destination || 'your destination') + "?");
 
+      if (voiceRepliesRef.current) voice.speak(aiText);
       setMessages(prev => [
         ...prev,
         {
@@ -211,6 +224,8 @@ export default function Voya({ trip }: { trip: any }) {
       setIsLoading(false);
     }
   };
+
+  sendRef.current = sendMessage;
 
   const LANG_OPTIONS = [
     { value: "en", label: "English", hint: "EN" },
@@ -415,9 +430,47 @@ export default function Voya({ trip }: { trip: any }) {
                   type="text"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder="Ask Voya anything about your trip"
+                  placeholder={voice.listening ? "Listening…" : "Ask Voya anything about your trip"}
                   className="h-12 flex-1 bg-transparent px-4 text-base text-white outline-none placeholder:text-white/35 sm:text-sm"
                 />
+                {voice.canSpeak && voiceReplies && (
+                  <button
+                    type="button"
+                    onClick={() => { if (voice.speaking) voice.stopSpeaking(); setVoiceReplies(false); }}
+                    aria-label="Turn off spoken replies"
+                    title="Spoken replies on. Tap to mute"
+                    className="mr-1 flex h-9 w-9 items-center justify-center rounded-full text-[#ffc36b] transition hover:bg-white/10"
+                  >
+                    {voice.speaking ? <Volume2 className="h-4 w-4 animate-pulse" /> : <Volume2 className="h-4 w-4" />}
+                  </button>
+                )}
+                {voice.canSpeak && !voiceReplies && (
+                  <button
+                    type="button"
+                    onClick={() => setVoiceReplies(true)}
+                    aria-label="Turn on spoken replies"
+                    title="Spoken replies off. Tap to hear Voya"
+                    className="mr-1 flex h-9 w-9 items-center justify-center rounded-full text-white/40 transition hover:bg-white/10 hover:text-white"
+                  >
+                    <VolumeX className="h-4 w-4" />
+                  </button>
+                )}
+                {voice.canListen && (
+                  <button
+                    type="button"
+                    onClick={() => (voice.listening ? voice.stopListening() : voice.startListening())}
+                    aria-label={voice.listening ? "Stop listening" : "Speak to Voya"}
+                    title={voice.listening ? "Listening. Tap to stop" : "Speak in your language"}
+                    className={`relative mr-1 flex h-9 w-9 items-center justify-center rounded-full border transition active:scale-95 ${
+                      voice.listening
+                        ? "border-[#ff7a5c] bg-[#ff7a5c]/20 text-[#ff9d5c]"
+                        : "border-white/15 bg-white/[0.06] text-[#cbd3e3] hover:bg-white/15"
+                    }`}
+                  >
+                    {voice.listening && <span className="absolute inset-0 animate-ping rounded-full bg-[#ff7a5c]/30" />}
+                    <Mic className="relative h-4 w-4" />
+                  </button>
+                )}
                 <button
                   type="submit"
                   disabled={!input.trim() || isLoading}
@@ -427,6 +480,11 @@ export default function Voya({ trip }: { trip: any }) {
                   <Send className="h-4 w-4" />
                 </button>
               </div>
+              {(voice.error || voice.listening) && (
+                <p role="status" className={`mt-2 px-2 text-[11.5px] ${voice.error ? "text-[#ff9d8a]" : "text-[#ffc36b]"}`}>
+                  {voice.error || "Listening… speak now"}
+                </p>
+              )}
             </form>
           </motion.div>
         )}

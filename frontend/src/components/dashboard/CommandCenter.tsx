@@ -17,11 +17,13 @@ import {
   Mountain,
   Palmtree,
   Landmark,
+  Flame,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { getTranslation, LanguageName } from "@/lib/i18n";
 
 export const PILLARS = [
+  { id: "trending", label: "Trending Now" },
   { id: "attractions", label: "Tourist Attractions" },
   { id: "events", label: "Events" },
   { id: "culinary", label: "Culinary" },
@@ -59,7 +61,7 @@ export default function CommandCenter({
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const ALL_PILLARS = [
-    "attractions", "events", "culinary", "bars_pubs", "wellness",
+    "trending", "attractions", "events", "culinary", "bars_pubs", "wellness",
     "secret_spots", "essentials", "shopping", "adventures", "theme_parks", "sacred_temples"
   ];
 
@@ -73,6 +75,7 @@ export default function CommandCenter({
   };
 
   const tabs = [
+    { id: "trending", icon: Flame, label: "Trending Now" },
     { id: "attractions", icon: Compass, label: t.attractions },
     { id: "events", icon: Ticket, label: t.events },
     { id: "culinary", icon: Utensils, label: t.culinaryPillar },

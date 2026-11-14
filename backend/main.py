@@ -23,7 +23,7 @@ from dotenv import load_dotenv
 
 from models import EventFestival
 from chat_agent import get_voya_system_prompt, get_chat_agent_tools, execute_tool_call
-from voya_engine import Deps, RateLimiter, run_chat
+from voya_engine import Deps, RateLimiter, run_chat, _name_score
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("voyanta")
@@ -499,6 +499,7 @@ def format_date_range(start: date, days: int) -> str:
     return f"{start.strftime('%b %d')} - {end.strftime('%b %d')}"
 
 PILLAR_DESCRIPTIONS = {
+    "trending": "what young locals are actually going to right now",
     "attractions": "iconic landmarks and sights",
     "events": "annual festivals and top events",
     "culinary": "famous eateries and local specialties",
@@ -1074,7 +1075,52 @@ async def build_real_events(client: httpx.AsyncClient, clean_dest: str, trip_sta
 #  Real Places Engine (TomTom POI + OpenStreetMap). No AI-invented venues.
 # ─────────────────────────────────────────────
 
+async def _gemini_trending(client: httpx.AsyncClient, dest: str, focus: str = "") -> List[Dict[str, Any]]:
+    """Currently-buzzing places for 18-28 year olds, from Gemini with live Google Search grounding.
+    Returns [{name, area, why}]. Empty when no key or on any failure, so callers fall back to map categories."""
+    key = GEMINI_API_KEY or os.getenv("GEMINI_API_KEY", "").strip()
+    if not key or client is None:
+        return []
+    cache_key = f"trending_names:{dest.lower()}:{(focus or '').lower()}"
+    if cache_key in dynamic_cache:
+        return dynamic_cache[cache_key]
+    year = date.today().year
+    prompt = (
+        f"Use Google Search. List the 10 most talked-about places in {dest} right now ({year}) that people aged 18-28 actually hang out at: "
+        f"specialty cafes, rooftop and aesthetic spots, gaming/bowling/entertainment zones, live music, dessert and brunch places, thrift and streetwear, nightlife. "
+        f"{('Focus on: ' + focus + '. ') if focus else ''}"
+        "Exclude old-fashioned tourist sights (parks, museums, monuments, temples), hotels and chains with no local buzz. "
+        'Return ONLY a JSON array, no prose: [{"name": "exact place name", "area": "neighbourhood in the city", "why": "one punchy sentence on why it is hot right now"}]'
+    )
+    for model in ("gemini-flash-latest", "gemini-2.5-flash"):
+        try:
+            r = await client.post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}",
+                json={"contents": [{"parts": [{"text": prompt}]}], "tools": [{"google_search": {}}]},
+                timeout=18.0)
+            if r.status_code != 200:
+                continue
+            parts = (r.json().get("candidates") or [{}])[0].get("content", {}).get("parts", [])
+            data = extract_json_payload("".join(p.get("text", "") for p in parts))
+            if isinstance(data, list):
+                out = [{"name": str(d.get("name", "")).strip(), "area": str(d.get("area", "")).strip(), "why": str(d.get("why", "")).strip()[:220]}
+                       for d in data if isinstance(d, dict) and d.get("name")][:12]
+                if out:
+                    dynamic_cache[cache_key] = out
+                    return out
+        except Exception as e:
+            logger.warning(f"Gemini trending ({model}) failed: {e}")
+    return []
+
+
 REAL_POI_PILLARS = {
+    "trending": {
+        "queries": ["specialty coffee cafe", "rooftop restaurant", "gaming zone", "bowling", "escape room", "live music venue", "dessert cafe", "brunch cafe"],
+        "include": ["cafe", "coffee", "restaurant", "bar", "lounge", "rooftop", "gaming", "game", "bowling", "escape", "karting", "club", "music",
+                    "entertainment", "dessert", "ice cream", "bakery", "brunch", "arcade", "amusement"],
+        "exclude_name": ["hotel", "lodge", "hospital", "school", "college", "clinic", "temple", "mandir", "museum"],
+        "osm": ['["amenity"~"cafe|nightclub|bar"]', '["leisure"~"bowling_alley|amusement_arcade|escape_game"]'],
+    },
     "attractions": {
         "queries": ["tourist attraction", "museum", "monument", "park", "beach"],
         "include": ["tourist attraction", "museum", "monument", "historic", "park", "beach", "fort", "palace", "lighthouse",
@@ -1296,6 +1342,25 @@ async def build_real_places(client: httpx.AsyncClient, clean_dest: str, pillar: 
                         seen.add(key)
                         pois.append(poi)
 
+    if pillar == "trending":
+        hot = await _gemini_trending(client, clean_dest)
+        resolved = await asyncio.gather(*[_tomtom_pois(client, h["name"], coords, radius=40000) for h in hot[:10]], return_exceptions=True)
+        front: List[Dict[str, Any]] = []
+        for h, res in zip(hot[:10], resolved):
+            best = None
+            if isinstance(res, list):
+                ranked = sorted(res, key=lambda c: _name_score(h["name"], c["name"]), reverse=True)
+                if ranked and _name_score(h["name"], ranked[0]["name"]) >= 0.5:
+                    best = dict(ranked[0])
+            if best is None:
+                best = {"name": h["name"], "cats": ["trending"], "address": h["area"], "area": h["area"], "lat": None, "lng": None, "url": "", "phone": ""}
+            best["why"] = h["why"]
+            key = re.sub(r"[^a-z0-9]", "", best["name"].lower())
+            if key and key not in seen:
+                seen.add(key)
+                front.append(best)
+        pois.extend(front)
+
     take(per_query)
     if len(pois) < 8:
         take([await _osm_pois(client, pillar, coords)])
@@ -1323,7 +1388,7 @@ async def build_real_places(client: httpx.AsyncClient, clean_dest: str, pillar: 
             "title": name,
             "name": name,
             "category": pillar.replace("_", " ").title(),
-            "description": info["extract"] or _describe_poi(poi, clean_dest),
+            "description": poi.get("why") or info["extract"] or _describe_poi(poi, clean_dest),
             "location": poi["area"] or clean_dest,
             "address": poi["address"] or poi["area"] or clean_dest,
             "maps_url": nav,
@@ -2000,6 +2065,7 @@ async def handle_voya_chat(req: ChatRequest, request: Request):
         parse_day=_parse_event_day,
         client=client,
         geocode=_geocode,
+        trending=lambda d, q: _gemini_trending(client, d.split(",")[0].strip().title(), q),
     )
     in_india = False
     if dest:

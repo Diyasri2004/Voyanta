@@ -179,3 +179,18 @@ def test_vague_offbeat_request_fans_out_to_real_categories():
     out = run(run_chat({**REQ, "message": "give me off beat locations"}, deps))
     assert len(seen) >= 4 and "offbeat locations" not in seen
     assert len(out["action"]["places"]) >= 4
+
+
+def test_genz_request_uses_live_trending_names_verified_on_map():
+    async def trending(dest, focus):
+        return [{"name": "Cafe Neon", "area": "Gomti Nagar", "why": "Packed with college crowds for its late-night waffles"}]
+    async def poi(q, d):
+        if q == "Cafe Neon":
+            return [{"name": "Cafe Neon", "address": "Vibhuti Khand, Gomti Nagar, Lucknow", "area": "Gomti Nagar", "lat": 26.85, "lng": 81.0, "url": ""}]
+        return []
+    m = FakeModel('{"tools": [{"name": "discover_places", "arguments": {"query": "fun spots for gen z", "vibe": "genz"}}], "reply": ""}', "ok")
+    deps = make_deps(m)
+    deps.poi_search, deps.trending = poi, trending
+    out = run(run_chat({**REQ, "destination": "Lucknow", "message": "where do gen z hang out"}, deps))
+    top = out["action"]["places"][0]
+    assert top["name"] == "Cafe Neon" and "26.85,81.0" in top["maps_url"] and "waffles" in top["about"]

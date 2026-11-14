@@ -13,7 +13,7 @@ export default function CyberDashboard({
   setTrip: any;
   selectedLanguage?: LanguageName;
 }) {
-  const [activeTab, setActiveTab] = useState("attractions");
+  const [activeTab, setActiveTab] = useState("trending");
 
   return (
     <div className="relative w-full max-w-7xl mx-auto px-4 py-6 flex flex-col min-h-[calc(100vh-100px)] text-white font-plus-jakarta mt-2">
