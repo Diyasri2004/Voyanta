@@ -485,7 +485,7 @@ export default function Page() {
         dangerouslySetInnerHTML={{
           __html: `
             @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Syne:wght@400;600;700;800&display=swap');
-            html, body { max-width: 100%; overflow-x: hidden; }
+            html, body { max-width: 100%; overflow-x: clip; }
             input[type="date"] { min-width: 0; -webkit-appearance: none; appearance: none; }
             body {
               background: #04060d;

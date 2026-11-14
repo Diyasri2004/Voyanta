@@ -244,7 +244,7 @@ export default function CommandCenter({
             {t.commandCenter}
             {tripStart && tripEnd ? `  ·  ${tripStart} → ${tripEnd}` : ""}
           </p>
-          <h2 className="font-display truncate text-5xl leading-[0.95] text-[#f6efe2] md:text-7xl">
+          <h2 className="font-display truncate text-4xl leading-[0.95] text-[#f6efe2] md:text-6xl">
             {destination.split(",")[0]}
           </h2>
           <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-[#aab3c5]">

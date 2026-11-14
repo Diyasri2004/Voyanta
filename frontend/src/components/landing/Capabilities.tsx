@@ -34,13 +34,13 @@ function Languages() {
     <DepthCard className="lg:col-span-4">
       <div className="flex h-full flex-col justify-between gap-10 p-7 sm:p-9">
         <div style={{ transform: "translateZ(30px)" }}>
-          <h3 className="font-display text-[clamp(1.7rem,2.6vw,2.4rem)] leading-tight text-[#f3ecdc]">In your language, the way you type it.</h3>
+          <h3 className="font-display text-[clamp(1.39rem,2.13vw,1.97rem)] leading-tight text-[#f3ecdc]">In your language, the way you type it.</h3>
           <p className="mt-3 max-w-lg text-sm leading-relaxed text-white/55">
             Switch the whole app between eight languages. The guide also replies in the mixed styles people really use in chat.
           </p>
         </div>
         <div className="flex flex-col gap-4" style={{ transform: "translateZ(60px)" }}>
-          <Marquee items={LANGS} className="font-display text-[clamp(2rem,4vw,3.4rem)] leading-none text-[#f3ecdc]/85" />
+          <Marquee items={LANGS} className="font-display text-[clamp(1.64rem,3.28vw,2.79rem)] leading-none text-[#f3ecdc]/85" />
           <Marquee items={CHAT_LANGS} reverse className="text-lg font-semibold text-[#ffc36b]/70" />
         </div>
       </div>
@@ -61,7 +61,7 @@ function Currencies() {
     <DepthCard className="lg:col-span-2">
       <div className="flex h-full flex-col justify-between gap-8 p-7 sm:p-9">
         <div style={{ transform: "translateZ(30px)" }}>
-          <h3 className="font-display text-[clamp(1.7rem,2.6vw,2.4rem)] leading-tight text-[#f3ecdc]">Budgets in your currency.</h3>
+          <h3 className="font-display text-[clamp(1.39rem,2.13vw,1.97rem)] leading-tight text-[#f3ecdc]">Budgets in your currency.</h3>
           <p className="mt-3 text-sm leading-relaxed text-white/55">Nine currencies, from rupees to dirhams.</p>
         </div>
         <div className="grid grid-cols-3 gap-2" style={{ transform: "translateZ(55px)" }}>
@@ -109,7 +109,7 @@ function Guide() {
     <DepthCard className="lg:col-span-3">
       <div className="flex h-full flex-col justify-between gap-8 p-7 sm:p-9">
         <div style={{ transform: "translateZ(30px)" }}>
-          <h3 className="font-display text-[clamp(1.7rem,2.6vw,2.4rem)] leading-tight text-[#f3ecdc]">A local guide, one message away.</h3>
+          <h3 className="font-display text-[clamp(1.39rem,2.13vw,1.97rem)] leading-tight text-[#f3ecdc]">A local guide, one message away.</h3>
           <p className="mt-3 max-w-md text-sm leading-relaxed text-white/55">
             Swap a stop for a hidden gem, ask for food and budget, get transit tips or a backup plan for rain.
           </p>
@@ -134,7 +134,7 @@ function Routes() {
     <DepthCard className="lg:col-span-3">
       <div className="flex h-full flex-col justify-between gap-8 p-7 sm:p-9">
         <div style={{ transform: "translateZ(30px)" }}>
-          <h3 className="font-display text-[clamp(1.7rem,2.6vw,2.4rem)] leading-tight text-[#f3ecdc]">Every stop opens in your maps app.</h3>
+          <h3 className="font-display text-[clamp(1.39rem,2.13vw,1.97rem)] leading-tight text-[#f3ecdc]">Every stop opens in your maps app.</h3>
           <p className="mt-3 max-w-md text-sm leading-relaxed text-white/55">Tap a marker for turn-by-turn directions. Routes show distance and travel time for each day.</p>
         </div>
         <div style={{ transform: "translateZ(55px)" }}>
@@ -173,7 +173,7 @@ export default function Capabilities() {
   return (
     <section className="relative z-10 px-5 py-24 sm:px-8 lg:px-14 lg:py-36">
       <div className="mx-auto w-full max-w-[1500px]">
-        <h2 className="max-w-3xl font-display text-[clamp(2.2rem,4.4vw,4rem)] leading-[1.02] text-[#f3ecdc]">
+        <h2 className="max-w-3xl font-display text-[clamp(1.8rem,3.61vw,3.28rem)] leading-[1.02] text-[#f3ecdc]">
           Made for how you actually travel.
         </h2>
         <div className="mt-14 grid gap-5 lg:grid-cols-6">

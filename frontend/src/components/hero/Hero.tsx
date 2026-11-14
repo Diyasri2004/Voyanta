@@ -47,7 +47,7 @@ const Hero = forwardRef<HTMLElement, HeroProps>(function Hero(props, ref) {
     <section ref={ref} className="relative z-10 flex min-h-[100svh] flex-col justify-center px-5 pb-16 pt-[27svh] sm:px-8 lg:px-14 lg:pt-28">
       <div className="mx-auto w-full max-w-[1500px]">
         <div className="max-w-[44rem]">
-          <h1 className="font-display text-[clamp(2.7rem,6.4vw,5.9rem)] leading-[0.96] text-[#f3ecdc]">{t.heroTitle}</h1>
+          <h1 className="font-display text-[clamp(2.21rem,5.25vw,4.84rem)] leading-[0.96] text-[#f3ecdc]">{t.heroTitle}</h1>
 
           <div className="mt-7 flex flex-col gap-3">
             <FlapBoard text={boardText} />

@@ -27,7 +27,7 @@ export default function Itinerary({ onVisible }: { onVisible: (v: boolean) => vo
     <section ref={section} id="how-it-works" className="relative z-10 px-5 py-28 sm:px-8 lg:px-14 lg:py-40">
       <div className="mx-auto grid w-full max-w-[1500px] gap-14 lg:grid-cols-[minmax(0,27rem)_minmax(0,1fr)] lg:gap-24">
         <div className="lg:sticky lg:top-32 lg:self-start">
-          <h2 className="font-display text-[clamp(2.2rem,4.4vw,4rem)] leading-[1.02] text-[#f3ecdc]">Your trip, laid out day by day.</h2>
+          <h2 className="font-display text-[clamp(1.8rem,3.61vw,3.28rem)] leading-[1.02] text-[#f3ecdc]">Your trip, laid out day by day.</h2>
           <p className="mt-6 max-w-md text-base leading-relaxed text-white/60">
             Choose a place and your dates. Voyanta builds each day with stops, distances and travel time, then adds food, events and a budget.
           </p>
@@ -61,7 +61,7 @@ export default function Itinerary({ onVisible }: { onVisible: (v: boolean) => vo
                   <div className={`flex flex-col gap-1 transition-opacity duration-500 sm:flex-row sm:items-baseline sm:gap-6 ${reached ? "opacity-100" : "opacity-45"}`}>
                     <span className="w-14 shrink-0 text-sm font-semibold tabular-nums text-[#ffc36b]">{s.time}</span>
                     <div className="min-w-0 flex-1">
-                      <h3 className="font-display text-[clamp(1.5rem,2.6vw,2.2rem)] leading-tight text-[#f3ecdc]">{s.name}</h3>
+                      <h3 className="font-display text-[clamp(1.23rem,2.13vw,1.8rem)] leading-tight text-[#f3ecdc]">{s.name}</h3>
                       <p className="mt-1.5 text-sm leading-relaxed text-white/55">{s.note}</p>
                       <p className="mt-1 text-xs text-white/35">{s.length}</p>
                     </div>

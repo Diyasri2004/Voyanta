@@ -6,7 +6,7 @@ import MagneticButton from "@/components/ui/MagneticButton";
 export default function FinalCTA({ onStart }: { onStart: () => void }) {
   return (
     <section className="relative z-10 flex min-h-[90svh] flex-col items-center justify-center px-5 pb-10 pt-24 text-center sm:px-8">
-      <h2 className="max-w-4xl font-display text-[clamp(2.8rem,7.4vw,6.6rem)] leading-[0.96] text-[#f3ecdc]">
+      <h2 className="max-w-4xl font-display text-[clamp(2.3rem,6.07vw,5.41rem)] leading-[0.96] text-[#f3ecdc]">
         Pick a place.
         <br />
         We&apos;ll plan the days.

@@ -27,7 +27,7 @@ export default function Pillars({ t, onVisible }: { t: TranslationDictionary; on
   return (
     <section ref={ref} className="relative z-10 px-5 py-24 sm:px-8 lg:px-14 lg:py-36">
       <div className="mx-auto w-full max-w-[1500px]">
-        <h2 className="max-w-3xl font-display text-[clamp(2.2rem,4.4vw,4rem)] leading-[1.02] text-[#f3ecdc]">
+        <h2 className="max-w-3xl font-display text-[clamp(1.8rem,3.61vw,3.28rem)] leading-[1.02] text-[#f3ecdc]">
           Eleven kinds of places, searched for you.
         </h2>
 
@@ -39,7 +39,7 @@ export default function Pillars({ t, onVisible }: { t: TranslationDictionary; on
                 className="absolute inset-0 -z-10 origin-left scale-x-0 bg-gradient-to-r from-[#ffc36b]/[0.10] via-[#ffc36b]/[0.03] to-transparent transition-transform duration-500 ease-out group-hover:scale-x-100"
               />
               <div className="flex items-center justify-between gap-6 py-5 transition-transform duration-500 ease-out group-hover:translate-x-3 sm:py-6">
-                <span className="font-display text-[clamp(1.9rem,4.6vw,4.2rem)] leading-none text-[#f3ecdc]/80 transition-colors duration-300 group-hover:text-[#ffd89a]">
+                <span className="font-display text-[clamp(1.56rem,3.77vw,3.44rem)] leading-none text-[#f3ecdc]/80 transition-colors duration-300 group-hover:text-[#ffd89a]">
                   {t[key] as string}
                 </span>
                 <span className="hidden max-w-xs text-right text-sm leading-snug text-white/45 transition-colors group-hover:text-white/75 md:block">{line}</span>

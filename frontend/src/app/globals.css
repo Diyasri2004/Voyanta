@@ -288,3 +288,8 @@ button, a, select, input { touch-action: manipulation; }
 @media (hover: none) {
   .group:hover .group-hover\:scale-125 { transform: scale(1.1); }
 }
+
+/* Laptop & desktop: a medium, refined scale (phones keep 16px) */
+@media (min-width: 1024px) {
+  html { font-size: clamp(13.5px, 0.4vw + 8.5px, 15px); }
+}

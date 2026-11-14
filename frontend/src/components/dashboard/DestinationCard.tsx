@@ -129,7 +129,7 @@ export const DestinationCard = ({
                 {item.event_note}
               </p>
             )}
-            <h4 className="font-display text-[1.7rem] leading-[1.05] text-[#f6efe2] line-clamp-2 transition-colors group-hover:text-[#ffd89a]">
+            <h4 className="font-display text-[1.45rem] leading-[1.05] text-[#f6efe2] line-clamp-2 transition-colors group-hover:text-[#ffd89a]">
               {title}
             </h4>
             <p className="mt-2 line-clamp-2 text-[13px] leading-relaxed text-[#9aa5bb]">

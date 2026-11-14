@@ -33,7 +33,7 @@ function Flap({ char, index }: { char: string; index: number }) {
 
   return (
     <span
-      className="flap relative inline-flex h-[clamp(2.2rem,4.6vw,4.1rem)] w-[clamp(1.45rem,3.1vw,2.8rem)] items-center justify-center overflow-hidden rounded-[0.28rem] text-[clamp(1.25rem,2.7vw,2.5rem)] font-extrabold leading-none text-[#ffc36b]"
+      className="flap relative inline-flex h-[clamp(2.2rem,4.6vw,4.1rem)] w-[clamp(1.45rem,3.1vw,2.8rem)] items-center justify-center overflow-hidden rounded-[0.28rem] text-[clamp(1.02rem,2.21vw,2.05rem)] font-extrabold leading-none text-[#ffc36b]"
       style={{ perspective: 400 }}
     >
       <motion.span
